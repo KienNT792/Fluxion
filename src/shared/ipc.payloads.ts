@@ -1,8 +1,8 @@
 import { AbortReason } from './agent.types';
 import {
-  CodexCapabilities,
   NodeId,
   NodeStatus,
+  ProviderCapabilitiesMap,
   Workflow,
   WorkflowEdge,
   WorkflowMetadata,
@@ -137,4 +137,4 @@ export interface MemoryContextReadyPayload {
   compiledContext: string;
 }
 
-export type CodexCapabilitiesPayload = CodexCapabilities;
+export type ProviderCapabilitiesPayload = ProviderCapabilitiesMap;

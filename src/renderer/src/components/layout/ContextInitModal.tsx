@@ -33,7 +33,7 @@ function useScoutAgent(workspacePath: string): {
       // Extract folder name from path
       const folderName = workspacePath.split(/[\\/]/).pop() || 'Project';
 
-      // Mock auto-fill based on common project patterns
+      // Lightweight heuristic auto-fill based on common project patterns
       setScannedContext({
         language: 'Auto-detected from project files',
         architecture: `Detected in ${folderName}`,

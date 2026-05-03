@@ -1,26 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import {
-  ModelId,
-  OPENAI_DEFAULT_MODEL,
-  ProviderType,
-  getOpenAIModelDisplayName,
-} from '@shared';
+import { OPENAI_DEFAULT_MODEL, getOpenAIModelDisplayName } from '@shared';
 import { useThemeStore } from '../../stores/theme.store';
+import { useWorkflowStore } from '../../stores/workflow.store';
 import { Tooltip } from '../ui/Tooltip';
 
 import openaiDark from '../../assets/logo/openai-dark.svg';
 import openaiLight from '../../assets/logo/openai-light.svg';
-
-interface PresetData {
-  provider: ProviderType;
-  model: ModelId;
-}
-
-const OPENAI_PRESET: PresetData = {
-  provider: 'openai',
-  model: OPENAI_DEFAULT_MODEL,
-};
 
 const AgentIcon: React.FC<{ theme: 'light' | 'dark' }> = ({ theme }) => {
   const isDark = theme === 'dark';
@@ -30,7 +16,18 @@ const AgentIcon: React.FC<{ theme: 'light' | 'dark' }> = ({ theme }) => {
 export const AgentPalette: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const theme = useThemeStore((state) => state.theme);
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const hasFetchedProviderCapabilities = useWorkflowStore(
+    (state) => state.hasFetchedProviderCapabilities
+  );
+  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasFetchedProviderCapabilities) {
+      void fetchProviderCapabilities();
+    }
+  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
@@ -46,14 +43,36 @@ export const AgentPalette: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const handleDragStart = (event: React.DragEvent, preset: PresetData): void => {
-    event.dataTransfer.setData('application/reactflow', JSON.stringify(preset));
+  const handleDragStart = (event: React.DragEvent): void => {
+    const model =
+      providerCapabilities.openai?.defaultModel
+      ?? providerCapabilities.openai?.models.find((item) => item.visibility === 'list')?.id
+      ?? providerCapabilities.openai?.models[0]?.id
+      ?? OPENAI_DEFAULT_MODEL;
+
+    event.dataTransfer.setData(
+      'application/reactflow',
+      JSON.stringify({
+        provider: 'openai',
+        model,
+      })
+    );
     event.dataTransfer.effectAllowed = 'move';
   };
 
+  const paletteModel =
+    providerCapabilities.openai?.defaultModel
+    ?? providerCapabilities.openai?.models.find((item) => item.visibility === 'list')?.id
+    ?? providerCapabilities.openai?.models[0]?.id
+    ?? OPENAI_DEFAULT_MODEL;
+  const paletteHint =
+    providerCapabilities.openai?.auth.status === 'authenticated'
+      ? getOpenAIModelDisplayName(paletteModel)
+      : providerCapabilities.openai?.auth.message ?? 'OPENAI_API_KEY missing';
+
   return (
     <div ref={containerRef} className="relative ml-2 mt-2 pointer-events-auto">
-      <Tooltip content={isOpen ? 'Close Agents' : 'Add Agent'} side="right">
+      <Tooltip content={isOpen ? 'Close Agent' : 'Add OpenAI Agent'} side="right">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors shadow-sm"
@@ -100,8 +119,8 @@ export const AgentPalette: React.FC = () => {
               className="flex cursor-grab items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors"
               style={{ background: 'transparent' }}
               draggable
-              title="Drag to create an OpenAI workflow node. Requires OPENAI_API_KEY in the app environment."
-              onDragStart={(event) => handleDragStart(event, OPENAI_PRESET)}
+              title={providerCapabilities.openai?.auth.message ?? 'Drag to create an OpenAI workflow node.'}
+              onDragStart={handleDragStart}
               onMouseEnter={(event) => {
                 event.currentTarget.style.background = 'var(--color-surface-strong)';
               }}
@@ -117,13 +136,19 @@ export const AgentPalette: React.FC = () => {
                   className="truncate text-sm font-medium"
                   style={{ color: 'var(--color-ink)' }}
                 >
-                  {getOpenAIModelDisplayName(OPENAI_DEFAULT_MODEL)}
+                  OpenAI
                 </div>
                 <div
                   className="truncate text-[11px]"
-                  style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                  style={{
+                    color:
+                      providerCapabilities.openai?.auth.status === 'authenticated'
+                        ? 'var(--color-muted)'
+                        : 'var(--color-semantic-error)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
                 >
-                  OpenAI MVP node
+                  {paletteHint}
                 </div>
               </div>
             </div>

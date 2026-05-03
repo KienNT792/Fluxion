@@ -2,7 +2,7 @@
 
 // ─── Enums & Types ─────────────────────────────────────────────────────────────
 
-export type ProviderType = 'google' | 'openai' | 'anthropic' | 'codex' | 'mock';
+export type ProviderType = 'openai';
 
 /**
  * Dynamic model identifier.
@@ -12,6 +12,27 @@ export type ProviderType = 'google' | 'openai' | 'anthropic' | 'codex' | 'mock';
 export type ModelId = string;
 
 export type ReasoningLevel = 'low' | 'medium' | 'high' | 'xhigh';
+
+export type ProviderAuthType =
+  | 'api-key-env'
+  | 'browser-login'
+  | 'cli-login'
+  | 'none'
+  | 'unknown';
+
+export type ProviderAuthStatus =
+  | 'authenticated'
+  | 'missing'
+  | 'not-required'
+  | 'unknown';
+
+export interface ProviderAuthState {
+  type: ProviderAuthType;
+  status: ProviderAuthStatus;
+  envVar?: string;
+  loginCommand?: string;
+  message?: string;
+}
 
 export interface ProviderModel {
   id: string;
@@ -29,11 +50,39 @@ export interface ProviderModel {
   supportsImages?: boolean;
 }
 
-export interface CodexCapabilities {
+export interface ProviderParameterOption {
+  value: string;
+  label: string;
+  hint?: string;
+}
+
+export interface ProviderParameterSpec {
+  id: string;
+  label: string;
+  type: 'select' | 'number' | 'text' | 'boolean';
+  defaultValue?: string | number | boolean;
+  options?: ProviderParameterOption[];
+  min?: number;
+  max?: number;
+  step?: number;
+  appliesTo?: 'all' | 'reasoning-models' | 'standard-models';
+}
+
+export interface ProviderCapabilities {
+  provider: ProviderType;
+  displayName: string;
   available: boolean;
   version?: string;
+  auth: ProviderAuthState;
   error?: string;
   models: ProviderModel[];
+  defaultModel?: string;
+  parameters: ProviderParameterSpec[];
+  refreshHint?: string;
+}
+
+export interface ProviderCapabilitiesMap {
+  openai?: ProviderCapabilities;
 }
 
 // ─── Node Status ─────────────────────────────────────────────────────────────

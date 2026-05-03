@@ -2,10 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
-  CodexCapabilitiesPayload,
   IpcChannels,
   MemoryContextReadyPayload,
   NodeId,
+  ProviderCapabilitiesPayload,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -56,8 +56,8 @@ const api = {
     context: Record<string, string>
   ): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT, { workspacePath, context }) as Promise<void>,
-  getCodexCapabilities: (): Promise<CodexCapabilitiesPayload> =>
-    ipcRenderer.invoke(IpcChannels.CODEX_GET_CAPABILITIES) as Promise<CodexCapabilitiesPayload>,
+  getProviderCapabilities: (): Promise<ProviderCapabilitiesPayload> =>
+    ipcRenderer.invoke(IpcChannels.PROVIDERS_GET_CAPABILITIES) as Promise<ProviderCapabilitiesPayload>,
   runWorkflow: (
     workflowId: string,
     nodes: WorkflowNode[],

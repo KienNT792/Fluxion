@@ -1,9 +1,9 @@
 import { ElectronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
-  CodexCapabilitiesPayload,
   MemoryContextReadyPayload,
   NodeId,
+  ProviderCapabilitiesPayload,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -28,7 +28,7 @@ export interface FluxionAPI {
     activeWorkflowFilePath: string
   ) => Promise<WorkflowSavedPayload>;
   saveContext: (workspacePath: string, context: Record<string, string>) => Promise<void>;
-  getCodexCapabilities: () => Promise<CodexCapabilitiesPayload>;
+  getProviderCapabilities: () => Promise<ProviderCapabilitiesPayload>;
   
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   createWorkflow: (workspacePath: string, name: string) => Promise<WorkflowCreateResult>;

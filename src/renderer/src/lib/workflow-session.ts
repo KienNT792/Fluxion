@@ -76,7 +76,7 @@ export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
 export async function loadWorkspaceFromPath(workspacePath: string): Promise<void> {
   const payload = await window.api.loadWorkspace(workspacePath);
   hydrateWorkspaceState(payload);
-  await useWorkflowStore.getState().fetchCodexCapabilities();
+  await useWorkflowStore.getState().fetchProviderCapabilities();
 }
 
 export async function openWorkspaceFromDialog(): Promise<void> {

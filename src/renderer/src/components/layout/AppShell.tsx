@@ -9,6 +9,7 @@ import { ContextInitModal, ProjectContext } from './ContextInitModal';
 import { useThemeStore, applyTheme } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { TooltipProvider } from '../ui/Tooltip';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 export const AppShell: React.FC = () => {
   const theme = useThemeStore(state => state.theme);
@@ -53,7 +54,9 @@ export const AppShell: React.FC = () => {
           <Topbar />
           <main className="flex-1 relative flex overflow-hidden">
             <FlowCanvas />
-            <PropertiesPanel />
+            <ErrorBoundary fallbackTitle="Config panel crashed">
+              <PropertiesPanel />
+            </ErrorBoundary>
             <TerminalViewer />
           </main>
         </div>

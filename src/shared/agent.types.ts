@@ -4,7 +4,7 @@ import { ProviderType, ModelId } from './workflow.types';
 
 /**
  * Specific reason why an agent execution was terminated prematurely.
- * Used by the Diagnostic Agent (Gemini Flash) to provide accurate suggestions.
+ * Used by the diagnostic flow to provide accurate suggestions.
  *
  * - USER_REQUESTED:  User clicked the STOP button.
  * - ENGINE_HALTED:   WorkflowEngine stopped the entire DAG (e.g. a previous node errored).
@@ -27,9 +27,9 @@ export enum AbortReason {
 export interface AgentConfig {
   provider: ProviderType;
   model: ModelId;
-  /** Absolute path to the CLI executable (e.g. 'C:/tools/gemini.cmd'). Optional for API-based agents. */
+  /** Absolute path to the CLI executable when needed. Optional for API-based agents. */
   cliPath?: string;
-  /** Name of the OS environment variable that holds the API key (e.g. 'GEMINI_API_KEY'). */
+  /** Name of the OS environment variable that holds the API key (e.g. 'OPENAI_API_KEY'). */
   apiKeyEnvVar: string;
   /** Additional flags to pass to the CLI. */
   extraFlags?: string[];

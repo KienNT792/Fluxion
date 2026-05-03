@@ -59,6 +59,7 @@ export const FlowCanvas: React.FC = () => {
   const onConnect = useWorkflowStore(state => state.onConnect);
   const addNode = useWorkflowStore(state => state.addNode);
   const deleteNode = useWorkflowStore(state => state.deleteNode);
+  const setSelectedNode = useWorkflowStore(state => state.setSelectedNode);
 
   // ── Delete/Backspace key shortcut ──────────────────────────────
   useEffect(() => {
@@ -123,17 +124,11 @@ export const FlowCanvas: React.FC = () => {
         edgeTypes={edgeTypes}
         onDragOver={onDragOver}
         onDrop={onDrop}
-        onSelectionChange={({ nodes }): void => {
-          const currentSelectedNodeId = useWorkflowStore.getState().selectedNodeId;
-          if (nodes.length === 1) {
-            if (currentSelectedNodeId !== nodes[0].id) {
-              useWorkflowStore.getState().setSelectedNode(nodes[0].id);
-            }
-          } else if (nodes.length === 0) {
-            if (currentSelectedNodeId !== null) {
-              useWorkflowStore.getState().setSelectedNode(null);
-            }
-          }
+        onNodeClick={(_event, node) => {
+          setSelectedNode(node.id);
+        }}
+        onPaneClick={() => {
+          setSelectedNode(null);
         }}
         colorMode={colorMode}
         proOptions={{ hideAttribution: true }}

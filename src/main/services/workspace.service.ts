@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ulid } from 'ulid';
 import { 
   IpcChannels, 
+  OPENAI_DEFAULT_MODEL,
   Workflow, 
   WorkflowNode, 
   WorkspaceOpenedPayload, 
@@ -60,6 +61,23 @@ const workflowFileSchema = z.object({
 
 type WorkflowFile = z.infer<typeof workflowFileSchema>;
 type SupportedChangeType = 'add' | 'change' | 'unlink';
+
+function sanitizeWorkflowNodeData(
+  data: WorkflowFile['nodes'][number]['data']
+): WorkflowNode['data'] {
+  const model =
+    typeof data.model === 'string' && data.model.trim().length > 0
+      ? data.model.trim()
+      : OPENAI_DEFAULT_MODEL;
+  const provider = data.provider === 'openai' ? 'openai' : 'openai';
+  const normalizedModel = data.provider === 'openai' ? model : OPENAI_DEFAULT_MODEL;
+
+  return {
+    ...data,
+    provider,
+    model: normalizedModel,
+  };
+}
 
 function normalizePathForCompare(value: string): string {
   return path.resolve(value).replaceAll('\\', '/').toLowerCase();
@@ -411,17 +429,21 @@ export class WorkspaceService {
       fluxionVersion: (workflowFile.fluxionVersion as FluxionSchemaVersion) || '1.0',
       createdAt: workflowFile.createdAt,
       updatedAt: workflowFile.updatedAt,
-      nodes: workflowFile.nodes.map((node) => ({
-        id: node.id,
-        type: node.type ?? 'agentNode',
-        label:
-          node.label ||
-          (typeof node.data.label === 'string' && node.data.label.trim()
-            ? node.data.label
-            : node.id),
-        data: node.data as WorkflowNode['data'],
-        position: node.position,
-      })),
+      nodes: workflowFile.nodes.map((node) => {
+        const normalizedData = sanitizeWorkflowNodeData(node.data);
+
+        return {
+          id: node.id,
+          type: node.type ?? 'agentNode',
+          label:
+            node.label ||
+            (typeof normalizedData.label === 'string' && normalizedData.label.trim()
+              ? normalizedData.label
+              : node.id),
+          data: normalizedData,
+          position: node.position,
+        };
+      }),
       edges: workflowFile.edges.map((edge) => ({
         id: edge.id,
         source: edge.source,

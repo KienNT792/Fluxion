@@ -29,8 +29,8 @@ export const IpcChannels = {
   // Memory
   MEMORY_CONTEXT_READY: 'memory:context-ready',
 
-  // Codex
-  CODEX_GET_CAPABILITIES: 'codex:get-capabilities',
+  // Providers
+  PROVIDERS_GET_CAPABILITIES: 'providers:get-capabilities',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];

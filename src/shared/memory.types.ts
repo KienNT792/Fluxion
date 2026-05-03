@@ -36,7 +36,7 @@ export interface FrontmatterMetadata {
   status: 'completed' | 'aborted';
   /** Unix ms timestamp when the agent finished writing this file. */
   timestamp: number;
-  /** Human-readable model name used for this execution (e.g. 'gemini-1.5-flash'). */
+  /** Human-readable model name used for this execution (e.g. 'gpt-5.5'). */
   modelName?: string;
 }
 

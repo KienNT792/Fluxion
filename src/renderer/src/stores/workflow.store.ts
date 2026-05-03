@@ -11,10 +11,9 @@ import {
 } from '@xyflow/react';
 import {
   AgentNodeData,
-  CodexCapabilities,
   OPENAI_DEFAULT_MODEL,
   OPENAI_DEFAULT_REASONING_LEVEL,
-  ProviderType,
+  ProviderCapabilitiesMap,
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
@@ -42,18 +41,17 @@ interface WorkflowState {
   saveError: string | null;
   hasExternalWorkflowChange: boolean;
   recentWorkspaceChanges: WorkspaceChangeRecord[];
-  /** Whether .fluxion/context.json exists for the current workspace */
   hasContext: boolean;
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
   legacyWorkflowDetected: boolean;
-  codexCapabilities: CodexCapabilities;
-  isCodexCapabilitiesLoading: boolean;
-  hasFetchedCodexCapabilities: boolean;
+  providerCapabilities: ProviderCapabilitiesMap;
+  isProviderCapabilitiesLoading: boolean;
+  hasFetchedProviderCapabilities: boolean;
 
   setWorkspacePath: (path: string | null) => void;
   setWorkflowName: (name: string) => void;
-  fetchCodexCapabilities: () => Promise<CodexCapabilities>;
+  fetchProviderCapabilities: () => Promise<ProviderCapabilitiesMap>;
   hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void;
   setNodes: (nodes: Node<WorkflowNode['data']>[]) => void;
   setEdges: (edges: Edge[]) => void;
@@ -74,43 +72,29 @@ interface WorkflowState {
 }
 
 const MAX_WORKSPACE_CHANGES = 5;
-const EMPTY_CODEX_CAPABILITIES: CodexCapabilities = {
-  available: false,
-  models: [],
-};
+const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitiesMap = {};
 
-function getDefaultStaticModel(provider: ProviderType): string {
-  switch (provider) {
-    case 'google':
-      return 'gemini-1.5-pro';
-    case 'openai':
-      return OPENAI_DEFAULT_MODEL;
-    case 'anthropic':
-      return 'claude-3-opus';
-    case 'mock':
-      return 'mock-agent';
-    case 'codex':
-    default:
-      return 'gpt-5.5';
-  }
+function normalizeNodeData(data: WorkflowNode['data']): WorkflowNode['data'] {
+  const model =
+    typeof data.model === 'string' && data.model.trim().length > 0
+      ? data.model.trim()
+      : OPENAI_DEFAULT_MODEL;
+
+  return {
+    ...data,
+    provider: 'openai',
+    model,
+    prompt: typeof data.prompt === 'string' ? data.prompt : '',
+  };
 }
 
-function getDefaultCodexModel(capabilities: CodexCapabilities): string {
+function getDefaultOpenAIModel(providerCapabilities: ProviderCapabilitiesMap): string {
   return (
-    capabilities.models.find((model) => model.visibility === 'list')?.id
-    ?? getDefaultStaticModel('codex')
+    providerCapabilities.openai?.defaultModel
+    ?? providerCapabilities.openai?.models.find((model) => model.visibility === 'list')?.id
+    ?? providerCapabilities.openai?.models[0]?.id
+    ?? OPENAI_DEFAULT_MODEL
   );
-}
-
-function getDefaultModelForProvider(
-  provider: ProviderType,
-  capabilities: CodexCapabilities
-): string {
-  if (provider === 'codex') {
-    return getDefaultCodexModel(capabilities);
-  }
-
-  return getDefaultStaticModel(provider);
 }
 
 function applySelectionState(
@@ -160,9 +144,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   activeWorkflowFilePath: null,
   workflows: [],
   legacyWorkflowDetected: false,
-  codexCapabilities: EMPTY_CODEX_CAPABILITIES,
-  isCodexCapabilitiesLoading: false,
-  hasFetchedCodexCapabilities: false,
+  providerCapabilities: EMPTY_PROVIDER_CAPABILITIES,
+  isProviderCapabilitiesLoading: false,
+  hasFetchedProviderCapabilities: false,
 
   setWorkspacePath: (path) => set({ workspacePath: path }),
 
@@ -174,51 +158,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       saveError: null,
     })),
 
-  fetchCodexCapabilities: async () => {
-    if (!window.api) {
-      const unavailablePayload: CodexCapabilities = {
-        available: false,
-        error: 'Fluxion API is not exposed on window.',
-        models: [],
-      };
-
+  fetchProviderCapabilities: async () => {
+    if (!window.api?.getProviderCapabilities) {
       set({
-        codexCapabilities: unavailablePayload,
-        isCodexCapabilitiesLoading: false,
-        hasFetchedCodexCapabilities: true,
+        providerCapabilities: EMPTY_PROVIDER_CAPABILITIES,
+        isProviderCapabilitiesLoading: false,
+        hasFetchedProviderCapabilities: true,
       });
 
-      return unavailablePayload;
+      return EMPTY_PROVIDER_CAPABILITIES;
     }
 
-    set({ isCodexCapabilitiesLoading: true });
+    set({ isProviderCapabilitiesLoading: true });
 
     try {
-      const capabilities = await window.api.getCodexCapabilities();
+      const capabilities = await window.api.getProviderCapabilities();
       set({
-        codexCapabilities: capabilities,
-        isCodexCapabilitiesLoading: false,
-        hasFetchedCodexCapabilities: true,
+        providerCapabilities: capabilities,
+        isProviderCapabilitiesLoading: false,
+        hasFetchedProviderCapabilities: true,
       });
       return capabilities;
-    } catch (error) {
-      const previousCapabilities = get().codexCapabilities;
-      const unavailablePayload: CodexCapabilities = {
-        available: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch Codex capabilities.',
-        models: previousCapabilities.models,
-      };
+    } catch {
+      const previousCapabilities = get().providerCapabilities;
 
       set({
-        codexCapabilities: unavailablePayload,
-        isCodexCapabilitiesLoading: false,
-        hasFetchedCodexCapabilities: true,
+        providerCapabilities: previousCapabilities,
+        isProviderCapabilitiesLoading: false,
+        hasFetchedProviderCapabilities: true,
       });
 
-      return unavailablePayload;
+      return previousCapabilities;
     }
   },
 
@@ -232,7 +202,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         payload.workflow.nodes.map((node) => ({
           id: node.id,
           position: node.position,
-          data: node.data,
+          data: normalizeNodeData(node.data),
           type: node.type ?? 'agentNode',
         })),
         null
@@ -258,7 +228,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setNodes: (nodes) =>
     set((state) => ({
-      nodes: applySelectionState(nodes, state.selectedNodeId),
+      nodes: applySelectionState(
+        nodes.map((node) => ({
+          ...node,
+          data: normalizeNodeData(node.data),
+        })),
+        state.selectedNodeId
+      ),
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
       saveError: null,
@@ -273,19 +249,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     })),
 
   onNodesChange: (changes) => {
-    set((state) => ({
-      nodes: changes.some((change) => change.type === 'select')
-        ? (applyNodeChanges(changes, state.nodes) as Node<WorkflowNode['data']>[])
-        : applySelectionState(
-            applyNodeChanges(changes, state.nodes) as Node<WorkflowNode['data']>[],
-            state.selectedNodeId
-          ),
-      workflowRevision: shouldMarkNodeChangesDirty(changes)
-        ? state.workflowRevision + 1
-        : state.workflowRevision,
-      isDirty: shouldMarkNodeChangesDirty(changes) ? true : state.isDirty,
-      saveError: shouldMarkNodeChangesDirty(changes) ? null : state.saveError,
-    }));
+    set((state) => {
+      const updatedNodes = applyNodeChanges(changes, state.nodes) as Node<WorkflowNode['data']>[];
+
+      return {
+        nodes: applySelectionState(updatedNodes, state.selectedNodeId),
+        workflowRevision: shouldMarkNodeChangesDirty(changes)
+          ? state.workflowRevision + 1
+          : state.workflowRevision,
+        isDirty: shouldMarkNodeChangesDirty(changes) ? true : state.isDirty,
+        saveError: shouldMarkNodeChangesDirty(changes) ? null : state.saveError,
+      };
+    });
   },
 
   onEdgesChange: (changes) => {
@@ -308,25 +283,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }));
   },
 
-  addNode: (preset, position) => {
-    const provider = preset.provider || 'openai';
-    const model = preset.model || getDefaultModelForProvider(provider, get().codexCapabilities);
-    const reasoningLevel =
-      provider === 'openai' && isOpenAIReasoningModel(model)
-        ? OPENAI_DEFAULT_REASONING_LEVEL
-        : undefined;
+  addNode: (_preset, position) => {
+    const model = getDefaultOpenAIModel(get().providerCapabilities);
     const newNodeId = `node-${Date.now()}`;
     const newNode: Node<WorkflowNode['data']> = {
       id: newNodeId,
       position,
       data: {
-        provider,
+        provider: 'openai',
         model,
         prompt: '',
         systemInstruction: '',
         maxTokens: 2048,
         temperature: 0.7,
-        reasoningLevel,
+        reasoningLevel: isOpenAIReasoningModel(model)
+          ? OPENAI_DEFAULT_REASONING_LEVEL
+          : undefined,
       },
       type: 'agentNode',
     };
@@ -350,22 +322,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         nodes: applySelectionState(state.nodes, id),
       };
     }),
+
   setTerminalNodeId: (id) => set({ terminalNodeId: id }),
 
   updateNodeData: (id, newData) => {
     set((state) => ({
       nodes: applySelectionState(
         state.nodes.map((node) => {
-          if (node.id === id) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                ...newData,
-              },
-            };
+          if (node.id !== id) {
+            return node;
           }
-          return node;
+
+          return {
+            ...node,
+            data: normalizeNodeData({
+              ...node.data,
+              ...newData,
+              provider: 'openai',
+            }),
+          };
         }),
         state.selectedNodeId
       ),
@@ -426,9 +401,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           MAX_WORKSPACE_CHANGES
         ),
         hasExternalWorkflowChange:
-          state.hasExternalWorkflowChange || 
-          (state.activeWorkflowFilePath != null && 
-           change.filePath.toLowerCase().replace(/\\/g, '/') === state.activeWorkflowFilePath.toLowerCase().replace(/\\/g, '/')),
+          state.hasExternalWorkflowChange ||
+          (state.activeWorkflowFilePath != null &&
+            change.filePath.toLowerCase().replace(/\\/g, '/')
+            === state.activeWorkflowFilePath.toLowerCase().replace(/\\/g, '/')),
       };
     }),
 

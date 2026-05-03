@@ -3,13 +3,10 @@ import {
   Workflow, 
   NodeId, 
   WorkflowNode, 
-  ProviderType,
   AbortReason, 
   IpcChannels,
   NodeStatus
 } from '@shared';
-import { MockAdapter } from '../adapters/mock.adapter';
-import { CodexAdapter } from '../adapters/codex.adapter';
 import { OpenAIAdapter } from '../adapters/openai.adapter';
 import { memoryManager } from './memory-manager';
 import { IAgentAdapter } from '../adapters/base.adapter';
@@ -23,15 +20,7 @@ export class WorkflowEngine {
   private activeNodes: Set<NodeId> = new Set();
   private haltReason: 'aborted' | 'error' | null = null;
   private haltError: string | null = null;
-  
-  // Basic factory map for adapters — keyed by ProviderType
-  private adapters: Record<ProviderType, IAgentAdapter> = {
-    'mock':      new MockAdapter(),
-    'codex':     new CodexAdapter(),
-    'google':    new MockAdapter(), // MVP fallback — replace with GeminiAdapter
-    'openai':    new OpenAIAdapter(),
-    'anthropic': new MockAdapter(), // MVP fallback — replace with ClaudeAdapter
-  };
+  private adapter: IAgentAdapter = new OpenAIAdapter();
 
   private constructor() {
     // Singleton
@@ -121,9 +110,7 @@ export class WorkflowEngine {
   }
 
   private async abortNode(nodeId: NodeId, reason: AbortReason): Promise<void> {
-    // We send abort to all adapters. They handle ignoring if they don't own the node.
-    const promises = Object.values(this.adapters).map((adapter) => adapter.abort(nodeId, reason))
-    await Promise.all(promises)
+    await this.adapter.abort(nodeId, reason)
   }
 
   private async haltActiveNodes(excludeNodeId?: NodeId): Promise<void> {
@@ -278,7 +265,7 @@ export class WorkflowEngine {
       promptSections.push(`[USER INSTRUCTION]\n${node.data.prompt}`);
       const fullPrompt = promptSections.filter((section) => section.length > 0).join('\n\n');
       
-      const adapter = this.adapters[node.data.provider] || this.adapters.mock
+      const adapter = this.adapter
       
       // Setup throttled stream dispatcher
       const batches: Record<'stdout' | 'stderr', string[]> = {

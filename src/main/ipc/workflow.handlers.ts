@@ -11,7 +11,7 @@ import {
   WorkflowDeletePayload,
 } from '@shared';
 import { workflowEngine } from '../services/workflow-engine';
-import { codexModelRegistryService } from '../services/codex-model-registry.service';
+import { providerRegistryService } from '../services/provider-registry.service';
 import { processManager } from '../services/process-manager';
 import { workspaceService } from '../services/workspace.service';
 
@@ -166,8 +166,8 @@ export function registerWorkflowHandlers(): void {
     }
   );
 
-  ipcMain.handle(IpcChannels.CODEX_GET_CAPABILITIES, async () => {
-    return codexModelRegistryService.fetchCapabilities();
+  ipcMain.handle(IpcChannels.PROVIDERS_GET_CAPABILITIES, async () => {
+    return providerRegistryService.fetchCapabilities();
   });
 
   ipcMain.on(

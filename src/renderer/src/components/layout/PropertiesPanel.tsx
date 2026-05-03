@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightFromLine, Bot, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowRightFromLine, RotateCcw, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import {
   AgentNodeData,
@@ -8,7 +8,6 @@ import {
   OPENAI_DEFAULT_MODEL,
   OPENAI_DEFAULT_REASONING_LEVEL,
   OPENAI_MVP_MODELS,
-  ProviderType,
   getOpenAIModelDisplayName,
   getOpenAIModelPreset,
   isOpenAIReasoningModel,
@@ -18,10 +17,6 @@ import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
 
-import claudeDark from '../../assets/logo/claude-dark.svg';
-import claudeLight from '../../assets/logo/claude-light.svg';
-import geminiDark from '../../assets/logo/gemini-dark.svg';
-import geminiLight from '../../assets/logo/gemini-light.svg';
 import openaiDark from '../../assets/logo/openai-dark.svg';
 import openaiLight from '../../assets/logo/openai-light.svg';
 import { Input } from '../ui/Input';
@@ -29,46 +24,43 @@ import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 import { getFormControlStyle } from '../ui/form-control';
 
-interface ProviderOption {
-  id: ProviderType;
-  label: string;
+function coerceNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
 }
 
-interface ModelOption {
-  id: string;
-  label: string;
-  description?: string;
+function coerceOptionalPositiveInteger(value: unknown): number | undefined {
+  const parsed = coerceNumber(value, Number.NaN);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
 }
 
-const OPENAI_PROVIDER_OPTION: ProviderOption = {
-  id: 'openai',
-  label: 'OpenAI',
-};
-
-const LEGACY_PROVIDER_LABELS: Record<Exclude<ProviderType, 'openai'>, string> = {
-  anthropic: 'Anthropic',
-  codex: 'Codex',
-  google: 'Google (Gemini)',
-  mock: 'Mock',
-};
-
-const LEGACY_MODEL_LABELS: Record<string, string> = {
-  'claude-3-5-sonnet': 'Claude 3.5 Sonnet',
-  'claude-3-opus': 'Claude 3 Opus',
-  'codex-mini': 'Codex Mini',
-  'gemini-1.5-flash': 'Gemini 1.5 Flash',
-  'gemini-1.5-pro': 'Gemini 1.5 Pro',
-  'gemini-exp-1206': 'Gemini Exp 1206',
-  'gpt-4.1': 'GPT-4.1',
-  'gpt-4o': 'GPT-4o',
-  'gpt-5.4': 'GPT-5.4',
-  'gpt-5.4-mini': 'GPT-5.4 mini',
-  'gpt-5.5': 'GPT-5.5',
-  'mock-agent': 'Mock Agent',
-  'o1-mini': 'o1 Mini',
-  'o1-preview': 'o1 Preview',
-  'o4-mini': 'o4 Mini',
-};
+const nodeDataSchema = z.object({
+  provider: z.literal('openai'),
+  model: z.string().min(1),
+  label: z.string().optional(),
+  prompt: z.string(),
+  systemInstruction: z.string().optional(),
+  maxTokens: z.preprocess(coerceOptionalPositiveInteger, z.number().optional()),
+  temperature: z.preprocess(
+    (value) => coerceNumber(value, 0.7),
+    z.number().min(0).max(2).optional()
+  ),
+  reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+});
 
 const REASONING_LEVEL_OPTIONS = [
   { value: 'low', label: 'Low', hint: 'Fast' },
@@ -76,17 +68,6 @@ const REASONING_LEVEL_OPTIONS = [
   { value: 'high', label: 'High', hint: 'Deep' },
   { value: 'xhigh', label: 'XHigh', hint: 'Max' },
 ] as const;
-
-const nodeDataSchema = z.object({
-  provider: z.enum(['google', 'openai', 'anthropic', 'codex', 'mock']),
-  model: z.string().min(1),
-  label: z.string().optional(),
-  prompt: z.string(),
-  systemInstruction: z.string().optional(),
-  maxTokens: z.number().optional(),
-  temperature: z.number().optional(),
-  reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-});
 
 const LABEL_STYLE: React.CSSProperties = {
   fontSize: '11px',
@@ -116,58 +97,8 @@ const MUTED_NOTE_STYLE: React.CSSProperties = {
   color: 'var(--color-muted)',
 };
 
-const getAgentIcon = (provider: ProviderType, theme: 'light' | 'dark'): React.JSX.Element => {
-  const isDark = theme === 'dark';
-  switch (provider) {
-    case 'google':
-      return <img src={isDark ? geminiDark : geminiLight} alt="Google" className="h-6 w-6" />;
-    case 'anthropic':
-      return <img src={isDark ? claudeDark : claudeLight} alt="Anthropic" className="h-6 w-6" />;
-    case 'openai':
-      return <img src={isDark ? openaiDark : openaiLight} alt="OpenAI" className="h-6 w-6" />;
-    case 'codex':
-      return <Bot size={24} style={{ color: 'var(--color-primary)' }} />;
-    default:
-      return <Bot size={24} style={{ color: 'var(--color-muted)' }} />;
-  }
-};
-
-function getLegacyProviderLabel(provider: ProviderType): string {
-  if (provider === 'openai') {
-    return 'OpenAI';
-  }
-
-  return LEGACY_PROVIDER_LABELS[provider];
-}
-
-function getFallbackModelName(modelId: string): string {
-  return LEGACY_MODEL_LABELS[modelId] ?? modelId;
-}
-
-function getProviderOptions(currentProvider: ProviderType): ProviderOption[] {
-  if (currentProvider === 'openai') {
-    return [OPENAI_PROVIDER_OPTION];
-  }
-
-  return [
-    OPENAI_PROVIDER_OPTION,
-    {
-      id: currentProvider,
-      label: `Legacy: ${getLegacyProviderLabel(currentProvider)}`,
-    },
-  ];
-}
-
-function getModelDisplayName(provider: ProviderType, modelId: string): string {
-  if (provider === 'openai') {
-    return getOpenAIModelDisplayName(modelId);
-  }
-
-  return getFallbackModelName(modelId);
-}
-
-function buildOpenAIModelOptions(currentModel: string): ModelOption[] {
-  const options: ModelOption[] = OPENAI_MVP_MODELS.map((model) => ({
+function buildModelOptions(currentModel: string) {
+  const options = OPENAI_MVP_MODELS.map((model) => ({
     id: model.id,
     label: model.displayName,
     description: model.description,
@@ -182,17 +113,7 @@ function buildOpenAIModelOptions(currentModel: string): ModelOption[] {
     {
       id: currentModel,
       label: getOpenAIModelDisplayName(currentModel),
-      description: 'Custom or legacy OpenAI model from an older workflow.',
-    },
-  ];
-}
-
-function buildLegacyModelOptions(currentModel: string): ModelOption[] {
-  return [
-    {
-      id: currentModel,
-      label: getFallbackModelName(currentModel),
-      description: 'Legacy provider model outside the current OpenAI MVP scope.',
+      description: 'Custom OpenAI model from an older workflow.',
     },
   ];
 }
@@ -216,6 +137,11 @@ export const PropertiesPanel: React.FC = () => {
   const nodes = useWorkflowStore((state) => state.nodes);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const deleteNode = useWorkflowStore((state) => state.deleteNode);
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const hasFetchedProviderCapabilities = useWorkflowStore(
+    (state) => state.hasFetchedProviderCapabilities
+  );
+  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const nodeStatus = useExecutionStore(
     (state) => (selectedNodeId ? state.nodeStatuses[selectedNodeId] : undefined) ?? 'idle'
   );
@@ -239,22 +165,34 @@ export const PropertiesPanel: React.FC = () => {
   const skipNextSyncRef = useRef(false);
 
   useEffect(() => {
-    if (selectedNode) {
-      skipNextSyncRef.current = true;
-      setLocalData({
-        provider: selectedNode.data.provider,
-        model: selectedNode.data.model,
-        label: selectedNode.data.label,
-        prompt: selectedNode.data.prompt,
-        systemInstruction: selectedNode.data.systemInstruction,
-        maxTokens: selectedNode.data.maxTokens ?? 2048,
-        temperature: selectedNode.data.temperature ?? 0.7,
-        reasoningLevel: selectedNode.data.reasoningLevel,
-      });
+    if (!hasFetchedProviderCapabilities) {
+      void fetchProviderCapabilities();
+    }
+  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
+
+  useEffect(() => {
+    if (!selectedNode) {
+      setLocalData({});
       return;
     }
 
-    setLocalData({});
+    skipNextSyncRef.current = true;
+    setLocalData({
+      provider: 'openai',
+      model:
+        typeof selectedNode.data.model === 'string' && selectedNode.data.model.trim()
+          ? selectedNode.data.model
+          : OPENAI_DEFAULT_MODEL,
+      label: selectedNode.data.label,
+      prompt: typeof selectedNode.data.prompt === 'string' ? selectedNode.data.prompt : '',
+      systemInstruction:
+        typeof selectedNode.data.systemInstruction === 'string'
+          ? selectedNode.data.systemInstruction
+          : '',
+      maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens) ?? 2048,
+      temperature: coerceNumber(selectedNode.data.temperature, 0.7),
+      reasoningLevel: selectedNode.data.reasoningLevel,
+    });
   }, [selectedNode]);
 
   useEffect(() => {
@@ -272,6 +210,7 @@ export const PropertiesPanel: React.FC = () => {
         const validated = nodeDataSchema.parse({
           ...selectedNode.data,
           ...localData,
+          provider: 'openai',
         });
 
         const isChanged = Object.keys(validated).some(
@@ -295,48 +234,28 @@ export const PropertiesPanel: React.FC = () => {
     return null;
   }
 
-  const currentProvider = (localData.provider ?? selectedNode.data.provider) as ProviderType;
   const currentModel = String(localData.model ?? selectedNode.data.model) as ModelId;
-  const isOpenAIProvider = currentProvider === 'openai';
-  const isLegacyProvider = !isOpenAIProvider;
-  const currentOpenAIModel = isOpenAIProvider
-    ? getOpenAIModelPreset(currentModel)
-    : undefined;
-  const providerOptions = getProviderOptions(currentProvider);
-  const modelOptions = isOpenAIProvider
-    ? buildOpenAIModelOptions(currentModel)
-    : buildLegacyModelOptions(currentModel);
-  const currentModelDisplayName = getModelDisplayName(currentProvider, currentModel);
-  const isReasoningModel = isOpenAIProvider && isOpenAIReasoningModel(currentModel);
+  const modelOptions = buildModelOptions(currentModel);
+  const currentModelDisplayName = getOpenAIModelDisplayName(currentModel);
+  const isReasoningModel = isOpenAIReasoningModel(currentModel);
   const modelDescription =
-    currentOpenAIModel?.description
+    getOpenAIModelPreset(currentModel)?.description
     ?? modelOptions.find((option) => option.id === currentModel)?.description;
-
-  const handleProviderChange = (newProvider: ProviderType): void => {
-    if (newProvider !== 'openai') {
-      setLocalData((prev) => ({
-        ...prev,
-        provider: newProvider,
-      }));
-      return;
-    }
-
-    setLocalData((prev) => ({
-      ...prev,
-      provider: 'openai',
-      model: OPENAI_DEFAULT_MODEL,
-      reasoningLevel: OPENAI_DEFAULT_REASONING_LEVEL,
-    }));
-  };
-
-  const accentColor =
-    {
-      anthropic: '#D97757',
-      codex: '#f54e00',
-      google: '#4285F4',
-      mock: 'var(--color-hairline-strong)',
-      openai: '#412991',
-    }[currentProvider] ?? 'var(--color-hairline-strong)';
+  const authState = providerCapabilities.openai?.auth;
+  const providerNote = [
+    modelDescription ?? 'OpenAI workflow node.',
+    providerCapabilities.openai?.version
+      ? `Version: ${providerCapabilities.openai.version}.`
+      : undefined,
+    authState
+      ? `Auth: ${authState.status}${authState.envVar ? ` via ${authState.envVar}` : ''}.`
+      : undefined,
+    providerCapabilities.openai?.error ?? authState?.message,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const currentTemperature = coerceNumber(localData.temperature, 0.7);
+  const currentMaxTokens = coerceOptionalPositiveInteger(localData.maxTokens) ?? 2048;
 
   const statusTone: Record<NodeStatus, string> = {
     idle: 'var(--color-muted)',
@@ -357,7 +276,7 @@ export const PropertiesPanel: React.FC = () => {
         borderLeft: '1px solid var(--color-hairline)',
       }}
     >
-      <div className="h-0.5 w-full flex-shrink-0" style={{ background: accentColor }} />
+      <div className="h-0.5 w-full flex-shrink-0" style={{ background: '#412991' }} />
 
       <div
         className="flex h-12 flex-shrink-0 items-center justify-between px-5"
@@ -374,7 +293,11 @@ export const PropertiesPanel: React.FC = () => {
               border: '1px solid var(--color-hairline)',
             }}
           >
-            {getAgentIcon(currentProvider, theme)}
+            <img
+              src={theme === 'dark' ? openaiDark : openaiLight}
+              alt="OpenAI"
+              className="h-5 w-5"
+            />
           </div>
           <span
             className="truncate text-xs font-semibold"
@@ -386,6 +309,7 @@ export const PropertiesPanel: React.FC = () => {
 
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => deleteNode(selectedNodeId)}
             className="rounded-md p-1.5 transition-colors"
             style={{ color: 'var(--color-semantic-error)' }}
@@ -400,6 +324,7 @@ export const PropertiesPanel: React.FC = () => {
             <Trash2 size={14} />
           </button>
           <button
+            type="button"
             onClick={() => setSelectedNode(null)}
             className="rounded-md p-1.5 transition-colors"
             style={{ color: 'var(--color-muted)' }}
@@ -434,46 +359,35 @@ export const PropertiesPanel: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label style={LABEL_STYLE}>Provider</label>
-              <Select
-                value={currentProvider}
-                onChange={(event) =>
-                  handleProviderChange(event.target.value as ProviderType)
-                }
-              >
-                {providerOptions.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <label style={LABEL_STYLE}>Model</label>
-              <Select
-                value={currentModel}
-                onChange={(event) =>
-                  setLocalData((prev) => ({ ...prev, model: event.target.value as ModelId }))
-                }
-                tone="accent"
-              >
-                {modelOptions.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
+          <div>
+            <label style={LABEL_STYLE}>Provider</label>
+            <div style={READONLY_INLINE_STYLE}>OpenAI</div>
           </div>
 
-          <div style={MUTED_NOTE_STYLE}>
-            {isLegacyProvider
-              ? `This node still uses the legacy ${getLegacyProviderLabel(currentProvider)} provider. OpenAI is the only supported runtime in the current MVP.`
-              : `${modelDescription ?? 'OpenAI workflow node.'} Requires OPENAI_API_KEY in the Electron main process environment.`}
+          <div>
+            <label style={LABEL_STYLE}>Model</label>
+            <Select
+              value={currentModel}
+              onChange={(event) =>
+                setLocalData((prev) => ({
+                  ...prev,
+                  model: event.target.value as ModelId,
+                  reasoningLevel: isOpenAIReasoningModel(event.target.value)
+                    ? prev.reasoningLevel ?? OPENAI_DEFAULT_REASONING_LEVEL
+                    : undefined,
+                }))
+              }
+              tone="accent"
+            >
+              {modelOptions.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.label}
+                </option>
+              ))}
+            </Select>
           </div>
+
+          <div style={MUTED_NOTE_STYLE}>{providerNote}</div>
         </Section>
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
@@ -528,18 +442,7 @@ export const PropertiesPanel: React.FC = () => {
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
 
         <Section title="Parameters">
-          {isLegacyProvider ? (
-            <div
-              style={{
-                ...READONLY_BLOCK_STYLE,
-                minHeight: '72px',
-                color: 'var(--color-semantic-error)',
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {`This node still points to the legacy ${getLegacyProviderLabel(currentProvider)} provider. Switch the provider to OpenAI before running it in the current MVP.`}
-            </div>
-          ) : isReasoningModel ? (
+          {isReasoningModel ? (
             <div>
               <label style={{ ...LABEL_STYLE, color: 'var(--color-timeline-done)' }}>
                 Reasoning Effort
@@ -554,9 +457,11 @@ export const PropertiesPanel: React.FC = () => {
                 {REASONING_LEVEL_OPTIONS.map((level) => {
                   const isActive =
                     (localData.reasoningLevel ?? OPENAI_DEFAULT_REASONING_LEVEL) === level.value;
+
                   return (
                     <button
                       key={level.value}
+                      type="button"
                       onClick={() =>
                         setLocalData((prev) => ({
                           ...prev,
@@ -604,7 +509,7 @@ export const PropertiesPanel: React.FC = () => {
                     color: 'var(--color-primary)',
                   }}
                 >
-                  {(localData.temperature ?? 0.7).toFixed(1)}
+                  {currentTemperature.toFixed(1)}
                 </span>
               </label>
               <input
@@ -612,7 +517,7 @@ export const PropertiesPanel: React.FC = () => {
                 step="0.1"
                 min="0"
                 max="2"
-                value={localData.temperature ?? 0.7}
+                value={currentTemperature}
                 onChange={(event) =>
                   setLocalData((prev) => ({
                     ...prev,
@@ -625,22 +530,20 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           )}
 
-          {!isLegacyProvider && (
-            <div>
-              <label style={LABEL_STYLE}>Max Tokens</label>
-              <Input
-                type="number"
-                value={localData.maxTokens ?? ''}
-                onChange={(event) =>
-                  setLocalData((prev) => ({
-                    ...prev,
-                    maxTokens: parseInt(event.target.value, 10) || 0,
-                  }))
-                }
-                font="mono"
-              />
-            </div>
-          )}
+          <div>
+            <label style={LABEL_STYLE}>Max Tokens</label>
+            <Input
+              type="number"
+              value={currentMaxTokens}
+              onChange={(event) =>
+                setLocalData((prev) => ({
+                  ...prev,
+                  maxTokens: parseInt(event.target.value, 10) || 0,
+                }))
+              }
+              font="mono"
+            />
+          </div>
         </Section>
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
@@ -692,6 +595,7 @@ export const PropertiesPanel: React.FC = () => {
 
           {nodeStatus === 'error' && (
             <button
+              type="button"
               onClick={() => retryWorkflowFromNode(selectedNodeId)}
               disabled={workflowStatus === 'running'}
               className="flex w-full items-center justify-center gap-2 rounded-md py-2 transition-colors"
