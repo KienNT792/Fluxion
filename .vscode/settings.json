@@ -1,0 +1,21 @@
+{
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  // ── Tailwind CSS v4 compatibility ──────────────────────────────
+  // @theme, @utility, @variant are valid Tailwind v4 directives.
+  // VS Code's built-in CSS linter doesn't know about them → suppress.
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  // Tell VS Code to treat these CSS files as Tailwind CSS
+  // (requires the Tailwind CSS IntelliSense extension for full support)
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

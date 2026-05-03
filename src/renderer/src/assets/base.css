@@ -1,0 +1,164 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ══════════════════════════════════════════════════════
+   FLUXION DESIGN SYSTEM — Cursor-Inspired
+   Based on DESIGN.md token specification
+   ══════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Colors: Brand ── */
+  --color-primary: #f54e00;
+  --color-primary-active: #d04200;
+
+  /* ── Colors: Text ── */
+  --color-ink: #26251e;
+  --color-body: #5a5852;
+  --color-body-strong: #26251e;
+  --color-muted: #807d72;
+  --color-muted-soft: #a09c92;
+  --color-on-primary: #ffffff;
+
+  /* ── Colors: Surface ── */
+  --color-canvas: #f7f7f4;
+  --color-canvas-soft: #fafaf7;
+  --color-surface-card: #ffffff;
+  --color-surface-strong: #e6e5e0;
+
+  /* ── Colors: Hairlines ── */
+  --color-hairline: #e6e5e0;
+  --color-hairline-soft: #efeee8;
+  --color-hairline-strong: #cfcdc4;
+
+  /* ── Colors: AI Timeline Pastels (Agent States ONLY) ── */
+  --color-timeline-thinking: #dfa88f;
+  --color-timeline-grep:     #9fc9a2;
+  --color-timeline-read:     #9fbbe0;
+  --color-timeline-edit:     #c0a8dd;
+  --color-timeline-done:     #c08532;
+
+  /* ── Colors: Semantic ── */
+  --color-semantic-error:   #cf2d56;
+  --color-semantic-success: #1f8a65;
+
+  /* ── Border Radius ── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-pill: 9999px;
+
+  /* ── Font Families ── */
+  --font-sans: 'Inter', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* ── Spacing extras ── */
+  --spacing-section: 80px;
+}
+
+/* ── Semantic Tailwind utilities via @layer ── */
+@layer base {
+  :root {
+    /* legacy electron-vite vars kept for compatibility */
+    --ev-c-white: #ffffff;
+    --ev-c-white-soft: #f8f8f8;
+    --ev-c-white-mute: #f2f2f2;
+    --ev-c-black: #1b1b1f;
+    --ev-c-black-soft: #222222;
+    --ev-c-black-mute: #282828;
+    --ev-c-gray-1: #515c67;
+    --ev-c-gray-2: #414853;
+    --ev-c-gray-3: #32363f;
+    --ev-c-text-1: var(--color-ink);
+    --ev-c-text-2: var(--color-body);
+    --ev-c-text-3: var(--color-muted);
+    --ev-button-alt-border: var(--color-hairline);
+    --ev-button-alt-text: var(--color-ink);
+    --ev-button-alt-bg: var(--color-surface-card);
+    --ev-button-alt-hover-border: var(--color-hairline-strong);
+    --ev-button-alt-hover-text: var(--color-ink);
+    --ev-button-alt-hover-bg: var(--color-canvas-soft);
+    --color-background: var(--color-canvas);
+    --color-background-soft: var(--color-canvas-soft);
+    --color-background-mute: var(--color-surface-strong);
+    --color-text: var(--color-ink);
+  }
+
+  /* ── Dark Mode Overrides ── */
+  :root.dark {
+    /* Surface */
+    --color-canvas: #121211;
+    --color-canvas-soft: #1a1a19;
+    --color-surface-card: #1e1e1d;
+    --color-surface-strong: #2d2d2c;
+
+    /* Text */
+    --color-ink: #f7f7f4;
+    --color-body: #a09c92;
+    --color-body-strong: #f7f7f4;
+    --color-muted: #807d72;
+    --color-muted-soft: #5a5852;
+
+    /* Hairlines */
+    --color-hairline: #2d2d2c;
+    --color-hairline-soft: #1a1a19;
+    --color-hairline-strong: #3d3d3c;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    font-weight: normal;
+  }
+
+  ul {
+    list-style: none;
+  }
+
+  body {
+    min-height: 100vh;
+    color: var(--color-ink);
+    background: var(--color-canvas);
+    line-height: 1.6;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Code surfaces always use JetBrains Mono */
+  code, pre, kbd, samp {
+    font-family: var(--font-mono);
+  }
+
+  /* ── Animated Edges ── */
+  @keyframes edge-dash {
+    from {
+      stroke-dashoffset: 20;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .animate-edge-running {
+    stroke-dasharray: 10, 5;
+    animation: edge-dash 1s linear infinite;
+  }
+
+  .animate-edge-error {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: .5;
+    }
+  }
+}

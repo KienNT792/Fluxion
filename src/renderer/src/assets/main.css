@@ -1,0 +1,89 @@
+@import './base.css';
+
+/* ── Electron App Shell ── */
+body {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  user-select: none;
+  background-color: var(--color-canvas);
+}
+
+#root {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── React Flow overrides ── */
+.react-flow__background {
+  background-color: var(--color-canvas) !important;
+}
+
+/* ── Scrollbar (minimal, matches canvas tone) ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-hairline-strong);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* ── Drag ghost: remove native browser drag image ── */
+[draggable="true"] {
+  cursor: grab;
+}
+[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* ── React Flow Controls: hairline style ── */
+.react-flow__controls {
+  box-shadow: none !important;
+  border: 1px solid var(--color-hairline) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: var(--color-surface-card) !important;
+  border-bottom: 1px solid var(--color-hairline) !important;
+  color: var(--color-body) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-canvas-soft) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: var(--color-body) !important;
+}
+
+/* ── React Flow Edge: warm ink ── */
+.react-flow__edge-path {
+  stroke: var(--color-hairline-strong) !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--color-primary) !important;
+}
+
+/* ── React Flow Connection line ── */
+.react-flow__connection-path {
+  stroke: var(--color-primary) !important;
+}
+
+/* ── Node selection ring ── */
+.react-flow__node.selected .react-flow__node-default,
+.react-flow__node:focus .react-flow__node-default {
+  outline: none;
+}

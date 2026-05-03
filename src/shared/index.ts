@@ -1,0 +1,15 @@
+/**
+ * @file index.ts
+ * @description
+ * Barrel file for the Shared Contract Layer.
+ * Exports all types, enums, and channels so they can be imported cleanly
+ * via the `@shared` alias in both the Main and Renderer processes.
+ *
+ * Example: `import { IpcChannels, NodeStatus } from '@shared'`
+ */
+
+export * from './workflow.types';
+export * from './agent.types';
+export * from './memory.types';
+export * from './ipc.channels';
+export * from './ipc.payloads';
