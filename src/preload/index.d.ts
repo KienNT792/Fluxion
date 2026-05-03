@@ -4,6 +4,7 @@ import {
   MemoryContextReadyPayload,
   NodeId,
   ProviderCapabilitiesPayload,
+  ProviderSettingsSummaryPayload,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -29,6 +30,8 @@ export interface FluxionAPI {
   ) => Promise<WorkflowSavedPayload>;
   saveContext: (workspacePath: string, context: Record<string, string>) => Promise<void>;
   getProviderCapabilities: () => Promise<ProviderCapabilitiesPayload>;
+  getProviderSettingsSummary: () => Promise<ProviderSettingsSummaryPayload>;
+  setOpenAIApiKey: (apiKey: string | null) => Promise<ProviderSettingsSummaryPayload>;
   
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   createWorkflow: (workspacePath: string, name: string) => Promise<WorkflowCreateResult>;

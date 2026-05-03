@@ -138,3 +138,14 @@ export interface MemoryContextReadyPayload {
 }
 
 export type ProviderCapabilitiesPayload = ProviderCapabilitiesMap;
+
+export interface ProviderSettingsSummaryPayload {
+  openaiApiKeyConfigured: boolean;
+  openaiApiKeySource: 'stored' | 'env' | 'none';
+  openaiApiKeyMasked?: string;
+  storageMode: 'secure' | 'plain' | 'env' | 'none';
+}
+
+export interface UpdateOpenAIApiKeyPayload {
+  apiKey: string | null;
+}

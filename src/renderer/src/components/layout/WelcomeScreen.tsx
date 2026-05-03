@@ -1,9 +1,12 @@
 import React from 'react';
-import { FolderOpen, Workflow } from 'lucide-react';
+import { FolderOpen, KeyRound, Workflow } from 'lucide-react';
 import { openWorkspaceFromDialog } from '../../lib/workflow-session';
 import { Button } from '../ui/Button';
+import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 
 export const WelcomeScreen: React.FC = () => {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+
   const handleOpenWorkspace = async (): Promise<void> => {
     await openWorkspaceFromDialog();
   };
@@ -63,13 +66,19 @@ export const WelcomeScreen: React.FC = () => {
           >
             Open a project folder to begin orchestrating your AI workflow.
             <br />
-            Fluxion will analyze your codebase and set up the workspace.
+            Configure your OpenAI key in Global Settings before running real workflows.
           </p>
 
-          <Button variant="primary" size="lg" onClick={handleOpenWorkspace}>
-            <FolderOpen size={16} />
-            Open Project Folder
-          </Button>
+          <div className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Button variant="secondary" size="lg" onClick={() => setIsSettingsOpen(true)}>
+              <KeyRound size={16} />
+              Global Settings
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleOpenWorkspace}>
+              <FolderOpen size={16} />
+              Open Project Folder
+            </Button>
+          </div>
         </div>
 
         {/* ── Keyboard hint ── */}
@@ -80,6 +89,11 @@ export const WelcomeScreen: React.FC = () => {
           or drag a folder onto this window
         </p>
       </div>
+
+      <GlobalSettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 };

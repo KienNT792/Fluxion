@@ -6,6 +6,7 @@ import {
   Plus,
   Play,
   Save,
+  Settings,
   Square,
   Sun,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ import {
   saveCurrentWorkflow,
 } from '../../lib/workflow-session';
 import { Button } from '../ui/Button';
+import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import { InputDialog } from '../ui/InputDialog';
 import { Tooltip } from '../ui/Tooltip';
 
@@ -64,6 +66,7 @@ export const Topbar: React.FC = () => {
   const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
   const workflowError = useExecutionStore((state) => state.workflowError);
@@ -354,6 +357,22 @@ export const Topbar: React.FC = () => {
         </Tooltip>
 
         <Tooltip
+          content="Global Settings"
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setIsSettingsOpen(true)}
+            disabled={isRunning}
+          >
+            <Settings size={14} />
+            <span className="hidden md:inline">Settings</span>
+            <span className="md:hidden">Config</span>
+          </Button>
+        </Tooltip>
+
+        <Tooltip
           content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           <Button
@@ -421,6 +440,11 @@ export const Topbar: React.FC = () => {
           setNewWorkflowName('');
         }}
         onConfirm={handleConfirmCreateWorkflow}
+      />
+
+      <GlobalSettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </header>
   );

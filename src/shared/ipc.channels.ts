@@ -31,6 +31,10 @@ export const IpcChannels = {
 
   // Providers
   PROVIDERS_GET_CAPABILITIES: 'providers:get-capabilities',
+
+  // Settings
+  SETTINGS_GET_PROVIDER_SUMMARY: 'settings:get-provider-summary',
+  SETTINGS_SET_OPENAI_API_KEY: 'settings:set-openai-api-key',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];

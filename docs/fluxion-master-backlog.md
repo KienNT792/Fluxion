@@ -56,118 +56,54 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Phase A - Runtime Reliability
 
-### FX-001 Fix adapter asset packaging and runtime path resolution
-
+### FX-001 Fix adapter asset packaging and runtime path resolution [DONE]
 - Priority: `P0`
-- Outcome: Mock adapter va cac adapter sau nay co the chay dung trong `dev` va `build`.
-- Deliverable: Co co che resolve script/CLI path an toan cho Electron main build output.
-- Acceptance:
-- `MockAdapter` khong con tham chieu sai `out/scripts/mock-cli.js`
-- `npm run dev` va build app deu stream duoc mock output that
-- Co smoke test cho path resolution
+- Outcome: Mock adapter và cac adapter sau nay co the chay dung trong `dev` va `build`.
 
-### FX-002 Enforce correct success/failure semantics in WorkflowEngine
-
+### FX-002 Enforce correct success/failure semantics in WorkflowEngine [DONE]
 - Priority: `P0`
 - Outcome: Engine chi ghi `completed` khi agent that su thanh cong.
-- Deliverable: `WorkflowEngine` doc `AgentResult` va quyet dinh status dung.
-- Acceptance:
-- Non-zero exit code -> node `error`
-- Abort -> node `stopping`/`aborted`, khong ghi output hop le cho downstream
-- Downstream node khong duoc unlock neu upstream fail
 
-### FX-003 Synchronize workflow status between main and renderer
-
+### FX-003 Synchronize workflow status between main and renderer [DONE]
 - Priority: `P0`
 - Outcome: Topbar, abort button va workflow badge phan anh dung trang thai.
-- Deliverable: Co state transition day du `idle -> running -> completed/error/aborted`.
-- Acceptance:
-- Bam Run thi UI vao `running` ngay
-- Bam Abort thi UI vao `aborted` hoac `stopping`
-- Workflow xong thi badge va controls tro ve trang thai hop le
 
-### FX-004 Forward full execution event set to renderer
-
+### FX-004 Forward full execution event set to renderer [DONE]
 - Priority: `P0`
 - Outcome: Renderer nhan day du `node-output`, `terminal-error`, `terminal-exit`.
-- Deliverable: Preload va renderer listeners day du cho event runtime.
-- Acceptance:
-- UI co the hien exit code, output file path, va loi stderr
-- `sourceType` khong con bi hardcode thanh `stdout`
-- Terminal log phan biet duoc stdout/stderr
 
-### FX-005 Add DAG validation before run
-
+### FX-005 Add DAG validation before run [DONE]
 - Priority: `P0`
 - Outcome: Khong cho chay workflow loi cau truc.
-- Deliverable: Validation cho cycle, edge hong, node trung ID, node khong hop le.
-- Acceptance:
-- Graph co cycle -> block run va hien loi ro
-- Edge tro toi node khong ton tai -> block run
-- Workflow hop le moi duoc bat dau execution
 
-### FX-006 Harden Windows abort and process cleanup
-
+### FX-006 Harden Windows abort and process cleanup [DONE]
 - Priority: `P0`
 - Outcome: Abort tren Windows on dinh va khong de process mo coi.
-- Deliverable: Cleanup ro rang trong process manager va app shutdown.
-- Acceptance:
-- Abort giua luc stream khong treo app
-- Dong app giua workflow khong de child process song sot
-- Co smoke test cho kill tree flow
 
 ## Phase B - Workspace and Persistence
 
-### FX-007 Implement workspace open flow
-
+### FX-007 Implement workspace open flow [DONE]
 - Priority: `P1`
 - Outcome: App that su mo mot folder du an thay vi fallback ve `.`.
-- Deliverable: Folder picker IPC, recent workspace state, renderer binding.
-- Acceptance:
-- User chon workspace tren UI
-- `workspacePath` trong store duoc set that
-- Topbar hien duong dan dang mo
 
-### FX-008 Add workspace bootstrap and `workflow.json` persistence
-
+### FX-008 Add workspace bootstrap and `workflow.json` persistence [DONE]
 - Priority: `P1`
 - Outcome: Workflow va memory co the khoi phuc giua cac session.
-- Deliverable: Tao `.fluxion/`, `memory/`, `workflow.json`, config co ban.
-- Acceptance:
-- Workspace moi tu dong bootstrap cau truc can thiet
-- Canvas load duoc tu `workflow.json` neu file ton tai
-- Thay doi flow co the save va reload lai
 
-### FX-009 Add `chokidar` file watch and renderer event stream
-
+### FX-009 Add `chokidar` file watch and renderer event stream [DONE]
 - Priority: `P1`
 - Outcome: Fluxion bat dau dung nhu mot workspace orchestrator dung nghia.
-- Deliverable: Main process watch workspace va day event thay doi file sang UI.
-- Acceptance:
-- Add/change/unlink deu phat event
-- Watcher cleanup dung khi doi workspace hoac dong app
-- Khong watch vo han cac thu muc generated can bo qua
 
-### FX-010 Add autosave and recovery
-
+### FX-010 Add autosave and recovery [DONE]
 - Priority: `P1`
 - Outcome: User khong mat flow khi app crash hoac dong dot ngot.
-- Deliverable: Autosave debounce cho `workflow.json`.
-- Acceptance:
-- Keo tha/chinh panel se duoc save sau mot khoang delay ngan
-- Mo lai app thi workflow cu duoc phuc hoi
 
 ## Phase C - Context and Instruction System
 
-### FX-011 Build context initialization wizard
-
+### FX-011 Build context initialization wizard [DONE]
 - Priority: `P1`
 - Outcome: App ho tro dung 5 cau hoi chien luoc de hieu du an con.
-- Deliverable: UI/logic cho 5 cau hoi context theo AGENTS.md.
-- Acceptance:
-- User co the tra loi 5 cau hoi trong app
-- Cau tra loi duoc luu vao workspace context
-- Agent run sau do nhan duoc context nay
+
 
 ### FX-012 Add source-scan assisted context draft
 

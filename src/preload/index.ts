@@ -6,9 +6,11 @@ import {
   MemoryContextReadyPayload,
   NodeId,
   ProviderCapabilitiesPayload,
+  ProviderSettingsSummaryPayload,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
+  UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowCompletedPayload,
   WorkflowEdge,
@@ -58,6 +60,12 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT, { workspacePath, context }) as Promise<void>,
   getProviderCapabilities: (): Promise<ProviderCapabilitiesPayload> =>
     ipcRenderer.invoke(IpcChannels.PROVIDERS_GET_CAPABILITIES) as Promise<ProviderCapabilitiesPayload>,
+  getProviderSettingsSummary: (): Promise<ProviderSettingsSummaryPayload> =>
+    ipcRenderer.invoke(IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY) as Promise<ProviderSettingsSummaryPayload>,
+  setOpenAIApiKey: (apiKey: string | null): Promise<ProviderSettingsSummaryPayload> =>
+    ipcRenderer.invoke(IpcChannels.SETTINGS_SET_OPENAI_API_KEY, {
+      apiKey,
+    } satisfies UpdateOpenAIApiKeyPayload) as Promise<ProviderSettingsSummaryPayload>,
   runWorkflow: (
     workflowId: string,
     nodes: WorkflowNode[],

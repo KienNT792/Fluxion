@@ -9,6 +9,7 @@ import {
   isOpenAIReasoningModel,
 } from '@shared';
 import { BaseAdapter } from './base.adapter';
+import { settingsService } from '../services/settings.service';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_REQUEST_TIMEOUT_MS = 120_000;
@@ -132,10 +133,10 @@ export class OpenAIAdapter extends BaseAdapter {
     this.abortReasons.delete(nodeId);
     this.timedOutNodes.delete(nodeId);
 
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    const apiKey = await settingsService.resolveOpenAIApiKey();
     if (!apiKey) {
       const error =
-        'OPENAI_API_KEY is missing in the Electron main process environment.';
+        'OpenAI API key is missing. Set it in Global Settings or via OPENAI_API_KEY.';
       yield this.createChunk('stderr', `${error}\n`);
       this.activeExecutions.delete(nodeId);
       return {

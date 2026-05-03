@@ -1,6 +1,8 @@
 import { app, dialog, ipcMain, IpcMainEvent } from 'electron';
 import {
   IpcChannels,
+  ProviderSettingsSummaryPayload,
+  UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowAbortPayload,
   WorkflowCompletedPayload,
@@ -13,6 +15,7 @@ import {
 import { workflowEngine } from '../services/workflow-engine';
 import { providerRegistryService } from '../services/provider-registry.service';
 import { processManager } from '../services/process-manager';
+import { settingsService } from '../services/settings.service';
 import { workspaceService } from '../services/workspace.service';
 
 function createWorkflowFailurePayload(
@@ -169,6 +172,22 @@ export function registerWorkflowHandlers(): void {
   ipcMain.handle(IpcChannels.PROVIDERS_GET_CAPABILITIES, async () => {
     return providerRegistryService.fetchCapabilities();
   });
+
+  ipcMain.handle(
+    IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY,
+    async (): Promise<ProviderSettingsSummaryPayload> => {
+      return settingsService.getProviderSettingsSummary();
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.SETTINGS_SET_OPENAI_API_KEY,
+    async (_event, payload: UpdateOpenAIApiKeyPayload): Promise<ProviderSettingsSummaryPayload> => {
+      const summary = await settingsService.updateOpenAIApiKey(payload.apiKey);
+      providerRegistryService.invalidateCache();
+      return summary;
+    }
+  );
 
   ipcMain.on(
     IpcChannels.WORKFLOW_RUN,

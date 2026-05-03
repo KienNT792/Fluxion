@@ -7,6 +7,7 @@ import {
   ProviderModel,
   ProviderParameterSpec,
 } from '@shared';
+import { settingsService } from './settings.service';
 
 const OPENAI_MODELS_TIMEOUT_MS = 10_000;
 
@@ -101,7 +102,8 @@ async function fetchOpenAIModels(apiKey: string): Promise<ProviderModel[]> {
 }
 
 async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  const apiKey = await settingsService.resolveOpenAIApiKey();
+  const settingsSummary = await settingsService.getProviderSettingsSummary();
   const fallbackModels = buildStaticOpenAIModels();
 
   if (!apiKey) {
@@ -113,7 +115,7 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
         type: 'api-key-env',
         status: 'missing',
         envVar: 'OPENAI_API_KEY',
-        message: 'Set OPENAI_API_KEY in the Electron main process environment.',
+        message: 'Set the OpenAI API key in Global Settings or via OPENAI_API_KEY.',
       },
       models: fallbackModels,
       defaultModel: OPENAI_DEFAULT_MODEL,
@@ -132,7 +134,12 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
       auth: {
         type: 'api-key-env',
         status: 'authenticated',
-        envVar: 'OPENAI_API_KEY',
+        envVar:
+          settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
+        message:
+          settingsSummary.openaiApiKeySource === 'stored'
+            ? 'Configured in Fluxion Global Settings.'
+            : undefined,
       },
       models: models.length > 0 ? models : fallbackModels,
       defaultModel: models.some((model) => model.id === OPENAI_DEFAULT_MODEL)
@@ -149,8 +156,12 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
       auth: {
         type: 'api-key-env',
         status: 'authenticated',
-        envVar: 'OPENAI_API_KEY',
-        message: 'API key exists, but live model discovery failed.',
+        envVar:
+          settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
+        message:
+          settingsSummary.openaiApiKeySource === 'stored'
+            ? 'Configured in Fluxion Global Settings, but live model discovery failed.'
+            : 'API key exists, but live model discovery failed.',
       },
       error: error instanceof Error ? error.message : 'Failed to fetch OpenAI models.',
       models: fallbackModels,
@@ -197,6 +208,11 @@ export class ProviderRegistryService {
     this.cachedAt = now;
 
     return capabilities;
+  }
+
+  public invalidateCache(): void {
+    this.cachedCapabilities = null;
+    this.cachedAt = 0;
   }
 }
 
