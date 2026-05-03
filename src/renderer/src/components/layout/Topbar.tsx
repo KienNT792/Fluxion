@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
   FolderOpen,
   Moon,
-  Plus,
   Play,
+  Plus,
   Save,
   Settings,
   Square,
   Sun,
 } from 'lucide-react';
 import { useExecutionStore } from '../../stores/execution.store';
-import { useWorkflowStore } from '../../stores/workflow.store';
 import { useThemeStore } from '../../stores/theme.store';
+import { useWorkflowStore } from '../../stores/workflow.store';
 import {
   createNewWorkflow,
   openWorkspaceFromDialog,
@@ -21,26 +22,24 @@ import {
   saveCurrentWorkflow,
 } from '../../lib/workflow-session';
 import { Button } from '../ui/Button';
-import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import { InputDialog } from '../ui/InputDialog';
 import { Tooltip } from '../ui/Tooltip';
+import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 
-const CHIP_SURFACE_STYLE: React.CSSProperties = {
-  background: 'var(--color-surface-card)',
-  border: '1px solid var(--color-hairline)',
-};
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
 
-const INFO_CHIP_STYLE: React.CSSProperties = {
-  ...CHIP_SURFACE_STYLE,
-  color: 'var(--color-body)',
-  cursor: 'default',
-};
-
-const CHANGE_VISIBILITY_CLASS_NAMES = ['hidden xl:inline-flex', 'hidden 2xl:inline-flex'];
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+}
 
 function formatSavedLabel(lastSavedAt: string | null): string {
   if (!lastSavedAt) {
-    return 'Saved';
+    return 'Saved recently';
   }
 
   return `Saved ${new Date(lastSavedAt).toLocaleTimeString([], {
@@ -48,6 +47,14 @@ function formatSavedLabel(lastSavedAt: string | null): string {
     minute: '2-digit',
     second: '2-digit',
   })}`;
+}
+
+function formatChangeTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function getChangeToken(changeType: 'add' | 'change' | 'unlink'): string {
@@ -62,21 +69,170 @@ function getChangeToken(changeType: 'add' | 'change' | 'unlink'): string {
   return 'M';
 }
 
+function getChangeTokenColor(changeType: 'add' | 'change' | 'unlink'): string {
+  if (changeType === 'add') {
+    return 'var(--color-timeline-grep)';
+  }
+
+  if (changeType === 'unlink') {
+    return 'var(--color-semantic-error)';
+  }
+
+  return 'var(--color-timeline-read)';
+}
+
+function getPulseState(
+  workflowStatus: 'idle' | 'running' | 'aborted' | 'completed' | 'error',
+  isSaving: boolean
+): {
+  label: string;
+  color: string;
+  animate: boolean;
+} {
+  if (workflowStatus === 'running') {
+    return {
+      label: 'Executing',
+      color: 'var(--color-timeline-thinking)',
+      animate: true,
+    };
+  }
+
+  if (isSaving) {
+    return {
+      label: 'Saving',
+      color: 'var(--color-timeline-read)',
+      animate: true,
+    };
+  }
+
+  if (workflowStatus === 'completed') {
+    return {
+      label: 'Completed',
+      color: 'var(--color-timeline-grep)',
+      animate: false,
+    };
+  }
+
+  if (workflowStatus === 'aborted') {
+    return {
+      label: 'Aborted',
+      color: 'var(--color-timeline-read)',
+      animate: false,
+    };
+  }
+
+  if (workflowStatus === 'error') {
+    return {
+      label: 'Error',
+      color: 'var(--color-semantic-error)',
+      animate: false,
+    };
+  }
+
+  return {
+    label: 'Ready',
+    color: 'var(--color-muted-soft)',
+    animate: false,
+  };
+}
+
+function getDirtyDotState(
+  isDirty: boolean,
+  isSaving: boolean
+): { color: string; animate: boolean; label: string } | null {
+  if (isSaving) {
+    return {
+      color: 'var(--color-timeline-grep)',
+      animate: true,
+      label: 'Saving',
+    };
+  }
+
+  if (isDirty) {
+    return {
+      color: 'var(--color-timeline-done)',
+      animate: false,
+      label: 'Unsaved changes',
+    };
+  }
+
+  return null;
+}
+
+interface ActionTextButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  dimmed?: boolean;
+}
+
+const ActionTextButton = React.forwardRef<HTMLButtonElement, ActionTextButtonProps>(
+  ({ className = '', dimmed = false, disabled = false, children, ...props }, ref) => (
+    <button
+      ref={ref}
+      type="button"
+      disabled={disabled}
+      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors hover:bg-[var(--color-surface-card)] hover:text-[var(--color-ink)] ${className}`}
+      style={{
+        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
+        opacity: dimmed ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+);
+
+ActionTextButton.displayName = 'ActionTextButton';
+
+const ActionIconButton = React.forwardRef<HTMLButtonElement, ActionTextButtonProps>(
+  ({ className = '', dimmed = false, disabled = false, children, ...props }, ref) => (
+    <button
+      ref={ref}
+      type="button"
+      disabled={disabled}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-card)] hover:text-[var(--color-ink)] ${className}`}
+      style={{
+        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
+        opacity: dimmed ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+);
+
+ActionIconButton.displayName = 'ActionIconButton';
+
+const POPOVER_SURFACE_STYLE: React.CSSProperties = {
+  background: 'var(--color-surface-card)',
+  border: '1px solid var(--color-hairline)',
+  borderRadius: 'var(--radius-lg)',
+  boxShadow: '0 18px 40px rgba(38, 37, 30, 0.08)',
+};
+
 export const Topbar: React.FC = () => {
   const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [isActivityPopoverOpen, setIsActivityPopoverOpen] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  const runStartedAtRef = useRef<number | null>(null);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const activityPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
   const workflowError = useExecutionStore((state) => state.workflowError);
   const setWorkflowError = useExecutionStore((state) => state.setWorkflowError);
   const setWorkflowStatus = useExecutionStore((state) => state.setWorkflowStatus);
+
   const nodes = useWorkflowStore((state) => state.nodes);
   const workspacePath = useWorkflowStore((state) => state.workspacePath);
-  const workspaceName = workspacePath
-    ? workspacePath.split(/[/\\]/).filter(Boolean).pop()
-    : 'No workspace';
+  const workflowName = useWorkflowStore((state) => state.workflowName);
   const isDirty = useWorkflowStore((state) => state.isDirty);
   const isSaving = useWorkflowStore((state) => state.isSaving);
   const saveError = useWorkflowStore((state) => state.saveError);
@@ -85,7 +241,98 @@ export const Topbar: React.FC = () => {
     (state) => state.hasExternalWorkflowChange
   );
   const recentWorkspaceChanges = useWorkflowStore((state) => state.recentWorkspaceChanges);
+
   const { theme, toggleTheme } = useThemeStore();
+
+  const workspaceName = workspacePath
+    ? workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? 'Workspace'
+    : 'Workspace';
+
+  const isRunning = workflowStatus === 'running';
+  const canRun = Boolean(workspacePath) && nodes.length > 0 && !isRunning;
+  const canSave = Boolean(workspacePath) && isDirty && !isSaving;
+  const editingDimmed = isRunning;
+  const pulseState = getPulseState(workflowStatus, isSaving);
+  const dirtyDotState = getDirtyDotState(isDirty, isSaving);
+  const changeCount = recentWorkspaceChanges.length;
+  const activitySummaryLabel =
+    changeCount > 0
+      ? `${changeCount} file${changeCount === 1 ? '' : 's'} changed`
+      : hasExternalWorkflowChange
+        ? 'Workflow changed on disk'
+        : 'Workspace steady';
+
+  const statusSubtext = workflowError ?? saveError;
+  const saveStateLabel = isSaving
+    ? 'Saving...'
+    : saveError
+      ? 'Save failed'
+      : isDirty
+        ? 'Unsaved changes'
+        : formatSavedLabel(lastSavedAt);
+
+  useEffect(() => {
+    if (workflowStatus === 'running') {
+      if (runStartedAtRef.current == null) {
+        runStartedAtRef.current = Date.now();
+        setElapsedMs(0);
+      }
+
+      const intervalId = window.setInterval(() => {
+        if (runStartedAtRef.current != null) {
+          setElapsedMs(Date.now() - runStartedAtRef.current);
+        }
+      }, 1000);
+
+      return () => window.clearInterval(intervalId);
+    }
+
+    runStartedAtRef.current = null;
+    setElapsedMs(0);
+    return undefined;
+  }, [workflowStatus]);
+
+  useEffect(() => {
+    if (!isProjectMenuOpen && !isActivityPopoverOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent): void => {
+      const target = event.target as Node | null;
+      if (
+        isProjectMenuOpen
+        && projectMenuRef.current
+        && target
+        && !projectMenuRef.current.contains(target)
+      ) {
+        setIsProjectMenuOpen(false);
+      }
+
+      if (
+        isActivityPopoverOpen
+        && activityPopoverRef.current
+        && target
+        && !activityPopoverRef.current.contains(target)
+      ) {
+        setIsActivityPopoverOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setIsProjectMenuOpen(false);
+        setIsActivityPopoverOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isActivityPopoverOpen, isProjectMenuOpen]);
 
   const handleRun = (): void => {
     runCurrentWorkflow();
@@ -93,6 +340,7 @@ export const Topbar: React.FC = () => {
 
   const handleOpenWorkspace = async (): Promise<void> => {
     try {
+      setIsProjectMenuOpen(false);
       await openWorkspaceFromDialog();
       setWorkflowError(null);
     } catch (error) {
@@ -104,6 +352,7 @@ export const Topbar: React.FC = () => {
 
   const handleSave = async (): Promise<void> => {
     try {
+      setIsProjectMenuOpen(false);
       await saveCurrentWorkflow();
     } catch (error) {
       const errorMessage =
@@ -117,6 +366,7 @@ export const Topbar: React.FC = () => {
       return;
     }
 
+    setIsProjectMenuOpen(false);
     setNewWorkflowName('');
     setIsCreateWorkflowDialogOpen(true);
   };
@@ -146,11 +396,10 @@ export const Topbar: React.FC = () => {
     try {
       await reloadCurrentWorkspaceFromDisk();
       setWorkflowError(null);
+      setIsActivityPopoverOpen(false);
     } catch (error) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Failed to reload workflow from disk.';
+        error instanceof Error ? error.message : 'Failed to reload workflow from disk.';
       setWorkflowError(errorMessage);
     }
   };
@@ -161,267 +410,352 @@ export const Topbar: React.FC = () => {
     window.api.abortWorkflow();
   };
 
-  const isRunning = workflowStatus === 'running';
-  const canRun = Boolean(workspacePath) && nodes.length > 0 && !isRunning;
-  const canSave = Boolean(workspacePath) && isDirty && !isSaving;
-  const visibleWorkspaceChanges = recentWorkspaceChanges.slice(0, 2);
-
-  const saveStateLabel = isSaving
-    ? 'Saving...'
-    : saveError
-      ? 'Save failed'
-      : isDirty
-        ? 'Unsaved'
-        : formatSavedLabel(lastSavedAt);
-
-  const saveStateColor = isSaving
-    ? 'var(--color-primary)'
-    : saveError
-      ? 'var(--color-semantic-error)'
-      : isDirty
-        ? 'var(--color-timeline-done)'
-        : 'var(--color-semantic-success)';
+  const activityDetailItems = useMemo(
+    () =>
+      recentWorkspaceChanges.map((change) => ({
+        key: `${change.relativePath}-${change.receivedAt}`,
+        token: getChangeToken(change.changeType),
+        tokenColor: getChangeTokenColor(change.changeType),
+        relativePath: change.relativePath,
+        receivedAt: formatChangeTime(change.receivedAt),
+      })),
+    [recentWorkspaceChanges]
+  );
 
   return (
     <header
-      className="relative z-40 flex shrink-0 flex-col gap-3 px-4 py-3 sm:px-5 lg:min-h-14 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2"
+      className="relative z-40 px-4 py-3 sm:px-5 lg:px-6"
       style={{
         background: 'var(--color-canvas)',
         borderBottom: '1px solid var(--color-hairline)',
       }}
     >
-      <div
-        className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        <Tooltip content={workspacePath || 'No workspace'}>
-          <span
-            className="inline-block max-w-full truncate rounded-md px-2 py-1 font-mono text-xs leading-none sm:max-w-[280px] xl:max-w-[360px]"
-            style={INFO_CHIP_STYLE}
-          >
-            {workspaceName}
-          </span>
-        </Tooltip>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+        <div className="min-w-0">
+          <Tooltip content={workspacePath || 'No workspace open'}>
+            <div className="flex min-w-0 items-center gap-2">
+              <FolderOpen size={14} style={{ color: 'var(--color-muted)' }} />
 
-        <Tooltip content={saveError || saveStateLabel}>
-          <span
-            className="rounded-md px-2 py-1 text-[11px] font-semibold leading-none"
-            style={{
-              ...CHIP_SURFACE_STYLE,
-              color: saveStateColor,
-            }}
-          >
-            {saveStateLabel}
-          </span>
-        </Tooltip>
-
-        {workflowStatus !== 'idle' && (
-          <span
-            className="hidden items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] md:inline-flex"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            Status:
-            <span
-              className="font-semibold"
-              style={{
-                color:
-                  workflowStatus === 'running'
-                    ? 'var(--color-timeline-done)'
-                    : workflowStatus === 'completed'
-                      ? 'var(--color-semantic-success)'
-                      : 'var(--color-semantic-error)',
-              }}
-            >
-              {workflowStatus.toUpperCase()}
-            </span>
-          </span>
-        )}
-
-        {hasExternalWorkflowChange && (
-          <Tooltip
-            content={
-              isRunning
-                ? 'Abort the current workflow before reloading from disk'
-                : 'The workflow file changed on disk. Reload from disk.'
-            }
-          >
-            <Button
-              variant="danger"
-              size="sm"
-              className="shrink-0"
-              onClick={handleReload}
-              disabled={isRunning}
-            >
-              <AlertTriangle size={14} />
-              <span className="hidden sm:inline">Reload from disk</span>
-              <span className="sm:hidden">Reload</span>
-            </Button>
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="hidden text-[11px] uppercase tracking-[0.08em] lg:inline"
+                  style={{
+                    color: 'var(--color-muted-soft)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  Fluxion
+                </span>
+                <span
+                  className="hidden lg:inline"
+                  style={{ color: 'var(--color-muted-soft)' }}
+                >
+                  /
+                </span>
+                <span
+                  className="truncate text-[11px] uppercase tracking-[0.08em]"
+                  style={{
+                    color: 'var(--color-muted)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {workspaceName}
+                </span>
+                <span style={{ color: 'var(--color-muted-soft)' }}>/</span>
+                <span
+                  className="truncate text-sm font-semibold"
+                  style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
+                >
+                  {workflowName}
+                </span>
+                {dirtyDotState && (
+                  <Tooltip content={dirtyDotState.label}>
+                    <span
+                      className={`inline-block h-2.5 w-2.5 rounded-full ${dirtyDotState.animate ? 'animate-pulse' : ''}`}
+                      style={{ background: dirtyDotState.color }}
+                    />
+                  </Tooltip>
+                )}
+              </div>
+            </div>
           </Tooltip>
-        )}
+        </div>
 
-        {visibleWorkspaceChanges.map((change, index) => (
-          <Tooltip
-            key={`${change.relativePath}-${change.receivedAt}`}
-            content={`${change.changeType.toUpperCase()} ${change.relativePath}`}
-          >
+        <div className="justify-self-start lg:justify-self-center">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span
-              className={`${CHANGE_VISIBILITY_CLASS_NAMES[index] ?? 'hidden 2xl:inline-flex'} max-w-[220px] items-center gap-1.5 rounded-md px-2 py-1 text-[11px] leading-none`}
-              style={{
-                ...CHIP_SURFACE_STYLE,
-                color: 'var(--color-muted)',
-                cursor: 'default',
-              }}
+              className="inline-flex items-center gap-2"
+              style={{ color: 'var(--color-body)' }}
             >
-              <span style={{ color: 'var(--color-primary)' }}>
-                {getChangeToken(change.changeType)}
+              <span
+                className={`inline-block h-2.5 w-2.5 rounded-full ${pulseState.animate ? 'animate-pulse' : ''}`}
+                style={{ background: pulseState.color }}
+              />
+              <span
+                className="font-medium"
+                style={{ color: 'var(--color-ink)' }}
+              >
+                {pulseState.label}
+                {workflowStatus === 'running' ? ` (${formatElapsed(elapsedMs)})` : ''}
               </span>
-              <span className="truncate">{change.relativePath}</span>
             </span>
-          </Tooltip>
-        ))}
 
-        {workflowError && (
-          <Tooltip content={workflowError}>
-            <span
-              className="basis-full truncate text-xs xl:basis-auto xl:max-w-[320px]"
-              style={{ color: 'var(--color-semantic-error)' }}
+            <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
+
+            {changeCount > 0 || hasExternalWorkflowChange ? (
+              <div className="relative" ref={activityPopoverRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsActivityPopoverOpen((current) => !current)}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
+                  style={{
+                    color: hasExternalWorkflowChange
+                      ? 'var(--color-semantic-error)'
+                      : 'var(--color-muted)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {activitySummaryLabel}
+                  <ChevronDown size={12} />
+                </button>
+
+                {isActivityPopoverOpen && (
+                  <div
+                    className="absolute left-0 top-[calc(100%+10px)] z-50 w-[320px] p-3"
+                    style={POPOVER_SURFACE_STYLE}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className="text-[11px] uppercase tracking-[0.08em]"
+                        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                      >
+                        Activity
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+                      >
+                        {saveStateLabel}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {activityDetailItems.length > 0 ? (
+                        activityDetailItems.map((item) => (
+                          <div
+                            key={item.key}
+                            className="flex items-start justify-between gap-3 text-xs"
+                          >
+                            <div className="flex min-w-0 items-start gap-2">
+                              <span
+                                className="mt-0.5 font-semibold"
+                                style={{ color: item.tokenColor, fontFamily: 'var(--font-mono)' }}
+                              >
+                                {item.token}
+                              </span>
+                              <span
+                                className="truncate"
+                                style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
+                              >
+                                {item.relativePath}
+                              </span>
+                            </div>
+                            <span
+                              className="shrink-0"
+                              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+                            >
+                              {item.receivedAt}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p
+                          className="text-xs"
+                          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                        >
+                          No recent file changes.
+                        </p>
+                      )}
+                    </div>
+
+                    {hasExternalWorkflowChange && (
+                      <div
+                        className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+                        style={{
+                          background: 'var(--color-canvas)',
+                          border: '1px solid var(--color-hairline)',
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <p
+                            className="text-xs font-medium"
+                            style={{ color: 'var(--color-ink)' }}
+                          >
+                            Workflow file changed on disk
+                          </p>
+                          <p
+                            className="mt-1 text-[11px]"
+                            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                          >
+                            Reload to sync the canvas with disk.
+                          </p>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleReload}
+                          disabled={isRunning}
+                        >
+                          <AlertTriangle size={13} />
+                          Reload
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span
+                className="text-xs"
+                style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+              >
+                {activitySummaryLabel}
+              </span>
+            )}
+          </div>
+
+          {statusSubtext && (
+            <p
+              className="mt-1 truncate text-[11px]"
+              style={{ color: 'var(--color-semantic-error)', fontFamily: 'var(--font-mono)' }}
             >
-              {workflowError}
-            </span>
-          </Tooltip>
-        )}
-      </div>
+              {statusSubtext}
+            </p>
+          )}
+        </div>
 
-      <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap lg:justify-end">
-        <Tooltip
-          content={
-            isRunning
-              ? 'Abort the current workflow before switching workspace'
-              : 'Open Workspace'
-          }
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={handleOpenWorkspace}
-            disabled={isRunning}
-          >
-            <FolderOpen size={14} />
-            <span className="hidden md:inline">Open Workspace</span>
-            <span className="md:hidden">Open</span>
-          </Button>
-        </Tooltip>
+        <div className="flex items-center justify-between gap-2 lg:justify-end">
+          <div className="flex items-center gap-1">
+            <div className="relative" ref={projectMenuRef}>
+              <ActionTextButton
+                onClick={() => setIsProjectMenuOpen((current) => !current)}
+                disabled={isRunning}
+                dimmed={editingDimmed}
+              >
+                <span>Project</span>
+                <ChevronDown size={14} />
+              </ActionTextButton>
 
-        <Tooltip
-          content={
-            !workspacePath
-              ? 'Open a workspace first'
-              : isRunning
-                ? 'Abort the current workflow before creating a new workflow'
-                : 'Create new workflow'
-          }
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={handleOpenCreateWorkflowDialog}
-            disabled={!workspacePath || isRunning}
-          >
-            <Plus size={14} />
-            <span className="hidden md:inline">New Workflow</span>
-            <span className="md:hidden">New</span>
-          </Button>
-        </Tooltip>
+              {isProjectMenuOpen && (
+                <div
+                  className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] p-2"
+                  style={POPOVER_SURFACE_STYLE}
+                >
+                  <button
+                    type="button"
+                    onClick={handleOpenWorkspace}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
+                    style={{ color: 'var(--color-ink)' }}
+                  >
+                    <FolderOpen size={14} />
+                    Open Workspace
+                  </button>
 
-        <Tooltip
-          content={
-            !workspacePath
-              ? 'Open a workspace first'
-              : isDirty
-                ? 'Save workflow.json now'
-                : 'Workflow is already saved'
-          }
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            <Save size={14} />
-            Save
-          </Button>
-        </Tooltip>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateWorkflowDialog}
+                    disabled={!workspacePath || isRunning}
+                    className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                    style={{
+                      color:
+                        !workspacePath || isRunning
+                          ? 'var(--color-muted-soft)'
+                          : 'var(--color-ink)',
+                    }}
+                  >
+                    <Plus size={14} />
+                    New Workflow
+                  </button>
 
-        <Tooltip
-          content="Global Settings"
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setIsSettingsOpen(true)}
-            disabled={isRunning}
-          >
-            <Settings size={14} />
-            <span className="hidden md:inline">Settings</span>
-            <span className="md:hidden">Config</span>
-          </Button>
-        </Tooltip>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!canSave}
+                    className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                    style={{
+                      color: canSave ? 'var(--color-ink)' : 'var(--color-muted-soft)',
+                    }}
+                  >
+                    <Save size={14} />
+                    Save Workflow
+                  </button>
 
-        <Tooltip
-          content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-            onClick={toggleTheme}
-          >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </Button>
-        </Tooltip>
+                  <div
+                    className="mt-2 px-3 pt-2 text-[11px]"
+                    style={{
+                      color: saveError ? 'var(--color-semantic-error)' : 'var(--color-muted)',
+                      fontFamily: 'var(--font-mono)',
+                      borderTop: '1px solid var(--color-hairline)',
+                    }}
+                  >
+                    {saveError ?? saveStateLabel}
+                  </div>
+                </div>
+              )}
+            </div>
 
-        <div
-          className="mx-1 hidden h-5 w-px sm:block"
-          style={{ background: 'var(--color-hairline)' }}
-        />
+            <Tooltip content="Global Settings">
+              <ActionIconButton
+                onClick={() => setIsSettingsOpen(true)}
+                disabled={isRunning}
+                dimmed={editingDimmed}
+              >
+                <Settings size={16} />
+              </ActionIconButton>
+            </Tooltip>
 
-        {!isRunning ? (
-          <Tooltip
-            content={
-              !workspacePath
-                ? 'Open a workspace first'
-                : nodes.length === 0
-                  ? 'Add at least one node'
-                  : 'Run workflow'
-            }
-          >
-            <Button
-              variant="primary"
-              className="min-w-[88px] shrink-0"
-              onClick={handleRun}
-              disabled={!canRun}
+            <Tooltip content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+              <ActionIconButton onClick={toggleTheme}>
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              </ActionIconButton>
+            </Tooltip>
+          </div>
+
+          {!isRunning ? (
+            <Tooltip
+              content={
+                !workspacePath
+                  ? 'Open a workspace first'
+                  : nodes.length === 0
+                    ? 'Add at least one node'
+                    : 'Run workflow'
+              }
             >
-              <Play size={14} fill="currentColor" />
-              Run
-            </Button>
-          </Tooltip>
-        ) : (
-          <Tooltip content="Abort current workflow">
-            <Button
-              variant="danger"
-              className="min-w-[88px] shrink-0"
-              onClick={handleAbort}
-            >
-              <Square size={14} fill="currentColor" />
-              Abort
-            </Button>
-          </Tooltip>
-        )}
+              <Button
+                variant="primary"
+                size="md"
+                className="min-w-[112px] shrink-0"
+                onClick={handleRun}
+                disabled={!canRun}
+              >
+                <Play size={14} fill="currentColor" />
+                RUN
+              </Button>
+            </Tooltip>
+          ) : (
+            <Tooltip content="Abort current workflow">
+              <Button
+                variant="danger"
+                size="md"
+                className="min-w-[112px] shrink-0"
+                onClick={handleAbort}
+              >
+                <Square size={14} fill="currentColor" />
+                ABORT
+              </Button>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       <InputDialog
@@ -435,7 +769,10 @@ export const Topbar: React.FC = () => {
         confirmDisabled={isCreatingWorkflow || !newWorkflowName.trim()}
         onValueChange={setNewWorkflowName}
         onCancel={() => {
-          if (isCreatingWorkflow) return;
+          if (isCreatingWorkflow) {
+            return;
+          }
+
           setIsCreateWorkflowDialogOpen(false);
           setNewWorkflowName('');
         }}
