@@ -12,11 +12,14 @@ import {
 import {
   AgentNodeData,
   CodexCapabilities,
+  OPENAI_DEFAULT_MODEL,
+  OPENAI_DEFAULT_REASONING_LEVEL,
   ProviderType,
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
   WorkflowMetadata,
+  isOpenAIReasoningModel,
 } from '@shared';
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
@@ -81,7 +84,7 @@ function getDefaultStaticModel(provider: ProviderType): string {
     case 'google':
       return 'gemini-1.5-pro';
     case 'openai':
-      return 'o1-preview';
+      return OPENAI_DEFAULT_MODEL;
     case 'anthropic':
       return 'claude-3-opus';
     case 'mock':
@@ -306,8 +309,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   addNode: (preset, position) => {
-    const provider = preset.provider || 'codex';
+    const provider = preset.provider || 'openai';
     const model = preset.model || getDefaultModelForProvider(provider, get().codexCapabilities);
+    const reasoningLevel =
+      provider === 'openai' && isOpenAIReasoningModel(model)
+        ? OPENAI_DEFAULT_REASONING_LEVEL
+        : undefined;
     const newNodeId = `node-${Date.now()}`;
     const newNode: Node<WorkflowNode['data']> = {
       id: newNodeId,
@@ -319,6 +326,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         systemInstruction: '',
         maxTokens: 2048,
         temperature: 0.7,
+        reasoningLevel,
       },
       type: 'agentNode',
     };

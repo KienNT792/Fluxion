@@ -1,7 +1,7 @@
 import React from 'react';
 import { Handle, Position, NodeProps, Node } from '@xyflow/react';
 import { Bot, RotateCcw, Settings, Terminal } from 'lucide-react';
-import { AgentNodeData } from '@shared';
+import { AgentNodeData, getOpenAIModelDisplayName } from '@shared';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
@@ -92,6 +92,10 @@ const MODEL_LABELS: Record<string, string> = {
   'gemini-1.5-flash': 'Gemini 1.5 Flash',
   'gemini-exp-1206':  'Gemini Exp',
   'gpt-4o':           'GPT-4o',
+  'gpt-4.1':          'GPT-4.1',
+  'gpt-5.4':          'GPT-5.4',
+  'gpt-5.4-mini':     'GPT-5.4 mini',
+  'gpt-5.5':          'GPT-5.5',
   'o1-preview':       'o1 Preview',
   'o1-mini':          'o1 Mini',
   'o4-mini':          'o4 Mini',
@@ -113,7 +117,10 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
     data.provider === 'codex'
       ? codexModels.find((model) => model.id === data.model)?.displayName
       : undefined;
-  const resolvedModelName = codexDisplayName || MODEL_LABELS[data.model] || data.model;
+  const openaiDisplayName =
+    data.provider === 'openai' ? getOpenAIModelDisplayName(data.model) : undefined;
+  const resolvedModelName =
+    codexDisplayName || openaiDisplayName || MODEL_LABELS[data.model] || data.model;
   const displayName = data.label || resolvedModelName;
   const modelLabel  = data.label ? resolvedModelName : data.model;
   const canRetry = status === 'error' && workflowStatus !== 'running';

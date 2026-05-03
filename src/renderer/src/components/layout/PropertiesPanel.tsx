@@ -5,8 +5,13 @@ import {
   AgentNodeData,
   ModelId,
   NodeStatus,
-  ProviderModel,
+  OPENAI_DEFAULT_MODEL,
+  OPENAI_DEFAULT_REASONING_LEVEL,
+  OPENAI_MVP_MODELS,
   ProviderType,
+  getOpenAIModelDisplayName,
+  getOpenAIModelPreset,
+  isOpenAIReasoningModel,
 } from '@shared';
 import { retryWorkflowFromNode } from '../../lib/workflow-session';
 import { useExecutionStore } from '../../stores/execution.store';
@@ -24,95 +29,47 @@ import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 import { getFormControlStyle } from '../ui/form-control';
 
-interface StaticModelOption {
+interface ProviderOption {
+  id: ProviderType;
+  label: string;
+}
+
+interface ModelOption {
   id: string;
   label: string;
   description?: string;
 }
 
-interface ModelOption extends StaticModelOption {
-  metadata?: string;
-}
-
-const PROVIDERS = [
-  { id: 'google', label: 'Google (Gemini)' },
-  { id: 'openai', label: 'OpenAI' },
-  { id: 'anthropic', label: 'Anthropic' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'mock', label: 'Mock' },
-] as const;
-
-const STATIC_MODEL_OPTIONS: Record<Exclude<ProviderType, 'codex'>, StaticModelOption[]> = {
-  google: [
-    {
-      id: 'gemini-1.5-pro',
-      label: 'Gemini 1.5 Pro',
-      description: 'High-capability Gemini preset.',
-    },
-    {
-      id: 'gemini-1.5-flash',
-      label: 'Gemini 1.5 Flash',
-      description: 'Fast Gemini preset.',
-    },
-    {
-      id: 'gemini-exp-1206',
-      label: 'Gemini Exp (Reasoning)',
-      description: 'Reasoning-style Gemini preset.',
-    },
-  ],
-  openai: [
-    {
-      id: 'gpt-4o',
-      label: 'GPT-4o',
-      description: 'General-purpose OpenAI preset.',
-    },
-    {
-      id: 'o1-preview',
-      label: 'o1 Preview (Reasoning)',
-      description: 'Reasoning-style OpenAI preset.',
-    },
-    {
-      id: 'o1-mini',
-      label: 'o1 Mini (Reasoning)',
-      description: 'Smaller reasoning-style OpenAI preset.',
-    },
-  ],
-  anthropic: [
-    {
-      id: 'claude-3-opus',
-      label: 'Claude 3 Opus',
-      description: 'High-capability Claude preset.',
-    },
-    {
-      id: 'claude-3-5-sonnet',
-      label: 'Claude 3.5 Sonnet',
-      description: 'Balanced Claude preset.',
-    },
-  ],
-  mock: [
-    {
-      id: 'mock-agent',
-      label: 'Mock Agent',
-      description: 'Local mock adapter for workflow testing.',
-    },
-  ],
+const OPENAI_PROVIDER_OPTION: ProviderOption = {
+  id: 'openai',
+  label: 'OpenAI',
 };
 
-const STATIC_MODEL_NAMES: Record<string, string> = {
+const LEGACY_PROVIDER_LABELS: Record<Exclude<ProviderType, 'openai'>, string> = {
+  anthropic: 'Anthropic',
+  codex: 'Codex',
+  google: 'Google (Gemini)',
+  mock: 'Mock',
+};
+
+const LEGACY_MODEL_LABELS: Record<string, string> = {
   'claude-3-5-sonnet': 'Claude 3.5 Sonnet',
   'claude-3-opus': 'Claude 3 Opus',
   'codex-mini': 'Codex Mini',
   'gemini-1.5-flash': 'Gemini 1.5 Flash',
   'gemini-1.5-pro': 'Gemini 1.5 Pro',
   'gemini-exp-1206': 'Gemini Exp 1206',
+  'gpt-4.1': 'GPT-4.1',
   'gpt-4o': 'GPT-4o',
+  'gpt-5.4': 'GPT-5.4',
+  'gpt-5.4-mini': 'GPT-5.4 mini',
+  'gpt-5.5': 'GPT-5.5',
   'mock-agent': 'Mock Agent',
   'o1-mini': 'o1 Mini',
   'o1-preview': 'o1 Preview',
   'o4-mini': 'o4 Mini',
 };
 
-const STATIC_REASONING_MODELS = new Set(['gemini-exp-1206', 'o1-preview', 'o1-mini']);
 const REASONING_LEVEL_OPTIONS = [
   { value: 'low', label: 'Low', hint: 'Fast' },
   { value: 'medium', label: 'Med', hint: 'Balanced' },
@@ -175,90 +132,67 @@ const getAgentIcon = (provider: ProviderType, theme: 'light' | 'dark'): React.JS
   }
 };
 
-function getStaticModelName(model: string): string {
-  return STATIC_MODEL_NAMES[model] ?? model;
-}
-
-function getCodexModelById(models: ProviderModel[], modelId: string): ProviderModel | undefined {
-  return models.find((model) => model.id === modelId);
-}
-
-function getSelectableCodexModels(models: ProviderModel[]): ProviderModel[] {
-  return models.filter((model) => model.visibility === 'list');
-}
-
-function getModelDisplayName(
-  provider: ProviderType,
-  model: string,
-  codexModels: ProviderModel[]
-): string {
-  if (provider === 'codex') {
-    return getCodexModelById(codexModels, model)?.displayName ?? getStaticModelName(model);
+function getLegacyProviderLabel(provider: ProviderType): string {
+  if (provider === 'openai') {
+    return 'OpenAI';
   }
 
-  return getStaticModelName(model);
+  return LEGACY_PROVIDER_LABELS[provider];
 }
 
-function getFirstModelForProvider(
-  provider: ProviderType,
-  codexModels: ProviderModel[]
-): string {
-  if (provider === 'codex') {
-    return getSelectableCodexModels(codexModels)[0]?.id ?? 'gpt-5.5';
+function getFallbackModelName(modelId: string): string {
+  return LEGACY_MODEL_LABELS[modelId] ?? modelId;
+}
+
+function getProviderOptions(currentProvider: ProviderType): ProviderOption[] {
+  if (currentProvider === 'openai') {
+    return [OPENAI_PROVIDER_OPTION];
   }
 
-  return STATIC_MODEL_OPTIONS[provider][0]?.id ?? 'mock-agent';
+  return [
+    OPENAI_PROVIDER_OPTION,
+    {
+      id: currentProvider,
+      label: `Legacy: ${getLegacyProviderLabel(currentProvider)}`,
+    },
+  ];
 }
 
-function formatTokenCount(tokenCount?: number): string {
-  if (typeof tokenCount !== 'number' || !Number.isFinite(tokenCount)) {
-    return 'n/a';
+function getModelDisplayName(provider: ProviderType, modelId: string): string {
+  if (provider === 'openai') {
+    return getOpenAIModelDisplayName(modelId);
   }
 
-  return `${new Intl.NumberFormat().format(tokenCount)} tokens`;
+  return getFallbackModelName(modelId);
 }
 
-function formatModalities(inputModalities?: string[]): string {
-  if (!inputModalities || inputModalities.length === 0) {
-    return 'n/a';
-  }
-
-  return inputModalities.join(', ');
-}
-
-function buildCodexModelOptions(
-  codexModels: ProviderModel[],
-  currentModel: string
-): ModelOption[] {
-  const selectableModels = getSelectableCodexModels(codexModels).map((model) => ({
+function buildOpenAIModelOptions(currentModel: string): ModelOption[] {
+  const options: ModelOption[] = OPENAI_MVP_MODELS.map((model) => ({
     id: model.id,
     label: model.displayName,
     description: model.description,
-    metadata: model.contextWindow ? formatTokenCount(model.contextWindow) : undefined,
   }));
 
-  if (!currentModel) {
-    return selectableModels;
+  if (!currentModel || options.some((model) => model.id === currentModel)) {
+    return options;
   }
 
-  const hasCurrentModel = selectableModels.some((model) => model.id === currentModel);
-  if (hasCurrentModel) {
-    return selectableModels;
-  }
-
-  const currentCodexModel = getCodexModelById(codexModels, currentModel);
   return [
-    ...selectableModels,
+    ...options,
     {
       id: currentModel,
-      label: currentCodexModel?.displayName ?? getStaticModelName(currentModel),
-      description:
-        currentCodexModel?.visibility === 'hide'
-          ? 'Hidden Codex model'
-          : 'Legacy or custom model',
-      metadata: currentCodexModel?.contextWindow
-        ? formatTokenCount(currentCodexModel.contextWindow)
-        : undefined,
+      label: getOpenAIModelDisplayName(currentModel),
+      description: 'Custom or legacy OpenAI model from an older workflow.',
+    },
+  ];
+}
+
+function buildLegacyModelOptions(currentModel: string): ModelOption[] {
+  return [
+    {
+      id: currentModel,
+      label: getFallbackModelName(currentModel),
+      description: 'Legacy provider model outside the current OpenAI MVP scope.',
     },
   ];
 }
@@ -282,13 +216,6 @@ export const PropertiesPanel: React.FC = () => {
   const nodes = useWorkflowStore((state) => state.nodes);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const deleteNode = useWorkflowStore((state) => state.deleteNode);
-  const codexCapabilities = useWorkflowStore((state) => state.codexCapabilities);
-  const isCodexCapabilitiesLoading = useWorkflowStore(
-    (state) => state.isCodexCapabilitiesLoading
-  );
-  const hasFetchedCodexCapabilities = useWorkflowStore(
-    (state) => state.hasFetchedCodexCapabilities
-  );
   const nodeStatus = useExecutionStore(
     (state) => (selectedNodeId ? state.nodeStatuses[selectedNodeId] : undefined) ?? 'idle'
   );
@@ -370,37 +297,35 @@ export const PropertiesPanel: React.FC = () => {
 
   const currentProvider = (localData.provider ?? selectedNode.data.provider) as ProviderType;
   const currentModel = String(localData.model ?? selectedNode.data.model) as ModelId;
-  const isCodexProvider = currentProvider === 'codex';
-  const codexModels = codexCapabilities.models;
-  const currentCodexModel = isCodexProvider
-    ? getCodexModelById(codexModels, currentModel)
+  const isOpenAIProvider = currentProvider === 'openai';
+  const isLegacyProvider = !isOpenAIProvider;
+  const currentOpenAIModel = isOpenAIProvider
+    ? getOpenAIModelPreset(currentModel)
     : undefined;
-  const currentModelDisplayName = getModelDisplayName(
-    currentProvider,
-    currentModel,
-    codexModels
-  );
-  const modelOptions: ModelOption[] = isCodexProvider
-    ? buildCodexModelOptions(codexModels, currentModel)
-    : STATIC_MODEL_OPTIONS[currentProvider].map((model) => ({ ...model }));
-  const isStaticReasoningModel =
-    !isCodexProvider && STATIC_REASONING_MODELS.has(currentModel);
-  const codexDiscoveryError =
-    hasFetchedCodexCapabilities
-    && !isCodexCapabilitiesLoading
-    && !codexCapabilities.available
-      ? codexCapabilities.error ?? 'Codex CLI is unavailable.'
-      : undefined;
-  const codexModelDescription =
-    currentCodexModel?.description
+  const providerOptions = getProviderOptions(currentProvider);
+  const modelOptions = isOpenAIProvider
+    ? buildOpenAIModelOptions(currentModel)
+    : buildLegacyModelOptions(currentModel);
+  const currentModelDisplayName = getModelDisplayName(currentProvider, currentModel);
+  const isReasoningModel = isOpenAIProvider && isOpenAIReasoningModel(currentModel);
+  const modelDescription =
+    currentOpenAIModel?.description
     ?? modelOptions.find((option) => option.id === currentModel)?.description;
 
   const handleProviderChange = (newProvider: ProviderType): void => {
-    const nextModel = getFirstModelForProvider(newProvider, codexModels);
+    if (newProvider !== 'openai') {
+      setLocalData((prev) => ({
+        ...prev,
+        provider: newProvider,
+      }));
+      return;
+    }
+
     setLocalData((prev) => ({
       ...prev,
-      provider: newProvider,
-      model: nextModel,
+      provider: 'openai',
+      model: OPENAI_DEFAULT_MODEL,
+      reasoningLevel: OPENAI_DEFAULT_REASONING_LEVEL,
     }));
   };
 
@@ -518,7 +443,7 @@ export const PropertiesPanel: React.FC = () => {
                   handleProviderChange(event.target.value as ProviderType)
                 }
               >
-                {PROVIDERS.map((provider) => (
+                {providerOptions.map((provider) => (
                   <option key={provider.id} value={provider.id}>
                     {provider.label}
                   </option>
@@ -544,20 +469,11 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           </div>
 
-          {isCodexProvider && (
-            <div style={MUTED_NOTE_STYLE}>
-              {isCodexCapabilitiesLoading
-                ? 'Loading Codex capabilities...'
-                : codexDiscoveryError
-                  ? codexDiscoveryError
-                  : codexModelDescription
-                    ? codexModelDescription
-                    : 'Codex model metadata is available through local CLI discovery.'}
-              {modelOptions.find((option) => option.id === currentModel)?.metadata
-                ? ` (${modelOptions.find((option) => option.id === currentModel)?.metadata})`
-                : ''}
-            </div>
-          )}
+          <div style={MUTED_NOTE_STYLE}>
+            {isLegacyProvider
+              ? `This node still uses the legacy ${getLegacyProviderLabel(currentProvider)} provider. OpenAI is the only supported runtime in the current MVP.`
+              : `${modelDescription ?? 'OpenAI workflow node.'} Requires OPENAI_API_KEY in the Electron main process environment.`}
+          </div>
         </Section>
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
@@ -612,55 +528,18 @@ export const PropertiesPanel: React.FC = () => {
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
 
         <Section title="Parameters">
-          {isCodexProvider ? (
-            <div className="space-y-3">
-              <div
-                style={{
-                  ...READONLY_BLOCK_STYLE,
-                  minHeight: '64px',
-                  color: codexDiscoveryError
-                    ? 'var(--color-semantic-error)'
-                    : 'var(--color-muted)',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {codexDiscoveryError
-                  ?? 'Fluxion currently passes only --model to Codex CLI. Capability metadata is shown read-only until a verified runtime mapping exists.'}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label style={LABEL_STYLE}>Context Window</label>
-                  <div style={READONLY_INLINE_STYLE}>
-                    {formatTokenCount(currentCodexModel?.contextWindow)}
-                  </div>
-                </div>
-
-                <div>
-                  <label style={LABEL_STYLE}>Visibility</label>
-                  <div style={READONLY_INLINE_STYLE}>
-                    {currentCodexModel?.visibility ?? 'n/a'}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label style={LABEL_STYLE}>Input Modalities</label>
-                <div style={READONLY_BLOCK_STYLE}>
-                  {formatModalities(currentCodexModel?.inputModalities)}
-                </div>
-              </div>
-
-              <div>
-                <label style={LABEL_STYLE}>Reasoning Levels</label>
-                <div style={READONLY_BLOCK_STYLE}>
-                  {currentCodexModel?.supportedReasoningLevels.length
-                    ? currentCodexModel.supportedReasoningLevels.join(', ')
-                    : 'n/a'}
-                </div>
-              </div>
+          {isLegacyProvider ? (
+            <div
+              style={{
+                ...READONLY_BLOCK_STYLE,
+                minHeight: '72px',
+                color: 'var(--color-semantic-error)',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {`This node still points to the legacy ${getLegacyProviderLabel(currentProvider)} provider. Switch the provider to OpenAI before running it in the current MVP.`}
             </div>
-          ) : isStaticReasoningModel ? (
+          ) : isReasoningModel ? (
             <div>
               <label style={{ ...LABEL_STYLE, color: 'var(--color-timeline-done)' }}>
                 Reasoning Effort
@@ -673,7 +552,8 @@ export const PropertiesPanel: React.FC = () => {
                 }}
               >
                 {REASONING_LEVEL_OPTIONS.map((level) => {
-                  const isActive = (localData.reasoningLevel ?? 'medium') === level.value;
+                  const isActive =
+                    (localData.reasoningLevel ?? OPENAI_DEFAULT_REASONING_LEVEL) === level.value;
                   return (
                     <button
                       key={level.value}
@@ -745,7 +625,7 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           )}
 
-          {!isCodexProvider && (
+          {!isLegacyProvider && (
             <div>
               <label style={LABEL_STYLE}>Max Tokens</label>
               <Input

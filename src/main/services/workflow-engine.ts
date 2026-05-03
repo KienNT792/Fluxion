@@ -10,6 +10,7 @@ import {
 } from '@shared';
 import { MockAdapter } from '../adapters/mock.adapter';
 import { CodexAdapter } from '../adapters/codex.adapter';
+import { OpenAIAdapter } from '../adapters/openai.adapter';
 import { memoryManager } from './memory-manager';
 import { IAgentAdapter } from '../adapters/base.adapter';
 import { join } from 'path';
@@ -28,7 +29,7 @@ export class WorkflowEngine {
     'mock':      new MockAdapter(),
     'codex':     new CodexAdapter(),
     'google':    new MockAdapter(), // MVP fallback — replace with GeminiAdapter
-    'openai':    new MockAdapter(), // MVP fallback — replace with OpenAIAdapter
+    'openai':    new OpenAIAdapter(),
     'anthropic': new MockAdapter(), // MVP fallback — replace with ClaudeAdapter
   };
 
