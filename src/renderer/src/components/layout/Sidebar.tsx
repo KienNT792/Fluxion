@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, FileJson, Plus, Check, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileJson, Plus, Trash2 } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflow.store';
-import { createNewWorkflow, switchWorkflow, deleteCurrentWorkflow } from '../../lib/workflow-session';
-import { Input } from '../ui/Input';
+import {
+  createNewWorkflow,
+  deleteCurrentWorkflow,
+  switchWorkflow,
+} from '../../lib/workflow-session';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { InputDialog } from '../ui/InputDialog';
 
 function formatUpdatedAtLabel(updatedAt: string): string {
   const parsed = new Date(updatedAt);
@@ -19,24 +23,102 @@ function formatUpdatedAtLabel(updatedAt: string): string {
   });
 }
 
+function buildMetadataLabel(updatedAtLabel: string, tags?: string[]): string {
+  const pieces: string[] = [];
+
+  if (updatedAtLabel) {
+    pieces.push(`Updated ${updatedAtLabel}`);
+  }
+
+  if (Array.isArray(tags) && tags.length > 0) {
+    pieces.push(tags.slice(0, 2).join(' / '));
+  }
+
+  return pieces.join('  •  ');
+}
+
+function SidebarGlyph(): React.JSX.Element {
+  return (
+    <div
+      className="relative flex h-8 w-8 items-center justify-center rounded-lg"
+      style={{
+        border: '1px solid var(--color-hairline-strong)',
+        color: 'var(--color-primary)',
+      }}
+    >
+      <span
+        className="text-sm font-semibold"
+        style={{ fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}
+      >
+        F
+      </span>
+      <span
+        className="absolute bottom-[7px] left-[9px] h-px w-3"
+        style={{ background: 'currentColor', opacity: 0.7 }}
+      />
+    </div>
+  );
+}
+
+function CollapseButton({
+  onClick,
+  icon,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="absolute -right-3 top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full transition-colors"
+      style={{
+        background: 'var(--color-surface-card)',
+        border: '1px solid var(--color-hairline-strong)',
+        color: 'var(--color-muted)',
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.color = 'var(--color-ink)';
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.color = 'var(--color-muted)';
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
+
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false);
   const [newWorkflowName, setNewWorkflowName] = useState('');
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
   const [pendingDeleteWorkflowName, setPendingDeleteWorkflowName] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const workflows = useWorkflowStore((state) => state.workflows);
   const activeWorkflowFilePath = useWorkflowStore((state) => state.activeWorkflowFilePath);
 
-  const handleCreate = async () => {
-    if (!newWorkflowName.trim()) {
-      setIsCreating(false);
+  const handleOpenCreateWorkflowDialog = (): void => {
+    setNewWorkflowName('');
+    setIsCreateWorkflowDialogOpen(true);
+  };
+
+  const handleConfirmCreateWorkflow = async (): Promise<void> => {
+    const trimmedName = newWorkflowName.trim();
+    if (!trimmedName || isCreatingWorkflow) {
       return;
     }
-    await createNewWorkflow(newWorkflowName.trim());
-    setNewWorkflowName('');
-    setIsCreating(false);
+
+    setIsCreatingWorkflow(true);
+    try {
+      await createNewWorkflow(trimmedName);
+      setIsCreateWorkflowDialogOpen(false);
+      setNewWorkflowName('');
+    } finally {
+      setIsCreatingWorkflow(false);
+    }
   };
 
   const handleConfirmDelete = async (): Promise<void> => {
@@ -53,66 +135,37 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const collapseBtn = (onClick: () => void, icon: React.ReactNode): React.JSX.Element => (
-    <button
-      onClick={onClick}
-      className="absolute -right-3 top-6 z-50 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
-      style={{
-        background: 'var(--color-surface-card)',
-        border: '1px solid var(--color-hairline-strong)',
-        color: 'var(--color-muted)',
-        boxShadow: 'none',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.color = 'var(--color-muted)';
-      }}
-    >
-      {icon}
-    </button>
-  );
-
   if (collapsed) {
     return (
       <aside
-        className="w-14 flex flex-col items-center py-4 relative z-50 flex-shrink-0"
+        className="relative z-50 flex w-14 shrink-0 flex-col items-center py-4"
         style={{
           background: 'var(--color-canvas)',
           borderRight: '1px solid var(--color-hairline)',
         }}
       >
-        {collapseBtn(() => setCollapsed(false), <ChevronRight size={13} />)}
+        <CollapseButton onClick={() => setCollapsed(false)} icon={<ChevronRight size={13} />} />
 
-        {/* Wordmark initial */}
-        <span
-          className="font-bold text-base mb-6 font-mono"
-          style={{ color: 'var(--color-primary)', letterSpacing: '-0.5px' }}
-        >
-          F
-        </span>
+        <div className="flex flex-col items-center gap-5">
+          <SidebarGlyph />
 
-        <div className="flex flex-col gap-3">
-          <div
-            className="w-9 h-9 flex items-center justify-center rounded-lg transition-colors cursor-pointer"
-            style={{
-              background: 'transparent',
-              color: 'var(--color-muted)',
-            }}
-            title="Workflows"
+          <button
+            type="button"
             onClick={() => setCollapsed(false)}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
+            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
+            style={{ color: 'var(--color-muted)' }}
+            title="Open Library"
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = 'var(--color-surface-card)';
+              event.currentTarget.style.color = 'var(--color-ink)';
             }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'transparent';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-muted)';
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = 'transparent';
+              event.currentTarget.style.color = 'var(--color-muted)';
             }}
           >
             <FileJson size={18} />
-          </div>
+          </button>
         </div>
       </aside>
     );
@@ -120,193 +173,213 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className="w-60 flex flex-col relative z-50 flex-shrink-0"
+      className="relative z-50 flex w-64 shrink-0 flex-col"
       style={{
         background: 'var(--color-canvas)',
         borderRight: '1px solid var(--color-hairline)',
       }}
     >
-      {collapseBtn(() => setCollapsed(true), <ChevronLeft size={13} />)}
+      <CollapseButton onClick={() => setCollapsed(true)} icon={<ChevronLeft size={13} />} />
 
-      {/* Header */}
       <div
-        className="px-5 h-14 flex items-center gap-2.5 flex-shrink-0"
+        className="flex h-16 shrink-0 items-center justify-between px-5"
         style={{ borderBottom: '1px solid var(--color-hairline)' }}
       >
-        <div
-          className="w-6 h-6 rounded flex items-center justify-center font-bold font-mono text-xs"
-          style={{
-            background: 'var(--color-primary)',
-            color: 'var(--color-on-primary)',
-          }}
-        >
-          F
+        <div className="flex min-w-0 items-center gap-3">
+          <SidebarGlyph />
+          <div className="min-w-0">
+            <p
+              className="text-[11px] uppercase"
+              style={{
+                color: 'var(--color-muted-soft)',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.22em',
+              }}
+            >
+              Library
+            </p>
+            <p className="mt-0.5 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+              Workflow archive
+            </p>
+          </div>
         </div>
-        <h1
-          className="font-semibold text-sm tracking-tight flex-1"
-          style={{ color: 'var(--color-ink)', letterSpacing: '-0.2px' }}
-        >
-          Fluxion
-        </h1>
-        
+
         <button
-          onClick={() => {
-            setIsCreating(true);
-            setNewWorkflowName('');
-          }}
-          className="w-6 h-6 rounded flex items-center justify-center transition-colors"
+          type="button"
+          onClick={handleOpenCreateWorkflowDialog}
+          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors"
           style={{ color: 'var(--color-muted)' }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)';
-            (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-            (e.currentTarget as HTMLElement).style.color = 'var(--color-muted)';
-          }}
           title="New Workflow"
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background = 'var(--color-surface-card)';
+            event.currentTarget.style.color = 'var(--color-ink)';
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = 'transparent';
+            event.currentTarget.style.color = 'var(--color-muted)';
+          }}
         >
           <Plus size={14} />
         </button>
       </div>
 
-      {/* Workflows Library */}
-      <div className="p-4 flex-1 overflow-y-auto">
-        <p
-          className="text-xs font-semibold uppercase tracking-widest mb-3"
-          style={{ color: 'var(--color-muted-soft)', letterSpacing: '0.88px', fontSize: '11px' }}
-        >
-          Workflows
-        </p>
-        
-        <div className="flex flex-col gap-1.5">
-          {isCreating && (
-            <div className="flex items-center gap-1 mb-2">
-              <Input
-                autoFocus
-                size="sm"
-                value={newWorkflowName}
-                onChange={(e) => setNewWorkflowName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreate();
-                  if (e.key === 'Escape') setIsCreating(false);
-                }}
-                placeholder="Workflow name..."
-                className="flex-1"
-              />
-              <button 
-                onClick={handleCreate}
-                className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface-strong)] transition-colors"
-              >
-                <Check size={14} />
-              </button>
-              <button 
-                onClick={() => setIsCreating(false)}
-                className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface-strong)] transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          )}
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        <div className="flex flex-col gap-2">
+          {workflows.map((workflow) => {
+            const isActive = workflow.filePath === activeWorkflowFilePath;
+            const updatedAtLabel = formatUpdatedAtLabel(workflow.updatedAt);
+            const metadataLabel = buildMetadataLabel(updatedAtLabel, workflow.tags);
 
-          {workflows.map((wf) => {
-            const isActive = wf.filePath === activeWorkflowFilePath;
-            const updatedAtLabel = formatUpdatedAtLabel(wf.updatedAt);
-            const tagsLabel = wf.tags?.slice(0, 2).join(' | ');
             return (
-              <div
-                key={wf.id}
-                onClick={() => switchWorkflow(wf.id)}
-                className="group flex flex-col gap-1 px-3 py-2.5 rounded-lg cursor-pointer transition-colors relative"
+              <button
+                key={workflow.id}
+                type="button"
+                onClick={() => switchWorkflow(workflow.id)}
+                className="group relative overflow-hidden rounded-xl px-4 py-3 text-left transition-colors"
                 style={{
-                  background: isActive ? 'var(--color-surface-strong)' : 'transparent',
-                  border: isActive 
-                    ? '1px dashed var(--color-hairline-strong)' 
-                    : '1px solid transparent',
+                  background: isActive ? 'var(--color-surface-card)' : 'transparent',
                 }}
-                onMouseEnter={(e) => {
+                onMouseEnter={(event) => {
                   if (!isActive) {
-                    (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-card)';
+                    event.currentTarget.style.background = 'var(--color-surface-card)';
                   }
                 }}
-                onMouseLeave={(e) => {
+                onMouseLeave={(event) => {
                   if (!isActive) {
-                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    event.currentTarget.style.background = 'transparent';
                   }
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <FileJson 
-                      size={14} 
-                      className="flex-shrink-0" 
-                      style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-muted)' }} 
-                    />
-                    <span 
-                      className="text-[13px] font-medium truncate"
-                      style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-muted-strong)' }}
-                    >
-                      {wf.name}
-                    </span>
-                    {wf.isLegacy && (
-                      <span 
-                        className="text-[9px] uppercase font-bold px-1 rounded flex-shrink-0"
-                        style={{ 
-                          background: 'var(--color-surface-card)',
-                          color: 'var(--color-warning)',
-                          border: '1px solid var(--color-warning-soft)'
+                {isActive && (
+                  <span
+                    className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full"
+                    style={{ background: 'var(--color-primary)' }}
+                  />
+                )}
+
+                {isActive && !workflow.isLegacy && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setPendingDeleteWorkflowName(workflow.name);
+                    }}
+                    className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-all group-hover:opacity-100"
+                    style={{ color: 'var(--color-muted)' }}
+                    title="Delete workflow"
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.background = 'var(--color-canvas)';
+                      event.currentTarget.style.color = 'var(--color-semantic-error)';
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.background = 'transparent';
+                      event.currentTarget.style.color = 'var(--color-muted)';
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+
+                <div className="flex min-w-0 items-start gap-2.5 pr-8">
+                  <FileJson
+                    size={14}
+                    className="mt-0.5 shrink-0"
+                    style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-muted)' }}
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="truncate text-[13px] font-semibold"
+                        style={{ color: 'var(--color-ink)', letterSpacing: '-0.1px' }}
+                      >
+                        {workflow.name}
+                      </span>
+
+                      {workflow.isLegacy && (
+                        <span
+                          className="shrink-0 text-[9px] uppercase"
+                          style={{
+                            color: 'var(--color-timeline-done)',
+                            fontFamily: 'var(--font-mono)',
+                            letterSpacing: '0.1em',
+                          }}
+                        >
+                          Legacy
+                        </span>
+                      )}
+                    </div>
+
+                    {workflow.description && (
+                      <p
+                        className="mt-1 truncate text-[11px]"
+                        style={{ color: 'var(--color-muted-soft)' }}
+                      >
+                        {workflow.description}
+                      </p>
+                    )}
+
+                    {metadataLabel && (
+                      <p
+                        className={`mt-2 truncate text-[10px] uppercase tracking-[0.08em] transition-opacity ${
+                          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                        style={{
+                          color: 'var(--color-muted)',
+                          fontFamily: 'var(--font-mono)',
                         }}
                       >
-                        Legacy
-                      </span>
+                        {metadataLabel}
+                      </p>
                     )}
                   </div>
-                  
-                  {/* Delete button (only show on hover, and only if not legacy) */}
-                  {isActive && !wf.isLegacy && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPendingDeleteWorkflowName(wf.name);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-[var(--color-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-card)]"
-                      title="Delete workflow"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
                 </div>
-
-                {wf.description && (
-                  <p className="text-[11px] truncate pl-6" style={{ color: 'var(--color-muted)' }}>
-                    {wf.description}
-                  </p>
-                )}
-
-                {(updatedAtLabel || tagsLabel) && (
-                  <div
-                    className="flex items-center gap-1.5 pl-6 text-[10px] uppercase tracking-[0.06em]"
-                    style={{ color: 'var(--color-muted-soft)' }}
-                  >
-                    {updatedAtLabel && <span className="truncate">Updated {updatedAtLabel}</span>}
-                    {updatedAtLabel && tagsLabel && <span>|</span>}
-                    {tagsLabel && <span className="truncate">{tagsLabel}</span>}
-                  </div>
-                )}
-              </div>
+              </button>
             );
           })}
 
-          {workflows.length === 0 && !isCreating && (
+          {workflows.length === 0 && (
             <div
-              className="text-[13px] italic px-2 py-3 rounded text-center"
-              style={{ color: 'var(--color-muted)', border: '1px dashed var(--color-hairline-strong)' }}
+              className="rounded-xl px-4 py-6 text-center"
+              style={{
+                background: 'var(--color-surface-card)',
+                color: 'var(--color-muted)',
+              }}
             >
-              No workflows found
+              <p
+                className="text-[11px] uppercase"
+                style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.18em' }}
+              >
+                Empty Library
+              </p>
+              <p className="mt-2 text-xs" style={{ color: 'var(--color-muted-soft)' }}>
+                Create a workflow to begin building your archive.
+              </p>
             </div>
           )}
         </div>
       </div>
+
+      <InputDialog
+        isOpen={isCreateWorkflowDialogOpen}
+        title="Create New Workflow"
+        description="Enter a workflow name for the library."
+        value={newWorkflowName}
+        placeholder="e.g. Refactor auth adapter"
+        confirmLabel={isCreatingWorkflow ? 'Creating...' : 'Create'}
+        cancelLabel="Cancel"
+        confirmDisabled={isCreatingWorkflow || !newWorkflowName.trim()}
+        onValueChange={setNewWorkflowName}
+        onCancel={() => {
+          if (isCreatingWorkflow) {
+            return;
+          }
+
+          setIsCreateWorkflowDialogOpen(false);
+          setNewWorkflowName('');
+        }}
+        onConfirm={handleConfirmCreateWorkflow}
+      />
 
       <ConfirmDialog
         isOpen={pendingDeleteWorkflowName != null}
@@ -320,7 +393,10 @@ export const Sidebar: React.FC = () => {
         cancelLabel="Cancel"
         confirmDisabled={isDeleting}
         onCancel={() => {
-          if (isDeleting) return;
+          if (isDeleting) {
+            return;
+          }
+
           setPendingDeleteWorkflowName(null);
         }}
         onConfirm={handleConfirmDelete}

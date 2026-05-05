@@ -12,6 +12,7 @@ import {
   WorkflowLoadPayload,
   WorkflowDeletePayload,
 } from '@shared';
+import { formatZodError, validateWorkflowGraph, WorkflowSchema } from '@core';
 import { workflowEngine } from '../services/workflow-engine';
 import { providerRegistryService } from '../services/provider-registry.service';
 import { processManager } from '../services/process-manager';
@@ -37,70 +38,23 @@ function validateWorkflow(payload: WorkflowRunPayload): string | null {
     return 'Open a workspace before running the workflow.';
   }
 
-  if (payload.nodes.length === 0) {
-    return 'Add at least one node before running the workflow.';
-  }
-
-  const nodeIds = new Set<string>();
-  for (const node of payload.nodes) {
-    if (nodeIds.has(node.id)) {
-      return `Duplicate node id detected: ${node.id}`;
-    }
-
-    nodeIds.add(node.id);
-
-    if (!node.data.prompt.trim()) {
-      return `Node ${node.id} is missing a prompt.`;
-    }
-  }
-
-  if (payload.resumeFromNodeId && !nodeIds.has(payload.resumeFromNodeId)) {
-    return `Retry node ${payload.resumeFromNodeId} does not exist in the workflow.`;
-  }
-
-  const inDegree = new Map<string, number>();
-  const adjacency = new Map<string, string[]>();
-
-  for (const node of payload.nodes) {
-    inDegree.set(node.id, 0);
-    adjacency.set(node.id, []);
-  }
-
-  for (const edge of payload.edges) {
-    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
-      return `Edge ${edge.id} references a node that does not exist.`;
-    }
-
-    adjacency.get(edge.source)!.push(edge.target);
-    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
-  }
-
-  const queue: string[] = [];
-  inDegree.forEach((degree, nodeId) => {
-    if (degree === 0) {
-      queue.push(nodeId);
-    }
+  const parsedWorkflow = WorkflowSchema.safeParse({
+    id: payload.workflowId,
+    name: 'Fluxion Workflow',
+    nodes: payload.nodes,
+    edges: payload.edges,
   });
 
-  let visitedCount = 0;
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    visitedCount += 1;
-
-    for (const neighbor of adjacency.get(current) ?? []) {
-      const nextDegree = (inDegree.get(neighbor) ?? 0) - 1;
-      inDegree.set(neighbor, nextDegree);
-      if (nextDegree === 0) {
-        queue.push(neighbor);
-      }
-    }
+  if (!parsedWorkflow.success) {
+    return `Invalid workflow payload: ${formatZodError(parsedWorkflow.error)}`;
   }
 
-  if (visitedCount !== payload.nodes.length) {
-    return 'Workflow graph contains a cycle. Remove the loop before running.';
-  }
+  const workflow = parsedWorkflow.data;
+  const result = validateWorkflowGraph(workflow, {
+    resumeFromNodeId: payload.resumeFromNodeId,
+  });
 
-  return null;
+  return result.errors[0]?.message ?? null;
 }
 
 export function registerWorkflowHandlers(): void {

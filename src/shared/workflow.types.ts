@@ -13,6 +13,33 @@ export type ModelId = string;
 
 export type ReasoningLevel = 'low' | 'medium' | 'high' | 'xhigh';
 
+export type RunnerId = 'codex' | 'custom';
+
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
+export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never';
+
+export type CodexWindowsSandbox = 'unelevated' | 'elevated';
+
+export interface CodexExecutionOptions {
+  json?: boolean;
+  sandboxMode?: CodexSandboxMode;
+  approvalPolicy?: CodexApprovalPolicy;
+  windowsSandbox?: CodexWindowsSandbox;
+  profile?: string;
+  config?: Record<string, string | number | boolean>;
+}
+
+export interface ArtifactRef {
+  path: string;
+  required?: boolean;
+}
+
+export interface RetryPolicy {
+  maxAttempts?: number;
+  [key: string]: unknown;
+}
+
 export type ProviderAuthType =
   | 'api-key-env'
   | 'browser-login'
@@ -114,12 +141,22 @@ export interface AgentNodeData {
   [key: string]: unknown;
   provider: ProviderType;
   model: ModelId;
+  runner?: RunnerId;
+  codex?: CodexExecutionOptions;
   /** Optional custom label for this node (e.g. "Analyze Bug", "Write Tests") */
   label?: string;
   /** The prompt or instruction to send to this agent. */
   prompt: string;
   /** Optional extra system instruction injected before global context. */
   systemInstruction?: string;
+  /** Optional artifact paths that must exist before this node can run. */
+  requires?: ArtifactRef[];
+  /** Optional artifact paths this node is expected to produce. */
+  produces?: ArtifactRef[];
+  /** If true, future phases may pause here for human approval. */
+  humanReview?: boolean;
+  /** Optional retry settings reserved for future execution policies. */
+  retryPolicy?: RetryPolicy;
   
   // Specific to standard models
   maxTokens?: number;

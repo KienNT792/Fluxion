@@ -424,13 +424,13 @@ export const Topbar: React.FC = () => {
 
   return (
     <header
-      className="relative z-40 px-4 py-3 sm:px-5 lg:px-6"
+      className="relative z-40 flex h-14 shrink-0 items-center px-4 sm:px-5 lg:px-6"
       style={{
         background: 'var(--color-canvas)',
         borderBottom: '1px solid var(--color-hairline)',
       }}
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+      <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         <div className="min-w-0">
           <Tooltip content={workspacePath || 'No workspace open'}>
             <div className="flex min-w-0 items-center gap-2">
