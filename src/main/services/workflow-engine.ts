@@ -7,7 +7,7 @@ import {
   IpcChannels,
   NodeStatus
 } from '@shared';
-import { OpenAIAdapter } from '../adapters/openai.adapter';
+import { CodexCliAdapter } from '../adapters/codex-cli.adapter';
 import { memoryManager } from './memory-manager';
 import { IAgentAdapter } from '../adapters/base.adapter';
 import { join } from 'path';
@@ -20,7 +20,7 @@ export class WorkflowEngine {
   private activeNodes: Set<NodeId> = new Set();
   private haltReason: 'aborted' | 'error' | null = null;
   private haltError: string | null = null;
-  private adapter: IAgentAdapter = new OpenAIAdapter();
+  private adapter: IAgentAdapter = new CodexCliAdapter();
 
   private constructor() {
     // Singleton
@@ -356,7 +356,7 @@ export class WorkflowEngine {
         node.id,
         node.data.provider,
         node.data.model,
-        fullOutput
+        result.output ?? fullOutput
       )
       
       this.sendNodeStatus(sender, node.id, 'completed', undefined, result.exitCode)

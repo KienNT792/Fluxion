@@ -1,5 +1,4 @@
-import { ChildProcess, spawn, SpawnOptions } from 'child_process';
-import { exec } from 'child_process';
+import { ChildProcess, execFile, spawn, SpawnOptions } from 'child_process';
 import { platform } from 'os';
 
 export interface ProcessRecord {
@@ -82,7 +81,7 @@ export class ProcessManager {
 
       if (platform() === 'win32') {
         // Send a gentle taskkill first (without /F)
-        exec(`taskkill /pid ${pid} /T`, (err) => {
+        execFile('taskkill', ['/pid', String(pid), '/T'], { windowsHide: true }, (err) => {
           if (!err) {
             record.status = 'killed';
             resolve();
@@ -91,7 +90,11 @@ export class ProcessManager {
 
           // If gentle kill fails or doesn't exit within timeout, force kill
           setTimeout(() => {
-            exec(`taskkill /pid ${pid} /T /F`, (forceErr) => {
+            execFile(
+              'taskkill',
+              ['/pid', String(pid), '/T', '/F'],
+              { windowsHide: true },
+              (forceErr) => {
               if (forceErr) {
                 console.error(`Failed to force kill process ${pid}`, forceErr);
                 reject(forceErr);

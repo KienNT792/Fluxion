@@ -51,6 +51,8 @@ export interface AgentChunk {
  */
 export interface AgentResult {
   success: boolean;
+  /** Final text output produced by the agent, when available. */
+  output?: string;
   /** Absolute path to the .md output file (only set if execution completed). */
   outputFilePath?: string;
   error?: string;
