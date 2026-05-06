@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PencilLine } from 'lucide-react';
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -32,6 +33,9 @@ export const InputDialog: React.FC<InputDialogProps> = ({
   onCancel,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useModalFocusTrap(isOpen, dialogRef, inputRef);
 
   useEffect(() => {
     if (!isOpen) {
@@ -91,9 +95,11 @@ export const InputDialog: React.FC<InputDialogProps> = ({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className="w-full max-w-md overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',

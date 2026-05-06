@@ -177,6 +177,8 @@ export const TerminalViewer: React.FC = () => {
         {/* Left: Back + Node info */}
         <div className="flex items-center gap-2 min-w-0">
           <button
+            type="button"
+            aria-label="Back to Workflow"
             onClick={() => setTerminalNodeId(null)}
             style={iconBtnStyle()}
             className="mr-1"
@@ -216,6 +218,8 @@ export const TerminalViewer: React.FC = () => {
         {/* Right: Actions */}
         <div className="flex items-center gap-0.5">
           <button
+            type="button"
+            aria-label="Clear Terminal"
             onClick={handleClear}
             style={iconBtnStyle()}
             title="Clear"
@@ -225,6 +229,8 @@ export const TerminalViewer: React.FC = () => {
             <Trash2 size={12} />
           </button>
           <button
+            type="button"
+            aria-label={isExpanded ? 'Collapse Terminal' : 'Expand Terminal'}
             onClick={() => setIsExpanded(!isExpanded)}
             style={iconBtnStyle()}
             title={isExpanded ? 'Collapse' : 'Expand'}
@@ -235,6 +241,8 @@ export const TerminalViewer: React.FC = () => {
           </button>
           <div className="w-px h-4 mx-1" style={{ background: 'var(--color-hairline)' }} />
           <button
+            type="button"
+            aria-label="Close Terminal"
             onClick={() => setTerminalNodeId(null)}
             style={iconBtnStyle()}
             title="Close"

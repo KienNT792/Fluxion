@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { KeyRound } from 'lucide-react';
 import { ProviderSettingsSummaryPayload } from '@shared';
 import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -19,9 +20,9 @@ function getStatusCopy(summary: ProviderSettingsSummaryPayload | null): {
 } {
   if (!summary || !summary.openaiApiKeyConfigured) {
     return {
-      label: 'Missing',
-      detail: 'No OpenAI API key is configured.',
-      tone: 'var(--color-semantic-error)',
+      label: 'Not configured',
+      detail: 'Optional for Codex CLI workflows. Add a key only for OpenAI API provider features.',
+      tone: 'var(--color-muted)',
     };
   }
 
@@ -45,6 +46,7 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
   onClose,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
   const isProviderCapabilitiesLoading = useWorkflowStore(
@@ -103,17 +105,7 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [isOpen]);
+  useModalFocusTrap(isOpen, dialogRef);
 
   useEffect(() => {
     if (!isOpen) {
@@ -220,9 +212,11 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Global Settings"
+        tabIndex={-1}
         className="w-full max-w-lg overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',
@@ -249,8 +243,9 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
               Global Settings
             </h3>
             <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-              Check the local Codex CLI runtime and configure optional OpenAI API credentials.
-              Settings are stored outside the workspace and never written into `workflow.json`.
+              Check the local Codex CLI runtime and optional OpenAI API credentials. Codex CLI
+              workflows run through `codex login`; API keys are only needed for API provider
+              features.
             </p>
           </div>
         </div>
@@ -316,7 +311,7 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
                 className="text-[11px] font-semibold uppercase tracking-[0.08em]"
                 style={{ color: 'var(--color-muted)' }}
               >
-                OpenAI Auth
+                OpenAI API Key
               </span>
               <span
                 className="rounded-md px-2 py-1 text-[11px] font-semibold"
@@ -331,6 +326,12 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
             </div>
             <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
               {isLoading ? 'Checking current provider settings...' : statusCopy.detail}
+            </p>
+            <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--color-muted)' }}>
+              Stored outside the workspace and never written into `workflow.json`.
+              {summary?.storageMode === 'secure'
+                ? ' Electron safeStorage is active for the saved key.'
+                : ''}
             </p>
           </div>
 
@@ -353,7 +354,7 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
               spellCheck={false}
             />
             <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--color-muted)' }}>
-              Leave the field empty to keep the current key. Saving a new key replaces the stored
+              Optional. Leave empty to keep the current key. Saving a new key replaces the stored
               one immediately.
             </p>
           </div>
@@ -377,14 +378,16 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
           style={{ borderTop: '1px solid var(--color-hairline)' }}
         >
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleClearStoredKey}
-              disabled={!canClearStoredKey || isSaving}
-            >
-              Clear Stored Key
-            </Button>
+            {canClearStoredKey && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleClearStoredKey}
+                disabled={isSaving}
+              >
+                Clear Stored Key
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

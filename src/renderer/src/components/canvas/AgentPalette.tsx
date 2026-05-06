@@ -61,6 +61,8 @@ export const AgentPalette: React.FC = () => {
     <div ref={containerRef} className="pointer-events-auto relative ml-2 mt-2">
       <Tooltip content={isOpen ? 'Close Agent' : 'Add Codex Agent'} side="right">
         <button
+          type="button"
+          aria-label={isOpen ? 'Close Agent Palette' : 'Open Agent Palette'}
           onClick={() => setIsOpen(!isOpen)}
           className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors shadow-sm"
           style={{

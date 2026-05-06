@@ -309,6 +309,18 @@ export const Topbar: React.FC = () => {
       : isDirty
         ? 'Unsaved changes'
         : formatSavedLabel(lastSavedAt);
+  const nodeCountLabel = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
+  const saveBadgeLabel = saveError
+    ? 'Save failed'
+    : isSaving
+      ? 'Saving'
+      : isDirty
+        ? 'Unsaved'
+        : 'Saved';
+  const saveBadgeColor = saveError
+    ? 'var(--color-semantic-error)'
+    : dirtyDotState?.color ?? 'var(--color-semantic-success)';
+  const saveBadgeIsAnimated = dirtyDotState?.animate ?? false;
 
   useEffect(() => {
     if (workflowStatus === 'running') {
@@ -521,14 +533,29 @@ export const Topbar: React.FC = () => {
                 >
                   {workflowName}
                 </span>
-                {dirtyDotState && (
-                  <Tooltip content={dirtyDotState.label}>
+                <span
+                  className="shrink-0 text-[11px]"
+                  style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                >
+                  ({nodeCountLabel})
+                </span>
+                <Tooltip content={saveError ?? saveStateLabel}>
+                  <span
+                    className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium md:inline-flex"
+                    style={{
+                      color: saveBadgeColor,
+                      background: 'var(--color-surface-card)',
+                      border: '1px solid var(--color-hairline)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
                     <span
-                      className={`inline-block h-2.5 w-2.5 rounded-full ${dirtyDotState.animate ? 'animate-pulse' : ''}`}
-                      style={{ background: dirtyDotState.color }}
+                      className={`h-1.5 w-1.5 rounded-full ${saveBadgeIsAnimated ? 'animate-pulse' : ''}`}
+                      style={{ background: saveBadgeColor }}
                     />
-                  </Tooltip>
-                )}
+                    {saveBadgeLabel}
+                  </span>
+                </Tooltip>
               </div>
             </div>
           </Tooltip>
@@ -569,6 +596,7 @@ export const Topbar: React.FC = () => {
                   <button
                     key={mode}
                     type="button"
+                    aria-pressed={isActive}
                     onClick={() => setExecutionMode(mode)}
                     disabled={isBusy}
                     className="min-w-[68px] rounded-[5px] px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors"
@@ -595,6 +623,8 @@ export const Topbar: React.FC = () => {
             <div className="relative" ref={readinessPopoverRef}>
               <button
                 type="button"
+                aria-label={`Codex readiness: ${codexReadiness.label}`}
+                aria-expanded={isReadinessPopoverOpen}
                 onClick={() => setIsReadinessPopoverOpen((current) => !current)}
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
                 style={{
@@ -682,6 +712,8 @@ export const Topbar: React.FC = () => {
               <div className="relative" ref={activityPopoverRef}>
                 <button
                   type="button"
+                  aria-label="Open workspace activity"
+                  aria-expanded={isActivityPopoverOpen}
                   onClick={() => setIsActivityPopoverOpen((current) => !current)}
                   className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
                   style={{
@@ -790,14 +822,7 @@ export const Topbar: React.FC = () => {
                   </div>
                 )}
               </div>
-            ) : (
-              <span
-                className="text-xs"
-                style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-              >
-                {activitySummaryLabel}
-              </span>
-            )}
+            ) : null}
           </div>
 
           {statusSubtext && (
@@ -814,6 +839,7 @@ export const Topbar: React.FC = () => {
           <div className="flex items-center gap-1">
             <div className="relative" ref={projectMenuRef}>
               <ActionTextButton
+                aria-expanded={isProjectMenuOpen}
                 onClick={() => setIsProjectMenuOpen((current) => !current)}
                 disabled={isBusy}
                 dimmed={editingDimmed}
@@ -882,6 +908,7 @@ export const Topbar: React.FC = () => {
 
             <Tooltip content="Global Settings">
               <ActionIconButton
+                aria-label="Open Global Settings"
                 onClick={() => setIsSettingsOpen(true)}
                 disabled={isBusy}
                 dimmed={editingDimmed}
@@ -891,7 +918,10 @@ export const Topbar: React.FC = () => {
             </Tooltip>
 
             <Tooltip content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-              <ActionIconButton onClick={toggleTheme}>
+              <ActionIconButton
+                aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                onClick={toggleTheme}
+              >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </ActionIconButton>
             </Tooltip>

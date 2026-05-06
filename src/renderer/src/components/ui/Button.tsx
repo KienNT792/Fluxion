@@ -79,7 +79,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled}
-        className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-md transition-colors ${className}`}
+        className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] ${className}`}
         style={{
           fontFamily: "'CursorGothic', sans-serif",
           ...getSizeStyle(),

@@ -63,13 +63,16 @@ function SidebarGlyph(): React.JSX.Element {
 function CollapseButton({
   onClick,
   icon,
+  ariaLabel,
 }: {
   onClick: () => void;
   icon: React.ReactNode;
+  ariaLabel: string;
 }): React.JSX.Element {
   return (
     <button
       type="button"
+      aria-label={ariaLabel}
       onClick={onClick}
       className="absolute -right-3 top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full transition-colors"
       style={{
@@ -144,13 +147,18 @@ export const Sidebar: React.FC = () => {
           borderRight: '1px solid var(--color-hairline)',
         }}
       >
-        <CollapseButton onClick={() => setCollapsed(false)} icon={<ChevronRight size={13} />} />
+        <CollapseButton
+          ariaLabel="Expand Library"
+          onClick={() => setCollapsed(false)}
+          icon={<ChevronRight size={13} />}
+        />
 
         <div className="flex flex-col items-center gap-5">
           <SidebarGlyph />
 
           <button
             type="button"
+            aria-label="Open Library"
             onClick={() => setCollapsed(false)}
             className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
             style={{ color: 'var(--color-muted)' }}
@@ -179,7 +187,11 @@ export const Sidebar: React.FC = () => {
         borderRight: '1px solid var(--color-hairline)',
       }}
     >
-      <CollapseButton onClick={() => setCollapsed(true)} icon={<ChevronLeft size={13} />} />
+      <CollapseButton
+        ariaLabel="Collapse Library"
+        onClick={() => setCollapsed(true)}
+        icon={<ChevronLeft size={13} />}
+      />
 
       <div
         className="flex h-16 shrink-0 items-center justify-between px-5"
@@ -206,6 +218,7 @@ export const Sidebar: React.FC = () => {
 
         <button
           type="button"
+          aria-label="Create New Workflow"
           onClick={handleOpenCreateWorkflowDialog}
           className="flex h-7 w-7 items-center justify-center rounded-md transition-colors"
           style={{ color: 'var(--color-muted)' }}
@@ -258,9 +271,10 @@ export const Sidebar: React.FC = () => {
                 )}
 
                 {isActive && !workflow.isLegacy && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
+                    <button
+                      type="button"
+                      aria-label={`Delete ${workflow.name}`}
+                      onClick={(event) => {
                       event.stopPropagation();
                       setPendingDeleteWorkflowName(workflow.name);
                     }}

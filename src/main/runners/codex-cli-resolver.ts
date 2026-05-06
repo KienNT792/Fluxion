@@ -5,6 +5,9 @@ import { dirname, extname, join } from 'path';
 export const CODEX_CLI_NOT_FOUND_MESSAGE =
   'Codex CLI not found. Install @openai/codex and run codex login.';
 
+const WHERE_CODEX_TIMEOUT_MS = 3_000;
+const WHERE_CODEX_MAX_BUFFER = 64 * 1024;
+
 export interface ResolvedCodexCli {
   command: string;
   argsPrefix: string[];
@@ -17,7 +20,12 @@ function runWhereCodex(): Promise<string[]> {
     execFile(
       'where.exe',
       ['codex'],
-      { encoding: 'utf8', windowsHide: true },
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: WHERE_CODEX_TIMEOUT_MS,
+        maxBuffer: WHERE_CODEX_MAX_BUFFER,
+      },
       (error, stdout) => {
         if (error) {
           resolve([]);
@@ -81,6 +89,23 @@ function isExecutable(candidate: string): boolean {
   return extname(candidate).toLowerCase() === '.exe';
 }
 
+function dedupeResolvedCandidates(candidates: ResolvedCodexCli[]): ResolvedCodexCli[] {
+  const seen = new Set<string>();
+  const uniqueCandidates: ResolvedCodexCli[] = [];
+
+  for (const candidate of candidates) {
+    const key = [candidate.command, ...candidate.argsPrefix].join('\u0000');
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    uniqueCandidates.push(candidate);
+  }
+
+  return uniqueCandidates;
+}
+
 export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
   if (process.platform !== 'win32') {
     return [
@@ -119,11 +144,11 @@ export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
     }
   }
 
-  const resolvedCandidates = [
+  const resolvedCandidates = dedupeResolvedCandidates([
     ...directCandidates,
     ...nodeScriptCandidates,
     ...cmdShimCandidates,
-  ];
+  ]);
 
   if (resolvedCandidates.length === 0) {
     throw new Error(CODEX_CLI_NOT_FOUND_MESSAGE);
@@ -131,4 +156,3 @@ export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
 
   return resolvedCandidates;
 }
-

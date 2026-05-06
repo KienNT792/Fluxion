@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
 import { Button } from './Button';
 
 interface ConfirmDialogProps {
@@ -24,6 +25,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useModalFocusTrap(isOpen, dialogRef);
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -63,9 +68,11 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className="w-full max-w-md overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',

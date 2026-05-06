@@ -121,6 +121,7 @@ interface CodexCommandAttemptResult {
 
 interface CodexDiscoveryContext {
   cliCandidates: ResolvedCodexCli[];
+  preferredCandidate?: ResolvedCodexCli;
   runCommand: (command: string, args: string[]) => Promise<ExecFileResult>;
 }
 
@@ -177,6 +178,22 @@ function getErrorCode(error: unknown): string | undefined {
 function shouldTryNextCandidate(error: unknown): boolean {
   const code = getErrorCode(error);
   return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOENT';
+}
+
+function getCliCandidateKey(candidate: ResolvedCodexCli): string {
+  return [candidate.command, ...candidate.argsPrefix].join('\u0000');
+}
+
+function getPrioritizedCliCandidates(context: CodexDiscoveryContext): ResolvedCodexCli[] {
+  if (!context.preferredCandidate) {
+    return context.cliCandidates;
+  }
+
+  const preferredKey = getCliCandidateKey(context.preferredCandidate);
+  return [
+    context.preferredCandidate,
+    ...context.cliCandidates.filter((candidate) => getCliCandidateKey(candidate) !== preferredKey),
+  ];
 }
 
 function buildCodexReadiness(
@@ -452,10 +469,16 @@ async function runCodexCommandAcrossCandidates(
 ): Promise<CodexCommandAttemptResult> {
   let lastError: unknown;
 
-  for (const cliCandidate of context.cliCandidates) {
+  for (const cliCandidate of getPrioritizedCliCandidates(context)) {
     try {
+      const result = await context.runCommand(
+        cliCandidate.command,
+        [...cliCandidate.argsPrefix, ...args]
+      );
+      context.preferredCandidate = cliCandidate;
+
       return {
-        result: await context.runCommand(cliCandidate.command, [...cliCandidate.argsPrefix, ...args]),
+        result,
       };
     } catch (error) {
       lastError = error;
@@ -683,6 +706,8 @@ export class ProviderRegistryService {
   private static instance: ProviderRegistryService;
   private cachedCapabilities: ProviderCapabilitiesMap | null = null;
   private cachedAt = 0;
+  private pendingCapabilities: Promise<ProviderCapabilitiesMap> | null = null;
+  private cacheGeneration = 0;
   private readonly cacheTtlMs = 30_000;
 
   private constructor() {
@@ -707,25 +732,44 @@ export class ProviderRegistryService {
       return this.cachedCapabilities;
     }
 
-    const [codex, openai] = await Promise.all([
+    if (this.pendingCapabilities) {
+      return this.pendingCapabilities;
+    }
+
+    const generation = this.cacheGeneration;
+    const pendingCapabilities = Promise.all([
       getCodexCapabilities(),
       getOpenAICapabilities(),
-    ]);
+    ]).then(([codex, openai]) => {
+      const capabilities: ProviderCapabilitiesMap = {
+        codex,
+        openai,
+      };
 
-    const capabilities: ProviderCapabilitiesMap = {
-      codex,
-      openai,
-    };
+      if (this.cacheGeneration === generation) {
+        this.cachedCapabilities = capabilities;
+        this.cachedAt = Date.now();
+      }
 
-    this.cachedCapabilities = capabilities;
-    this.cachedAt = now;
+      return capabilities;
+    });
 
-    return capabilities;
+    this.pendingCapabilities = pendingCapabilities;
+
+    try {
+      return await pendingCapabilities;
+    } finally {
+      if (this.pendingCapabilities === pendingCapabilities) {
+        this.pendingCapabilities = null;
+      }
+    }
   }
 
   public invalidateCache(): void {
     this.cachedCapabilities = null;
     this.cachedAt = 0;
+    this.pendingCapabilities = null;
+    this.cacheGeneration += 1;
   }
 }
 

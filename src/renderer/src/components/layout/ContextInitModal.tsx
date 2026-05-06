@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Sparkles, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
@@ -89,6 +90,9 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
 }) => {
   const { isScanning, scannedContext } = useScoutAgent(workspacePath);
   const [form, setForm] = useState<Partial<ProjectContext>>({});
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useModalFocusTrap(true, dialogRef);
 
   const resolvedForm = useMemo<ProjectContext>(
     () => ({
@@ -120,6 +124,11 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
       style={{ background: 'rgba(38, 37, 30, 0.4)', backdropFilter: 'blur(8px)' }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Initialize Workspace"
+        tabIndex={-1}
         className="w-full max-w-lg mx-4 overflow-hidden"
         style={{
           background: 'var(--color-surface-card)',
