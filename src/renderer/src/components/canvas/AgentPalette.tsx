@@ -1,21 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
-import { OPENAI_DEFAULT_MODEL, getOpenAIModelDisplayName } from '@shared';
-import { useThemeStore } from '../../stores/theme.store';
+import { Plus, TerminalSquare, X } from 'lucide-react';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Tooltip } from '../ui/Tooltip';
-
-import openaiDark from '../../assets/logo/openai-dark.svg';
-import openaiLight from '../../assets/logo/openai-light.svg';
-
-const AgentIcon: React.FC<{ theme: 'light' | 'dark' }> = ({ theme }) => {
-  const isDark = theme === 'dark';
-  return <img src={isDark ? openaiDark : openaiLight} alt="OpenAI" className="h-4 w-4" />;
-};
+import {
+  getCodexCapabilities,
+  getCodexModelDisplayName,
+  getDefaultCodexModel,
+} from '../../lib/provider-capabilities';
 
 export const AgentPalette: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const theme = useThemeStore((state) => state.theme);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
@@ -43,36 +37,29 @@ export const AgentPalette: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const handleDragStart = (event: React.DragEvent): void => {
-    const model =
-      providerCapabilities.openai?.defaultModel
-      ?? providerCapabilities.openai?.models.find((item) => item.visibility === 'list')?.id
-      ?? providerCapabilities.openai?.models[0]?.id
-      ?? OPENAI_DEFAULT_MODEL;
+  const codexCapabilities = getCodexCapabilities(providerCapabilities);
+  const paletteModel = getDefaultCodexModel(providerCapabilities);
+  const paletteHint =
+    codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated'
+      ? getCodexModelDisplayName(providerCapabilities, paletteModel)
+      : codexCapabilities?.error
+        ?? codexCapabilities?.auth.message
+        ?? 'Codex CLI unavailable';
 
+  const handleDragStart = (event: React.DragEvent): void => {
     event.dataTransfer.setData(
       'application/reactflow',
       JSON.stringify({
-        provider: 'openai',
-        model,
+        provider: 'codex',
+        model: paletteModel,
       })
     );
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const paletteModel =
-    providerCapabilities.openai?.defaultModel
-    ?? providerCapabilities.openai?.models.find((item) => item.visibility === 'list')?.id
-    ?? providerCapabilities.openai?.models[0]?.id
-    ?? OPENAI_DEFAULT_MODEL;
-  const paletteHint =
-    providerCapabilities.openai?.auth.status === 'authenticated'
-      ? getOpenAIModelDisplayName(paletteModel)
-      : providerCapabilities.openai?.auth.message ?? 'OPENAI_API_KEY missing';
-
   return (
-    <div ref={containerRef} className="relative ml-2 mt-2 pointer-events-auto">
-      <Tooltip content={isOpen ? 'Close Agent' : 'Add OpenAI Agent'} side="right">
+    <div ref={containerRef} className="pointer-events-auto relative ml-2 mt-2">
+      <Tooltip content={isOpen ? 'Close Agent' : 'Add Codex Agent'} side="right">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors shadow-sm"
@@ -119,7 +106,7 @@ export const AgentPalette: React.FC = () => {
               className="flex cursor-grab items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors"
               style={{ background: 'transparent' }}
               draggable
-              title={providerCapabilities.openai?.auth.message ?? 'Drag to create an OpenAI workflow node.'}
+              title={paletteHint}
               onDragStart={handleDragStart}
               onMouseEnter={(event) => {
                 event.currentTarget.style.background = 'var(--color-surface-strong)';
@@ -128,21 +115,28 @@ export const AgentPalette: React.FC = () => {
                 event.currentTarget.style.background = 'transparent';
               }}
             >
-              <div className="flex-shrink-0">
-                <AgentIcon theme={theme} />
+              <div
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
+                style={{
+                  background: 'var(--color-canvas-soft)',
+                  border: '1px solid var(--color-hairline)',
+                  color: 'var(--color-primary)',
+                }}
+              >
+                <TerminalSquare size={15} />
               </div>
               <div className="min-w-0">
                 <div
                   className="truncate text-sm font-medium"
                   style={{ color: 'var(--color-ink)' }}
                 >
-                  OpenAI
+                  Codex
                 </div>
                 <div
                   className="truncate text-[11px]"
                   style={{
                     color:
-                      providerCapabilities.openai?.auth.status === 'authenticated'
+                      codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated'
                         ? 'var(--color-muted)'
                         : 'var(--color-semantic-error)',
                     fontFamily: 'var(--font-mono)',

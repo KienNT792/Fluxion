@@ -7,6 +7,7 @@ describe('WorkflowRunStateSchema', () => {
       schemaVersion: 1,
       runId: 'run-1',
       workflowId: 'workflow-1',
+      executionMode: 'auto',
       status: 'pending',
       updatedAt: '2026-05-05T00:00:00.000Z',
       currentNodeIds: [],
@@ -25,6 +26,7 @@ describe('WorkflowRunStateSchema', () => {
     });
 
     expect(parsed.status).toBe('pending');
+    expect(parsed.executionMode).toBe('auto');
     expect(parsed.nodes['node-a']?.runner).toBe('codex');
     expect(parsed.nodes['node-a']?.runnerSessionId).toBe('session-123');
     expect(parsed.nodes['node-a']?.model).toBe('gpt-5.5');
@@ -36,6 +38,7 @@ describe('WorkflowRunStateSchema', () => {
         schemaVersion: 1,
         runId: 'run-1',
       workflowId: 'workflow-1',
+      executionMode: 'auto',
       status: 'idle',
       updatedAt: '2026-05-05T00:00:00.000Z',
       currentNodeIds: [],
@@ -58,6 +61,7 @@ describe('WorkflowRunStateSchema', () => {
       schemaVersion: 1,
       runId: 'run-2',
       workflowId: 'workflow-1',
+      executionMode: 'manual',
       status: 'awaiting_review',
       updatedAt: '2026-05-05T00:00:00.000Z',
       currentNodeIds: [],
@@ -71,6 +75,7 @@ describe('WorkflowRunStateSchema', () => {
           model: 'gpt-5.5',
           humanReview: true,
           reviewStatus: 'pending',
+          reviewSource: 'manual',
           reviewRequestedAt: '2026-05-05T00:00:00.000Z',
           outputArtifactPaths: ['docs/review.md'],
         },
@@ -78,6 +83,8 @@ describe('WorkflowRunStateSchema', () => {
     });
 
     expect(parsed.awaitingReviewNodeIds).toEqual(['node-a']);
+    expect(parsed.executionMode).toBe('manual');
     expect(parsed.nodes['node-a']?.reviewStatus).toBe('pending');
+    expect(parsed.nodes['node-a']?.reviewSource).toBe('manual');
   });
 });

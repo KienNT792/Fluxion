@@ -16,7 +16,7 @@ function createWorkflow(): Workflow {
         label: 'Node A',
         position: { x: 0, y: 0 },
         data: {
-          provider: 'openai',
+          provider: 'codex',
           model: 'gpt-5.5',
           prompt: 'Run A',
         },
@@ -27,7 +27,7 @@ function createWorkflow(): Workflow {
         label: 'Node B',
         position: { x: 0, y: 0 },
         data: {
-          provider: 'openai',
+          provider: 'codex',
           model: 'gpt-5.5',
           prompt: 'Run B',
         },
@@ -66,6 +66,7 @@ describe('RunStateStore', () => {
 
     const state = await store.readRun(workspacePath, 'run-1');
     expect(state.status).toBe('running');
+    expect(state.executionMode).toBe('auto');
     expect(Object.keys(state.nodes)).toEqual(['node-a']);
     expect(state.nodes['node-a']).toMatchObject({
       status: 'pending',
@@ -149,6 +150,7 @@ describe('RunStateStore', () => {
     await store.markNodeRunning(workspacePath, 'run-4', 'node-a');
     let state = await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a', {
       outputArtifactPaths: ['docs/review.md'],
+      reviewSource: 'node',
     });
     expect(state.status).toBe('awaiting_review');
     expect(state.awaitingReviewNodeIds).toEqual(['node-a']);
@@ -156,6 +158,7 @@ describe('RunStateStore', () => {
       status: 'awaiting_review',
       humanReview: true,
       reviewStatus: 'pending',
+      reviewSource: 'node',
       outputArtifactPaths: ['docs/review.md'],
     });
 
@@ -175,6 +178,7 @@ describe('RunStateStore', () => {
     expect(state.nodes['node-a']).toMatchObject({
       status: 'pending',
       reviewStatus: undefined,
+      reviewSource: undefined,
       outputArtifactPaths: [],
     });
 
@@ -186,7 +190,31 @@ describe('RunStateStore', () => {
     expect(state.nodes['node-a']).toMatchObject({
       status: 'rejected',
       reviewStatus: 'rejected',
+      reviewSource: 'node',
       reviewComment: 'needs changes',
+    });
+  });
+
+  it('records manual execution mode review checkpoints without mutating node-level humanReview', async () => {
+    const store = new RunStateStore();
+    await store.initializeRun({
+      workspacePath,
+      workflow: createWorkflow(),
+      executionNodeIds: new Set(['node-a']),
+      runId: 'run-5',
+      executionMode: 'manual',
+    });
+
+    await store.markNodeRunning(workspacePath, 'run-5', 'node-a');
+    const state = await store.markNodeAwaitingReview(workspacePath, 'run-5', 'node-a', {
+      reviewSource: 'manual',
+    });
+
+    expect(state.executionMode).toBe('manual');
+    expect(state.nodes['node-a']).toMatchObject({
+      humanReview: false,
+      reviewSource: 'manual',
+      reviewStatus: 'pending',
     });
   });
 });

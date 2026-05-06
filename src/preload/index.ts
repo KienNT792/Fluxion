@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  ExecutionMode,
   IpcChannels,
   MemoryContextReadyPayload,
   NodeId,
@@ -73,6 +74,7 @@ const api = {
     nodes: WorkflowNode[],
     edges: WorkflowEdge[],
     workspacePath: string,
+    executionMode: ExecutionMode,
     resumeFromNodeId?: NodeId
   ): void => {
     ipcRenderer.send(IpcChannels.WORKFLOW_RUN, {
@@ -80,6 +82,7 @@ const api = {
       nodes,
       edges,
       workspacePath,
+      executionMode,
       resumeFromNodeId,
     });
   },

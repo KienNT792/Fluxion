@@ -3,6 +3,7 @@ import { ArtifactRefSchema } from './artifact.schema';
 import { CodexExecutionOptionsSchema } from './codex.schema';
 
 export const RunnerIdSchema = z.enum(['codex', 'custom']);
+export const ExecutionModeSchema = z.enum(['auto', 'manual']);
 
 export const RetryPolicySchema = z
   .object({
@@ -52,6 +53,7 @@ export const WorkflowSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  executionMode: ExecutionModeSchema.default('auto'),
   fluxionVersion: z.string().optional(),
   nodes: z.array(WorkflowNodeSchema),
   edges: z.array(WorkflowEdgeSchema),

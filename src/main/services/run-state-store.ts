@@ -2,17 +2,19 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import {
   NodeRunState,
+  ReviewSource,
   RunStatus,
   WorkflowRunState,
   WorkflowRunStateSchema,
 } from '@core';
-import { NodeId, Workflow } from '@shared';
+import { ExecutionMode, NodeId, Workflow } from '@shared';
 
 export interface InitializeRunOptions {
   workspacePath: string;
   workflow: Workflow;
   executionNodeIds: Set<NodeId>;
   runId: string;
+  executionMode?: ExecutionMode;
   startedAt?: string;
 }
 
@@ -21,6 +23,7 @@ export interface NodeCompletionUpdate {
   runnerSessionId?: string;
   outputArtifactPaths?: string[];
   completedAt?: string;
+  reviewSource?: ReviewSource;
 }
 
 export interface NodeFailureUpdate {
@@ -84,6 +87,7 @@ export class RunStateStore {
       schemaVersion: 1,
       runId: options.runId,
       workflowId: options.workflow.id,
+      executionMode: options.executionMode ?? options.workflow.executionMode ?? 'auto',
       status: 'running',
       startedAt,
       updatedAt: startedAt,
@@ -126,6 +130,7 @@ export class RunStateStore {
       node.runnerSessionId = undefined;
       node.outputArtifactPaths = [];
       node.reviewStatus = undefined;
+      node.reviewSource = undefined;
       node.reviewRequestedAt = undefined;
       node.reviewResolvedAt = undefined;
       node.reviewComment = undefined;
@@ -174,7 +179,7 @@ export class RunStateStore {
       node.error = undefined;
       node.runnerSessionId = update.runnerSessionId;
       node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? []);
-      node.humanReview = true;
+      node.reviewSource = update.reviewSource ?? 'node';
       node.reviewStatus = 'pending';
       node.reviewRequestedAt = node.completedAt;
       node.reviewResolvedAt = undefined;
@@ -237,6 +242,7 @@ export class RunStateStore {
       node.runnerSessionId = undefined;
       node.outputArtifactPaths = [];
       node.reviewStatus = undefined;
+      node.reviewSource = undefined;
       node.reviewRequestedAt = undefined;
       node.reviewResolvedAt = undefined;
       node.reviewComment = undefined;

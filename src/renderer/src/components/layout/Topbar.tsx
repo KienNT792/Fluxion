@@ -239,6 +239,7 @@ export const Topbar: React.FC = () => {
   const setWorkflowStatus = useExecutionStore((state) => state.setWorkflowStatus);
 
   const nodes = useWorkflowStore((state) => state.nodes);
+  const executionMode = useWorkflowStore((state) => state.executionMode);
   const workspacePath = useWorkflowStore((state) => state.workspacePath);
   const workflowName = useWorkflowStore((state) => state.workflowName);
   const isDirty = useWorkflowStore((state) => state.isDirty);
@@ -249,6 +250,7 @@ export const Topbar: React.FC = () => {
     (state) => state.hasExternalWorkflowChange
   );
   const recentWorkspaceChanges = useWorkflowStore((state) => state.recentWorkspaceChanges);
+  const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
 
   const { theme, toggleTheme } = useThemeStore();
 
@@ -509,6 +511,43 @@ export const Topbar: React.FC = () => {
                 {workflowStatus === 'running' ? ` (${formatElapsed(elapsedMs)})` : ''}
               </span>
             </span>
+
+            <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
+
+            <div
+              className="inline-flex items-center rounded-md p-0.5"
+              style={{
+                background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-hairline)',
+              }}
+            >
+              {(['auto', 'manual'] as const).map((mode) => {
+                const isActive = executionMode === mode;
+
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setExecutionMode(mode)}
+                    disabled={isBusy}
+                    className="min-w-[68px] rounded-[5px] px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors"
+                    style={{
+                      background: isActive ? 'var(--color-primary)' : 'transparent',
+                      color: isActive ? '#ffffff' : 'var(--color-muted)',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                      opacity: isBusy && !isActive ? 0.5 : 1,
+                    }}
+                    title={
+                      mode === 'auto'
+                        ? 'Only nodes with review checkpoints pause'
+                        : 'Every completed node pauses for review'
+                    }
+                  >
+                    {mode}
+                  </button>
+                );
+              })}
+            </div>
 
             <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
 

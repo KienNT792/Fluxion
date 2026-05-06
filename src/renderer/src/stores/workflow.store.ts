@@ -11,15 +11,20 @@ import {
 } from '@xyflow/react';
 import {
   AgentNodeData,
-  OPENAI_DEFAULT_MODEL,
-  OPENAI_DEFAULT_REASONING_LEVEL,
+  CODEX_DEFAULT_MODEL,
+  CODEX_DEFAULT_REASONING_LEVEL,
+  ExecutionMode,
   ProviderCapabilitiesMap,
+  ReasoningLevel,
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
   WorkflowMetadata,
-  isOpenAIReasoningModel,
 } from '@shared';
+import {
+  getCodexModelById,
+  getDefaultCodexModel,
+} from '../lib/provider-capabilities';
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
   receivedAt: number;
@@ -30,6 +35,7 @@ interface WorkflowState {
   workflowName: string;
   workflowRevision: number;
   lastSavedRevision: number;
+  executionMode: ExecutionMode;
   nodes: Node<WorkflowNode['data']>[];
   edges: Edge[];
   workspacePath: string | null;
@@ -51,6 +57,7 @@ interface WorkflowState {
 
   setWorkspacePath: (path: string | null) => void;
   setWorkflowName: (name: string) => void;
+  setExecutionMode: (mode: ExecutionMode) => void;
   fetchProviderCapabilities: () => Promise<ProviderCapabilitiesMap>;
   hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void;
   setNodes: (nodes: Node<WorkflowNode['data']>[]) => void;
@@ -78,23 +85,14 @@ function normalizeNodeData(data: WorkflowNode['data']): WorkflowNode['data'] {
   const model =
     typeof data.model === 'string' && data.model.trim().length > 0
       ? data.model.trim()
-      : OPENAI_DEFAULT_MODEL;
+      : CODEX_DEFAULT_MODEL;
 
   return {
     ...data,
-    provider: 'openai',
+    provider: 'codex',
     model,
     prompt: typeof data.prompt === 'string' ? data.prompt : '',
   };
-}
-
-function getDefaultOpenAIModel(providerCapabilities: ProviderCapabilitiesMap): string {
-  return (
-    providerCapabilities.openai?.defaultModel
-    ?? providerCapabilities.openai?.models.find((model) => model.visibility === 'list')?.id
-    ?? providerCapabilities.openai?.models[0]?.id
-    ?? OPENAI_DEFAULT_MODEL
-  );
 }
 
 function applySelectionState(
@@ -129,6 +127,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workflowName: 'Fluxion Workflow',
   workflowRevision: 0,
   lastSavedRevision: 0,
+  executionMode: 'auto',
   nodes: [],
   edges: [],
   workspacePath: null,
@@ -157,6 +156,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       isDirty: true,
       saveError: null,
     })),
+
+  setExecutionMode: (mode) =>
+    set((state) => {
+      if (state.executionMode === mode) {
+        return state;
+      }
+
+      return {
+        executionMode: mode,
+        workflowRevision: state.workflowRevision + 1,
+        isDirty: true,
+        saveError: null,
+      };
+    }),
 
   fetchProviderCapabilities: async () => {
     if (!window.api?.getProviderCapabilities) {
@@ -198,6 +211,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflowName: payload.workflow.name,
       workflowRevision: 0,
       lastSavedRevision: 0,
+      executionMode: payload.workflow.executionMode ?? 'auto',
       nodes: applySelectionState(
         payload.workflow.nodes.map((node) => ({
           id: node.id,
@@ -284,20 +298,33 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   addNode: (_preset, position) => {
-    const model = getDefaultOpenAIModel(get().providerCapabilities);
+    const preset = _preset;
+    const providerCapabilities = get().providerCapabilities;
+    const requestedModel =
+      typeof preset.model === 'string' && preset.model.trim().length > 0
+        ? preset.model.trim()
+        : getDefaultCodexModel(providerCapabilities);
+    const model = requestedModel || CODEX_DEFAULT_MODEL;
+    const reasoningLevels = getCodexModelById(
+      providerCapabilities,
+      model
+    )?.supportedReasoningLevels.filter(
+      (level): level is ReasoningLevel =>
+        level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh'
+    );
     const newNodeId = `node-${Date.now()}`;
     const newNode: Node<WorkflowNode['data']> = {
       id: newNodeId,
       position,
       data: {
-        provider: 'openai',
+        provider: 'codex',
         model,
         prompt: '',
         systemInstruction: '',
-        maxTokens: 2048,
-        temperature: 0.7,
-        reasoningLevel: isOpenAIReasoningModel(model)
-          ? OPENAI_DEFAULT_REASONING_LEVEL
+        reasoningLevel: reasoningLevels && reasoningLevels.length > 0
+          ? reasoningLevels.includes(CODEX_DEFAULT_REASONING_LEVEL)
+            ? CODEX_DEFAULT_REASONING_LEVEL
+            : reasoningLevels[0]
           : undefined,
       },
       type: 'agentNode',
@@ -338,7 +365,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             data: normalizeNodeData({
               ...node.data,
               ...newData,
-              provider: 'openai',
             }),
           };
         }),

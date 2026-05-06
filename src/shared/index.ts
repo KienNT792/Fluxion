@@ -9,6 +9,7 @@
  */
 
 export * from './workflow.types';
+export * from './codex.models';
 export * from './openai.models';
 export * from './agent.types';
 export * from './memory.types';

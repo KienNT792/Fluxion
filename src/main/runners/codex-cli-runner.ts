@@ -14,6 +14,7 @@ import {
   ResolvedCodexCli,
   resolveCodexCliCandidates,
 } from './codex-cli-resolver';
+import { providerRegistryService } from '../services/provider-registry.service';
 
 interface RunnerEventQueueItem {
   event?: RunnerEvent;
@@ -94,6 +95,7 @@ export interface CodexCliRunnerOptions {
   processManager?: CodexProcessManager;
   resolveCli?: () => Promise<ResolvedCodexCli | ResolvedCodexCli[]>;
   outputDirectory?: string;
+  modelSupportsReasoning?: (modelId: string) => Promise<boolean>;
 }
 
 export function encodeCodexConfigValue(value: string | number | boolean): string {
@@ -104,13 +106,26 @@ export function encodeCodexConfigValue(value: string | number | boolean): string
   return String(value);
 }
 
-export function buildCodexExecArgs(ctx: RunnerContext, outputLastMessagePath: string): string[] {
+async function modelSupportsReasoningEffort(modelId: string): Promise<boolean> {
+  const capabilities = await providerRegistryService.fetchCapabilities();
+  const model = capabilities.codex?.models.find((candidate) => candidate.id === modelId);
+  return (model?.supportedReasoningLevels.length ?? 0) > 0;
+}
+
+export async function buildCodexExecArgs(
+  ctx: RunnerContext,
+  outputLastMessagePath: string,
+  options: {
+    modelSupportsReasoning?: (modelId: string) => Promise<boolean>;
+  } = {}
+): Promise<string[]> {
   const codexOptions = CodexExecutionOptionsSchema.parse(ctx.node.data.codex);
   const args = ['exec'];
   const model =
     typeof ctx.node.data.model === 'string' && ctx.node.data.model.trim().length > 0
       ? ctx.node.data.model.trim()
       : undefined;
+  const configEntries = new Map(Object.entries(codexOptions.config ?? {}));
 
   if (codexOptions.json) {
     args.push('--json');
@@ -135,7 +150,16 @@ export function buildCodexExecArgs(ctx: RunnerContext, outputLastMessagePath: st
     args.push('--config', `windows.sandbox=${codexOptions.windowsSandbox}`);
   }
 
-  for (const [key, value] of Object.entries(codexOptions.config ?? {}).sort(([a], [b]) =>
+  if (
+    model
+    && typeof ctx.node.data.reasoningLevel === 'string'
+    && !configEntries.has('model_reasoning_effort')
+    && await (options.modelSupportsReasoning ?? modelSupportsReasoningEffort)(model)
+  ) {
+    configEntries.set('model_reasoning_effort', ctx.node.data.reasoningLevel);
+  }
+
+  for (const [key, value] of [...configEntries.entries()].sort(([a], [b]) =>
     a.localeCompare(b)
   )) {
     args.push('--config', `${key}=${encodeCodexConfigValue(value)}`);
@@ -207,18 +231,22 @@ export class CodexCliRunner implements FluxionRunner {
   private readonly processManager: CodexProcessManager;
   private readonly resolveCli: () => Promise<ResolvedCodexCli | ResolvedCodexCli[]>;
   private readonly outputDirectory: string;
+  private readonly supportsReasoningByModel?: (modelId: string) => Promise<boolean>;
   private readonly activeProcesses = new Map<string, ActiveCodexProcess>();
 
   public constructor(options: CodexCliRunnerOptions = {}) {
     this.processManager = options.processManager ?? processManager;
     this.resolveCli = options.resolveCli ?? resolveCodexCliCandidates;
     this.outputDirectory = options.outputDirectory ?? join('.fluxion', 'tmp', 'codex');
+    this.supportsReasoningByModel = options.modelSupportsReasoning;
   }
 
   public async *run(ctx: RunnerContext): AsyncGenerator<RunnerEvent, RunnerResult, void> {
     const outputPath = await this.createOutputPath(ctx);
     const codexOptions = CodexExecutionOptionsSchema.parse(ctx.node.data.codex);
-    const execArgs = buildCodexExecArgs(ctx, outputPath);
+    const execArgs = await buildCodexExecArgs(ctx, outputPath, {
+      modelSupportsReasoning: this.supportsReasoningByModel,
+    });
     const cliCandidates = normalizeCliCandidates(await this.resolveCli());
     const queue = new RunnerEventQueue();
     const key = executionKey(ctx.runId, ctx.node.id);

@@ -42,6 +42,7 @@ function validateWorkflow(payload: WorkflowRunPayload): string | null {
   const parsedWorkflow = WorkflowSchema.safeParse({
     id: payload.workflowId,
     name: 'Fluxion Workflow',
+    executionMode: payload.executionMode,
     nodes: payload.nodes,
     edges: payload.edges,
   });
@@ -164,6 +165,7 @@ export function registerWorkflowHandlers(): void {
         const workflow: Workflow = {
           id: payload.workflowId,
           name: 'Fluxion Workflow',
+          executionMode: payload.executionMode ?? 'auto',
           nodes: payload.nodes,
           edges: payload.edges,
         };

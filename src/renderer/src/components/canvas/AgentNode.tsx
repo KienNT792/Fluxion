@@ -1,14 +1,11 @@
 import React from 'react';
 import { Handle, Position, NodeProps, Node } from '@xyflow/react';
-import { RotateCcw, Settings, Terminal } from 'lucide-react';
-import { AgentNodeData, getOpenAIModelDisplayName } from '@shared';
+import { RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react';
+import { AgentNodeData } from '@shared';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
-import { useThemeStore } from '../../stores/theme.store';
 import { retryWorkflowFromNode } from '../../lib/workflow-session';
-
-import openaiLight from '../../assets/logo/openai-light.svg';
-import openaiDark from '../../assets/logo/openai-dark.svg';
+import { getCodexModelDisplayName } from '../../lib/provider-capabilities';
 
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>;
 
@@ -47,24 +44,13 @@ const StatusPill: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-const ProviderLogo: React.FC = () => {
-  const theme = useThemeStore((state) => state.theme);
-  const isDark = theme === 'dark';
-
-  return (
-    <img
-      src={isDark ? openaiDark : openaiLight}
-      alt="OpenAI"
-      className="h-5 w-5"
-    />
-  );
-};
-
 export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
   const status = useExecutionStore((state) => state.nodeStatuses[id] ?? 'idle');
   const nodeError = useExecutionStore((state) => state.nodeErrors[id]);
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
-  const displayName = data.label || getOpenAIModelDisplayName(data.model);
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const displayName =
+    data.label || getCodexModelDisplayName(providerCapabilities, data.model);
   const canRetry =
     status === 'error' &&
     workflowStatus !== 'running' &&
@@ -112,9 +98,10 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
             style={{
               background: 'var(--color-surface-card)',
               border: '1px solid var(--color-hairline)',
+              color: 'var(--color-primary)',
             }}
           >
-            <ProviderLogo />
+            <TerminalSquare size={16} />
           </div>
 
           <div className="min-w-0">

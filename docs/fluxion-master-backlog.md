@@ -1,12 +1,12 @@
 # Fluxion Master Backlog
 
-Date: 2026-05-02
-Workspace: `D:\Fluxion`
-Source baseline: `docs/fluxion-project-assessment-2026-05-02.md`
+Date: 2026-05-06
+Workspace: `D:\codex-workflow\Fluxion`
+Source baseline: `README.md`, `docs/fluxion-project-assessment-2026-05-03.md`, repo verification on `2026-05-06`
 
 ## Purpose
 
-Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first desktop orchestrator co the dung duoc cho workflow agent that. Thu tu uu tien o day uu tien:
+Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first desktop orchestrator co the dung duoc cho workflow agent that. Thu tu uu tien o day van la:
 
 1. Runtime correctness
 2. Workspace-first flow
@@ -21,28 +21,44 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - `P2`: Important enhancement. Nen lam truoc public beta.
 - `P3`: Nice-to-have. Lam sau khi core da on.
 
+## Status Legend
+
+- `[DONE]`: Delivered va da duoc xac nhan bang repo state hien tai.
+- `[PARTIAL]`: Da ship mot phan quan trong, nhung acceptance van con gap.
+- `[CURRENT]`: Viec uu tien cao nhat nen lam tiep theo repo state hien tai.
+
+## Current Snapshot
+
+- `git status`: clean on `main...origin/main`
+- `npm run typecheck`: pass
+- `npm test`: pass (`12` files, `55` tests)
+- P0/P0.1/P1 runtime foundation cho Codex CLI tren Windows da xong.
+- Run-state persistence, artifact gates, va V2 memory frontmatter da co trong code va test.
+- Human review checkpoints da co theo tung node, nhung workflow-level mode UX van chua khop acceptance ban dau.
+- Gap con lai lon nhat hien nay la Electron smoke validation, `build:win`, dynamic Codex capability discovery, va product hardening.
+
 ## Release Gates
 
-### Alpha Gate
+### Alpha Gate [DONE]
 
-- Mock workflow A -> B chay dung end-to-end
-- Node loi thi dung la `error`, khong duoc ghi `completed`
-- Abort dung tren Windows, khong de zombie process
-- Workspace co the duoc mo va luu `workflow.json`
+- [x] Mock workflow A -> B chay dung end-to-end.
+- [x] Node loi thi dung la `error`, khong bi ghi nham `completed`.
+- [x] Abort dung tren Windows, khong de zombie process.
+- [x] Workspace co the duoc mo va luu workflow.
 
-### Beta Gate
+### Beta Gate [PARTIAL]
 
-- Co it nhat 1 adapter that de chay agent that
-- Co Retry va Explain with AI
-- Co file watch, context init, instruction file generation
-- UI phan anh dung trang thai workflow va node
+- [x] Co it nhat 1 adapter that de chay agent that.
+- [ ] Co `Retry` va `Explain with AI`. Current state: `Retry` da co, `Explain with AI` chua co.
+- [ ] Co file watch, context init, instruction file generation. Current state: file watch va context init da co; instruction file generation chua co.
+- [x] UI phan anh dung trang thai workflow va node.
 
-### MVP Gate
+### MVP Gate [PARTIAL]
 
-- Co it nhat 2 adapter that
-- Ho tro Auto Accept va Manual Accept
-- Data piping `.md` + frontmatter on dinh
-- Build Windows co the dong goi va smoke test duoc
+- [ ] Co it nhat 2 adapter that tren main execution path. Current state: Codex CLI runtime da co; adapter khac chua duoc wire vao execution path hien tai.
+- [ ] Ho tro Auto Accept va Manual Accept o cap workflow. Current state: per-node `humanReview` da co, nhung chua co run mode selector ro rang.
+- [x] Data piping `.md` + frontmatter on dinh.
+- [ ] Build Windows co the dong goi va smoke test duoc.
 
 ## Definition of Done
 
@@ -58,23 +74,23 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ### FX-001 Fix adapter asset packaging and runtime path resolution [DONE]
 - Priority: `P0`
-- Outcome: Mock adapter và cac adapter sau nay co the chay dung trong `dev` va `build`.
+- Outcome: Adapter assets va runtime paths da du on dinh cho `dev` va current build path.
 
 ### FX-002 Enforce correct success/failure semantics in WorkflowEngine [DONE]
 - Priority: `P0`
-- Outcome: Engine chi ghi `completed` khi agent that su thanh cong.
+- Outcome: Engine chi ghi `completed` khi execution that su thanh cong.
 
 ### FX-003 Synchronize workflow status between main and renderer [DONE]
 - Priority: `P0`
-- Outcome: Topbar, abort button va workflow badge phan anh dung trang thai.
+- Outcome: Topbar, node status, abort flow, va completion state da dong bo.
 
 ### FX-004 Forward full execution event set to renderer [DONE]
 - Priority: `P0`
-- Outcome: Renderer nhan day du `node-output`, `terminal-error`, `terminal-exit`.
+- Outcome: Renderer nhan du `node-output`, `terminal-error`, `terminal-exit`, review events, va status updates.
 
 ### FX-005 Add DAG validation before run [DONE]
 - Priority: `P0`
-- Outcome: Khong cho chay workflow loi cau truc.
+- Outcome: Workflow loi cau truc khong the chay.
 
 ### FX-006 Harden Windows abort and process cleanup [DONE]
 - Priority: `P0`
@@ -84,15 +100,15 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ### FX-007 Implement workspace open flow [DONE]
 - Priority: `P1`
-- Outcome: App that su mo mot folder du an thay vi fallback ve `.`.
+- Outcome: App mo folder du an that su thay vi fallback ve `.`.
 
 ### FX-008 Add workspace bootstrap and `workflow.json` persistence [DONE]
 - Priority: `P1`
-- Outcome: Workflow va memory co the khoi phuc giua cac session.
+- Outcome: Workflow, memory, va workspace bootstrap co the khoi phuc giua cac session.
 
 ### FX-009 Add `chokidar` file watch and renderer event stream [DONE]
 - Priority: `P1`
-- Outcome: Fluxion bat dau dung nhu mot workspace orchestrator dung nghia.
+- Outcome: Workspace change stream da duoc day vao renderer.
 
 ### FX-010 Add autosave and recovery [DONE]
 - Priority: `P1`
@@ -102,8 +118,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ### FX-011 Build context initialization wizard [DONE]
 - Priority: `P1`
-- Outcome: App ho tro dung 5 cau hoi chien luoc de hieu du an con.
-
+- Outcome: App da co context init modal de thu thap thong tin chien luoc ban dau.
 
 ### FX-012 Add source-scan assisted context draft
 
@@ -111,8 +126,8 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Outcome: Giam thao tac tay khi setup workspace moi.
 - Deliverable: Co che quet repo de goi y muc tieu, stack, architecture, style.
 - Acceptance:
-- App tao duoc ban nhap context tu source tree
-- User co the review va sua truoc khi luu
+- App tao duoc ban nhap context tu source tree.
+- User co the review va sua truoc khi luu.
 
 ### FX-013 Generate instruction files with frontmatter
 
@@ -120,9 +135,9 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Outcome: Tao `GEMINI.md`, `CODEX.md`, `CLAUDE.md` va file data lien quan theo chuan.
 - Deliverable: Instruction file generator co schema frontmatter ro rang.
 - Acceptance:
-- Moi file duoc sinh ra deu co frontmatter hop le
-- Metadata co `node id`, `status`, `agent name` khi phu hop
-- Template co the tuy bien theo workspace context
+- Moi file duoc sinh ra deu co frontmatter hop le.
+- Metadata co `node id`, `status`, `agent name` khi phu hop.
+- Template co the tuy bien theo workspace context.
 
 ### FX-014 Add editable global context and long-term memory surface
 
@@ -130,69 +145,79 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Outcome: User co noi quan ly rules chung thay vi chi sua file tay.
 - Deliverable: UI editor cho `global-context.md` va tom tat long-term memory.
 - Acceptance:
-- User sua va luu duoc `global-context.md` trong app
-- Memory compiler doc dung metadata da chuan hoa
+- User sua va luu duoc `global-context.md` trong app.
+- Memory compiler doc dung metadata da chuan hoa.
 
 ## Phase D - Agent Integration and Execution Modes
 
-### FX-015 Harden adapter contract for real providers
+### FX-015 Harden adapter contract for real providers [DONE]
 
 - Priority: `P1`
-- Outcome: Adapter layer san sang cho CLI/API that.
-- Deliverable: Standard hoa lifecycle execute, abort, parse chunk, exit result.
+- Outcome: Adapter/runner contract da on dinh cho execute, abort, chunk stream, exit result, va run-state integration.
 - Acceptance:
-- Adapter co the bao `stdout`, `stderr`, `status`, `exitCode`, `abortReason`
-- Engine khong can biet chi tiet tung provider
+- [x] Adapter co the bao `stdout`, `stderr`, `status`, `exitCode`, `abortReason`.
+- [x] Engine khong can biet chi tiet runner implementation.
 
 ### FX-016 Implement Gemini adapter
 
 - Priority: `P1`
-- Outcome: Co it nhat 1 agent that chay duoc.
+- Outcome: Co them mot runtime that ngoai Codex.
 - Deliverable: Gemini CLI hoac API adapter theo huong Windows-first.
 - Acceptance:
-- Prompt + context duoc gui dung
-- Streaming log len UI duoc
-- Abort, error va output file hoat dong dung
+- Prompt + context duoc gui dung.
+- Streaming log len UI duoc.
+- Abort, error va output file hoat dong dung.
 
-### FX-017 Implement Codex adapter
+### FX-017 Implement Codex adapter [DONE]
 
 - Priority: `P1`
-- Outcome: Phu hop muc tieu da-agent collaboration.
-- Deliverable: Codex adapter theo cung contract.
+- Outcome: Codex CLI da la runtime that cho workflow node.
 - Acceptance:
-- Co the chay mot node Codex that tu UI
-- Chunk stream, completion, abort deu thong suot
+- [x] Co the chay mot node Codex that tu UI/runtime path hien tai.
+- [x] Chunk stream, completion, abort deu thong suot.
 
-### FX-018 Implement Auto Accept and Manual Accept modes
+### FX-018 Implement Auto Accept and Manual Accept modes [PARTIAL]
 
 - Priority: `P1`
-- Outcome: App dat dung operational workflow da dat ra.
+- Outcome: Human review gate da co theo node, nhung UX/workflow-level mode van chua hoan tat.
 - Deliverable: Run mode selector va execution gate giua cac node.
 - Acceptance:
-- Auto Accept: node sau tu chay khi upstream xong
-- Manual Accept: node sau dung lai o `paused` cho user duyet
-- UI the hien mode dang dung ro rang
+- [x] Auto Accept: node sau tu chay khi upstream xong neu khong co review gate.
+- [x] Manual Accept: node co `humanReview` dung lai o `paused` / `awaiting_review`.
+- [ ] UI the hien mode dang dung ro rang o cap workflow.
 
-### FX-019 Add Retry node and rerun subtree
+### FX-019 Add Retry node and rerun subtree [PARTIAL]
 
 - Priority: `P1`
-- Outcome: User co the xu ly loi ma khong phai run lai toan bo graph.
+- Outcome: Retry from node va rerun paused review node da co, nhung attempt history van con toi gian.
 - Deliverable: Retry cho node loi hoac rerun tu node duoc chon.
 - Acceptance:
-- Retry mot node se reset dung subtree lien quan
-- Logs va output cu duoc danh dau ro rang
+- [x] Retry mot node reset dung subtree lien quan.
+- [x] Review node co the rerun trong cung workflow run.
+- [ ] Logs va output cu duoc danh dau ro rang giua cac attempt.
+
+### FX-027 Align Codex capability discovery with current CLI [CURRENT]
+
+- Priority: `P1`
+- Outcome: UI va runtime Codex khop voi `codex debug models` thay vi tiep tuc dua vao metadata cu/hardcode.
+- Deliverable: Codex capability discovery service, IPC exposure, va capability-driven renderer.
+- Acceptance:
+- [ ] Parse JSON tu `codex debug models` hoac machine-readable source tuong duong.
+- [ ] Renderer dung danh sach model/capability dong cho Codex.
+- [ ] Fluxion hien trang thai unavailable ro rang neu Codex CLI khong co trong PATH.
+- [ ] Legacy/custom model slug van load/save duoc.
 
 ## Phase E - Error Handling and Operator UX
 
-### FX-020 Add node-level error surface with actions
+### FX-020 Add node-level error surface with actions [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Dung theo yeu cau "Retry" va "Explain with AI".
+- Outcome: Node-level status/error surface va `Retry` action da co; `Explain with AI` van chua co.
 - Deliverable: Tooltip/panel loi tren node va trong properties panel.
 - Acceptance:
-- Node loi hien icon/trang thai ro
-- Co nut `Retry`
-- Co nut `Explain with AI`
+- [x] Node loi hien icon/trang thai ro.
+- [x] Co nut `Retry`.
+- [ ] Co nut `Explain with AI`.
 
 ### FX-021 Implement diagnostic agent flow
 
@@ -200,8 +225,8 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Outcome: App co the phan tich loi bang model chi phi thap.
 - Deliverable: Diagnostic adapter/flow cho stderr + context loi.
 - Acceptance:
-- User bam `Explain with AI` thi co phan tich nguyen nhan
-- Mac dinh dung model re hoac local neu cau hinh co san
+- User bam `Explain with AI` thi co phan tich nguyen nhan.
+- Mac dinh dung model re hoac local neu cau hinh co san.
 
 ### FX-022 Add markdown output preview and artifact links
 
@@ -209,71 +234,72 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Outcome: User nhin thay san pham cua moi node ngay trong app.
 - Deliverable: Markdown viewer va link mo output file.
 - Acceptance:
-- Node completed co the preview body markdown
-- Co link toi file `.md` output that
+- Node completed co the preview body markdown.
+- Co link toi file `.md` output that.
 
 ## Phase F - Data Integrity, Security, and Hardening
 
-### FX-023 Normalize frontmatter schema and memory parsing
+### FX-023 Normalize frontmatter schema and memory parsing [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Khong con lech giua `provider/model` va field parser.
+- Outcome: Writer/reader gap da giam ro, nhung memory compiler van chua schema-enforce day du downstream artifacts.
 - Deliverable: Schema thong nhat cho output md va memory compiler.
 - Acceptance:
-- Parser khong con doc `agent` khi writer ghi `provider`
-- Metadata hop le moi duoc dung lam context downstream
+- [x] Parser khong con phu thuoc vao field `agent` cu.
+- [x] Writer da dung V2 frontmatter voi `runId`, `runner`, `status`, `startedAt`, `completedAt`.
+- [ ] Metadata khong hop le bi chan truoc khi dua vao downstream context.
 
-### FX-024 Add credential storage and provider config management
+### FX-024 Add credential storage and provider config management [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Khong hardcode key va co UX cau hinh an toan.
-- Deliverable: `.env`, `electron-store`, hoac Windows Credential Manager abstraction.
+- Outcome: OpenAI key storage/settings da co, nhung provider config management chua bao phu toan bo runtime path.
+- Deliverable: Secure local settings storage va provider config surface.
 - Acceptance:
-- API key khong nam trong source code
-- User co the cau hinh provider trong app
-- App validate thieu key truoc khi run
+- [x] API key khong nam trong source code.
+- [x] User co the cau hinh OpenAI provider trong app.
+- [ ] App validate thieu auth/config truoc khi run cho tat ca provider/runtime lien quan.
 
-### FX-025 Establish test matrix and CI baseline
+### FX-025 Establish test matrix and CI baseline [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Giam nguy co vo workflow khi tang truong codebase.
+- Outcome: Unit tests cho engine/runtime core da co, nhung build smoke va CI baseline van chua khop DoD.
 - Deliverable: Unit test, integration test, build smoke, lint/typecheck pipeline.
 - Acceptance:
-- Co test cho engine success/error/abort
-- Co test cho memory frontmatter parsing
-- Co build smoke tren Windows
+- [x] Co test cho engine success/error/abort.
+- [x] Co test cho memory frontmatter parsing.
+- [ ] Co build smoke tren Windows.
+- [ ] Co CI baseline cho lint/typecheck/test.
 
-### FX-026 Clean lint baseline and align product metadata
+### FX-026 Clean lint baseline and align product metadata [PARTIAL]
 
 - Priority: `P2`
-- Outcome: Repo chuyen tu prototype sang product-ready workspace.
-- Deliverable: Giam lint error ve 0 va sua `package.json`, README, docs theo identity Fluxion.
+- Outcome: README da gan hon voi product that, nhung metadata starter va lint baseline van can don dep.
+- Deliverable: Giam lint noise va sua `package.json`, README, docs theo identity Fluxion.
 - Acceptance:
-- `npm run lint` pass
-- `package.json` khong con metadata starter
-- README mo ta dung tinh nang hien co, khong marketing vuot implementation
+- [ ] `npm run lint` pass clean.
+- [ ] `package.json` khong con metadata starter.
+- [x] README mo ta dung tinh nang hien co hon truoc.
 
 ## Suggested Implementation Order
 
-1. `FX-001` -> `FX-006`
-2. `FX-007` -> `FX-010`
-3. `FX-015` -> `FX-018`
-4. `FX-020` -> `FX-024`
-5. `FX-025` -> `FX-026`
-6. `FX-011` -> `FX-014`
+1. `FX-018`, `FX-020`, `FX-027`
+2. `FX-025`, `FX-026`
+3. `FX-013`, `FX-014`, `FX-012`
+4. `FX-016`, `FX-021`, `FX-022`
+5. `FX-024`, `FX-023`
 
-## Suggested First Sprint
+## Suggested Next Sprint
 
-Sprint 1 nen chi tap trung vao 6 item:
+Sprint tiep theo nen tap trung vao 6 item:
 
-- `FX-001` Fix runtime path packaging
-- `FX-002` Fix execution semantics
-- `FX-003` Sync workflow status
-- `FX-004` Forward full runtime events
-- `FX-005` DAG validation
-- `FX-007` Workspace open flow
+- `FX-018` Hoan tat workflow-level Auto Accept / Manual Accept UX.
+- `FX-020` Them `Explain with AI`.
+- `FX-027` Chuyen Codex model picker sang dynamic capability discovery.
+- `FX-025` Them `build:win` smoke validation va CI baseline.
+- `FX-026` Don dep metadata san pham va lint baseline.
+- `FX-013` Bat dau instruction file generation co frontmatter.
 
-Neu xong 6 item nay, Fluxion se chuyen tu "UI prototype" thanh "alpha orchestrator co the demo duoc".
+Neu xong 6 item nay, Fluxion se chuyen tu "runtime foundation da co" sang "beta candidate co the smoke-test nghiem tuc tren desktop".
 
 ## Deferred for Later
 

@@ -61,7 +61,7 @@ function createContext(overrides: Partial<RunnerContext> = {}): RunnerContext {
     label: 'Node A',
     position: { x: 0, y: 0 },
     data: {
-      provider: 'openai',
+      provider: 'codex',
       model: 'gpt-5.5',
       runner: 'codex',
       prompt: 'Do the thing',
@@ -88,6 +88,7 @@ function createRunner(processManager: FakeProcessManager, outputDirectory: strin
       displayCommand: 'node codex.js',
       source: 'node-script',
     }),
+    modelSupportsReasoning: async () => false,
   });
 }
 
@@ -102,8 +103,8 @@ describe('CodexCliRunner', () => {
     await rm(outputDirectory, { recursive: true, force: true });
   });
 
-  it('builds default codex exec args for non-interactive JSON mode', () => {
-    const args = buildCodexExecArgs(createContext(), 'D:\\out\\last-message.md');
+  it('builds default codex exec args for non-interactive JSON mode', async () => {
+    const args = await buildCodexExecArgs(createContext(), 'D:\\out\\last-message.md');
 
     expect(args).toEqual([
       'exec',
@@ -122,7 +123,7 @@ describe('CodexCliRunner', () => {
     ]);
   });
 
-  it('maps explicit sandbox, approval, Windows sandbox, profile, and custom config', () => {
+  it('maps explicit sandbox, approval, Windows sandbox, profile, and custom config', async () => {
     const ctx = createContext({
       node: WorkflowNodeSchema.parse({
         ...createContext().node,
@@ -143,7 +144,7 @@ describe('CodexCliRunner', () => {
       }),
     });
 
-    const args = buildCodexExecArgs(ctx, 'D:\\out\\last-message.md');
+    const args = await buildCodexExecArgs(ctx, 'D:\\out\\last-message.md');
 
     expect(args).toContain('--sandbox');
     expect(args[args.indexOf('--sandbox') + 1]).toBe('read-only');
@@ -153,6 +154,49 @@ describe('CodexCliRunner', () => {
     expect(args).toContain('windows.sandbox=unelevated');
     expect(args).toContain('analytics.enabled=false');
     expect(args).toContain('model_verbosity="high"');
+  });
+
+  it('injects model_reasoning_effort only for supported models and does not override explicit config', async () => {
+    const ctx = createContext({
+      node: WorkflowNodeSchema.parse({
+        ...createContext().node,
+        data: {
+          ...createContext().node.data,
+          reasoningLevel: 'high',
+        },
+      }),
+    });
+
+    const args = await buildCodexExecArgs(ctx, 'D:\\out\\last-message.md', {
+      modelSupportsReasoning: async () => true,
+    });
+
+    expect(args).toContain('model_reasoning_effort="high"');
+
+    const explicitArgs = await buildCodexExecArgs(
+      {
+        ...ctx,
+        node: WorkflowNodeSchema.parse({
+          ...ctx.node,
+          data: {
+            ...ctx.node.data,
+            codex: {
+              ...ctx.node.data.codex,
+              config: {
+                model_reasoning_effort: 'low',
+              },
+            },
+          },
+        }),
+      },
+      'D:\\out\\last-message.md',
+      {
+        modelSupportsReasoning: async () => true,
+      }
+    );
+
+    expect(explicitArgs).toContain('model_reasoning_effort="low"');
+    expect(explicitArgs).not.toContain('model_reasoning_effort="high"');
   });
 
   it('passes prompt through stdin instead of command args', async () => {

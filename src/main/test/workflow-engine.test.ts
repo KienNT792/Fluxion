@@ -120,7 +120,7 @@ function createNode(id: string, data: Partial<AgentNodeData> = {}): WorkflowNode
     label: id,
     position: { x: 0, y: 0 },
     data: {
-      provider: 'openai',
+      provider: 'codex',
       model: 'gpt-5.5',
       prompt: `Run ${id}`,
       ...data,
@@ -128,10 +128,15 @@ function createNode(id: string, data: Partial<AgentNodeData> = {}): WorkflowNode
   };
 }
 
-function createWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): Workflow {
+function createWorkflow(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[] = [],
+  executionMode: Workflow['executionMode'] = 'auto'
+): Workflow {
   return {
     id: 'workflow-1',
     name: 'Workflow 1',
+    executionMode,
     nodes,
     edges,
   };
@@ -140,6 +145,7 @@ function createWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): Work
 async function readSingleRunState(workspacePath: string): Promise<{
   runId: string;
   status: string;
+  executionMode: 'auto' | 'manual';
   currentNodeIds: string[];
   awaitingReviewNodeIds: string[];
   nodes: Record<
@@ -148,7 +154,9 @@ async function readSingleRunState(workspacePath: string): Promise<{
       status: string;
       outputArtifactPaths: string[];
       attempts?: number;
+      humanReview?: boolean;
       reviewStatus?: string;
+      reviewSource?: string;
     }
   >;
 }> {
@@ -158,6 +166,7 @@ async function readSingleRunState(workspacePath: string): Promise<{
   return JSON.parse(await readFile(join(runsDir, fileName), 'utf8')) as {
     runId: string;
     status: string;
+    executionMode: 'auto' | 'manual';
     currentNodeIds: string[];
     awaitingReviewNodeIds: string[];
     nodes: Record<
@@ -166,7 +175,9 @@ async function readSingleRunState(workspacePath: string): Promise<{
         status: string;
         outputArtifactPaths: string[];
         attempts?: number;
+        humanReview?: boolean;
         reviewStatus?: string;
+        reviewSource?: string;
       }
     >;
   };
@@ -451,9 +462,11 @@ describe('WorkflowEngine', () => {
 
     let runState = await readSingleRunState(workspacePath);
     expect(runState.status).toBe('awaiting_review');
+    expect(runState.executionMode).toBe('auto');
     expect(runState.awaitingReviewNodeIds).toEqual(['node-a']);
     expect(runState.nodes['node-a']?.status).toBe('awaiting_review');
     expect(runState.nodes['node-a']?.reviewStatus).toBe('pending');
+    expect(runState.nodes['node-a']?.reviewSource).toBe('node');
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a']);
     expect(
       sender.events.some((event) => event.channel === IpcChannels.WORKFLOW_REVIEW_REQUIRED)
@@ -552,5 +565,110 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.attempts).toBe(2);
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-a']);
     expect(await readFile(outputPath, 'utf8')).toContain('Second review output');
+  });
+
+  it('pauses every completed node in manual execution mode and resumes only after approval', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Manual review output A',
+      },
+      'node-b': {
+        output: 'Manual review output B',
+      },
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow(
+      [createNode('node-a'), createNode('node-b')],
+      [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }],
+      'manual'
+    );
+
+    await engine.start(workflow, workspacePath, sender);
+
+    let runState = await readSingleRunState(workspacePath);
+    expect(runState.executionMode).toBe('manual');
+    expect(runState.status).toBe('awaiting_review');
+    expect(runState.awaitingReviewNodeIds).toEqual(['node-a']);
+    expect(runState.nodes['node-a']?.reviewSource).toBe('manual');
+    expect(runState.nodes['node-a']?.humanReview).toBe(false);
+    expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a']);
+
+    await engine.approveReview(reviewAction(runState.runId, 'node-a'));
+
+    runState = await readSingleRunState(workspacePath);
+    expect(runState.status).toBe('awaiting_review');
+    expect(runState.awaitingReviewNodeIds).toEqual(['node-b']);
+    expect(runState.nodes['node-b']?.reviewSource).toBe('manual');
+    expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
+
+    await engine.approveReview(reviewAction(runState.runId, 'node-b'));
+
+    const finalState = await readSingleRunState(workspacePath);
+    expect(finalState.status).toBe('completed');
+    expect(finalState.awaitingReviewNodeIds).toEqual([]);
+  });
+
+  it('re-pauses a rerun review node in manual execution mode', async () => {
+    let executionCount = 0;
+    const adapter = new FakeAdapter({
+      'node-a': {
+        onExecute: async () => {
+          executionCount += 1;
+        },
+        get output() {
+          return executionCount === 1 ? 'First manual output' : 'Second manual output';
+        },
+      } as AdapterBehavior,
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow([createNode('node-a')], [], 'manual');
+
+    await engine.start(workflow, workspacePath, sender);
+    const runState = await readSingleRunState(workspacePath);
+
+    await engine.rerunReviewNode(reviewAction(runState.runId, 'node-a'));
+
+    const rerunState = await readSingleRunState(workspacePath);
+    expect(rerunState.status).toBe('awaiting_review');
+    expect(rerunState.nodes['node-a']?.status).toBe('awaiting_review');
+    expect(rerunState.nodes['node-a']?.reviewSource).toBe('manual');
+    expect(rerunState.nodes['node-a']?.attempts).toBe(2);
+  });
+
+  it('rejects a manual review checkpoint and finalizes the workflow as rejected', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Manual review output',
+      },
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow([createNode('node-a')], [], 'manual');
+
+    await engine.start(workflow, workspacePath, sender);
+    const runState = await readSingleRunState(workspacePath);
+
+    await engine.rejectReview(reviewAction(runState.runId, 'node-a'));
+
+    const finalState = await readSingleRunState(workspacePath);
+    expect(finalState.status).toBe('rejected');
+    expect(finalState.nodes['node-a']?.reviewSource).toBe('manual');
   });
 });

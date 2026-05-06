@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import {
   AbortReason,
   AgentResult,
+  ExecutionMode,
   IpcChannels,
   NodeId,
   NodeStatus,
@@ -69,6 +70,7 @@ interface WorkflowRuntime {
   inDegree: Map<NodeId, number>;
   readyQueue: NodeId[];
   awaitingReviewNodeIds: Set<NodeId>;
+  executionMode: ExecutionMode;
 }
 
 type HaltReason = 'aborted' | 'error' | 'rejected' | null;
@@ -189,6 +191,7 @@ export class WorkflowEngine {
         workflow,
         executionNodeIds,
         runId,
+        executionMode: workflow.executionMode ?? 'auto',
       } satisfies InitializeRunOptions);
 
       this.currentRuntime = this.createRuntime(
@@ -447,7 +450,19 @@ export class WorkflowEngine {
       inDegree,
       readyQueue,
       awaitingReviewNodeIds: new Set<NodeId>(),
+      executionMode: workflow.executionMode ?? 'auto',
     };
+  }
+
+  private getReviewSource(
+    runtime: WorkflowRuntime,
+    node: WorkflowNode
+  ): 'node' | 'manual' | null {
+    if (runtime.executionMode === 'manual') {
+      return 'manual';
+    }
+
+    return node.data.humanReview ? 'node' : null;
   }
 
   private async continueCurrentRuntime(): Promise<void> {
@@ -623,12 +638,14 @@ export class WorkflowEngine {
         this.createSaveNodeOutputParams(node, runtime.runId, startedAt, completedAt, result)
       );
 
-      if (node.data.humanReview) {
+      const reviewSource = this.getReviewSource(runtime, node);
+      if (reviewSource) {
         await this.runStateStore.markNodeAwaitingReview(runtime.workspacePath, runtime.runId, node.id, {
           completedAt,
           exitCode: result.exitCode,
           runnerSessionId: result.runnerSessionId,
           outputArtifactPaths: producedPaths,
+          reviewSource,
         });
         runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
           nodeId: node.id,

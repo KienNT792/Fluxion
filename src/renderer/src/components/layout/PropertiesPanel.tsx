@@ -1,16 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightFromLine, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowRightFromLine, RotateCcw, TerminalSquare, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 import {
   AgentNodeData,
+  CODEX_DEFAULT_REASONING_LEVEL,
   ModelId,
   NodeStatus,
-  OPENAI_DEFAULT_MODEL,
-  OPENAI_DEFAULT_REASONING_LEVEL,
-  OPENAI_MVP_MODELS,
-  getOpenAIModelDisplayName,
-  getOpenAIModelPreset,
-  isOpenAIReasoningModel,
+  ReasoningLevel,
 } from '@shared';
 import {
   approveReviewNode,
@@ -18,12 +14,15 @@ import {
   rerunReviewNode,
   retryWorkflowFromNode,
 } from '../../lib/workflow-session';
+import {
+  getCodexCapabilities,
+  getCodexModelById,
+  getCodexModelDisplayName,
+  getDefaultCodexModel,
+  modelSupportsReasoning,
+} from '../../lib/provider-capabilities';
 import { useExecutionStore } from '../../stores/execution.store';
-import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
-
-import openaiDark from '../../assets/logo/openai-dark.svg';
-import openaiLight from '../../assets/logo/openai-light.svg';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
@@ -53,27 +52,29 @@ function coerceOptionalPositiveInteger(value: unknown): number | undefined {
   return Math.floor(parsed);
 }
 
-const nodeDataSchema = z.object({
-  provider: z.literal('openai'),
-  model: z.string().min(1),
-  label: z.string().optional(),
-  prompt: z.string(),
-  systemInstruction: z.string().optional(),
-  humanReview: z.boolean().optional(),
-  maxTokens: z.preprocess(coerceOptionalPositiveInteger, z.number().optional()),
-  temperature: z.preprocess(
-    (value) => coerceNumber(value, 0.7),
-    z.number().min(0).max(2).optional()
-  ),
-  reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-});
+const nodeDataSchema = z
+  .object({
+    provider: z.literal('codex'),
+    model: z.string().min(1),
+    label: z.string().optional(),
+    prompt: z.string(),
+    systemInstruction: z.string().optional(),
+    humanReview: z.boolean().optional(),
+    maxTokens: z.preprocess(coerceOptionalPositiveInteger, z.number().optional()),
+    temperature: z.preprocess(
+      (value) => coerceNumber(value, 0.7),
+      z.number().min(0).max(2).optional()
+    ),
+    reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  })
+  .passthrough();
 
-const REASONING_LEVEL_OPTIONS = [
-  { value: 'low', label: 'Low', hint: 'Fast' },
-  { value: 'medium', label: 'Med', hint: 'Balanced' },
-  { value: 'high', label: 'High', hint: 'Deep' },
-  { value: 'xhigh', label: 'XHigh', hint: 'Max' },
-] as const;
+const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { label: string; hint: string }> = {
+  low: { label: 'Low', hint: 'Fast' },
+  medium: { label: 'Med', hint: 'Balanced' },
+  high: { label: 'High', hint: 'Deep' },
+  xhigh: { label: 'XHigh', hint: 'Max' },
+};
 
 const LABEL_STYLE: React.CSSProperties = {
   fontSize: '11px',
@@ -103,23 +104,23 @@ const MUTED_NOTE_STYLE: React.CSSProperties = {
   color: 'var(--color-muted)',
 };
 
-function buildModelOptions(currentModel: string) {
-  const options = OPENAI_MVP_MODELS.map((model) => ({
-    id: model.id,
-    label: model.displayName,
-    description: model.description,
-  }));
+interface ModelOption {
+  id: string;
+  label: string;
+  description?: string;
+}
 
-  if (!currentModel || options.some((model) => model.id === currentModel)) {
+function buildModelOptions(models: AgentNodeData['model'], options: ModelOption[]): ModelOption[] {
+  if (!models || options.some((option) => option.id === models)) {
     return options;
   }
 
   return [
     ...options,
     {
-      id: currentModel,
-      label: getOpenAIModelDisplayName(currentModel),
-      description: 'Custom OpenAI model from an older workflow.',
+      id: models,
+      label: `Legacy / Custom (${models})`,
+      description: 'Persisted from an older workflow or custom model slug.',
     },
   ];
 }
@@ -137,13 +138,13 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 );
 
 export const PropertiesPanel: React.FC = () => {
-  const theme = useThemeStore((state) => state.theme);
   const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
   const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode);
   const nodes = useWorkflowStore((state) => state.nodes);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const deleteNode = useWorkflowStore((state) => state.deleteNode);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const executionMode = useWorkflowStore((state) => state.executionMode);
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
   );
@@ -184,11 +185,11 @@ export const PropertiesPanel: React.FC = () => {
 
     skipNextSyncRef.current = true;
     setLocalData({
-      provider: 'openai',
+      provider: 'codex',
       model:
         typeof selectedNode.data.model === 'string' && selectedNode.data.model.trim()
           ? selectedNode.data.model
-          : OPENAI_DEFAULT_MODEL,
+          : getDefaultCodexModel(providerCapabilities),
       label: selectedNode.data.label,
       prompt: typeof selectedNode.data.prompt === 'string' ? selectedNode.data.prompt : '',
       systemInstruction:
@@ -196,11 +197,14 @@ export const PropertiesPanel: React.FC = () => {
           ? selectedNode.data.systemInstruction
           : '',
       humanReview: Boolean(selectedNode.data.humanReview),
-      maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens) ?? 2048,
-      temperature: coerceNumber(selectedNode.data.temperature, 0.7),
+      maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens),
+      temperature:
+        typeof selectedNode.data.temperature === 'number'
+          ? selectedNode.data.temperature
+          : undefined,
       reasoningLevel: selectedNode.data.reasoningLevel,
     });
-  }, [selectedNode]);
+  }, [providerCapabilities, selectedNode]);
 
   useEffect(() => {
     if (!selectedNodeId || !selectedNode) {
@@ -217,7 +221,7 @@ export const PropertiesPanel: React.FC = () => {
         const validated = nodeDataSchema.parse({
           ...selectedNode.data,
           ...localData,
-          provider: 'openai',
+          provider: 'codex',
         });
 
         const isChanged = Object.keys(validated).some(
@@ -241,28 +245,44 @@ export const PropertiesPanel: React.FC = () => {
     return null;
   }
 
-  const currentModel = String(localData.model ?? selectedNode.data.model) as ModelId;
-  const modelOptions = buildModelOptions(currentModel);
-  const currentModelDisplayName = getOpenAIModelDisplayName(currentModel);
-  const isReasoningModel = isOpenAIReasoningModel(currentModel);
+  const codexCapabilities = getCodexCapabilities(providerCapabilities);
+  const currentModel = String(
+    localData.model ?? selectedNode.data.model ?? getDefaultCodexModel(providerCapabilities)
+  ) as ModelId;
+  const visibleModels = (codexCapabilities?.models ?? [])
+    .filter((model) => model.visibility !== 'hide')
+    .map((model) => ({
+      id: model.id,
+      label: model.displayName,
+      description: model.description,
+    }));
+  const modelOptions = buildModelOptions(currentModel, visibleModels);
+  const currentModelCapabilities = getCodexModelById(providerCapabilities, currentModel);
+  const currentModelDisplayName = getCodexModelDisplayName(providerCapabilities, currentModel);
+  const reasoningOptions = (currentModelCapabilities?.supportedReasoningLevels ?? []).filter(
+    (level): level is ReasoningLevel =>
+      level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh'
+  );
+  const isReasoningModel = modelSupportsReasoning(currentModelCapabilities);
+  const authState = codexCapabilities?.auth;
   const modelDescription =
-    getOpenAIModelPreset(currentModel)?.description
+    currentModelCapabilities?.description
     ?? modelOptions.find((option) => option.id === currentModel)?.description;
-  const authState = providerCapabilities.openai?.auth;
   const providerNote = [
-    modelDescription ?? 'OpenAI workflow node.',
-    providerCapabilities.openai?.version
-      ? `Version: ${providerCapabilities.openai.version}.`
-      : undefined,
+    codexCapabilities?.available === false ? 'Codex CLI unavailable.' : 'Codex workflow node.',
+    modelDescription,
     authState
       ? `Auth: ${authState.status}${authState.envVar ? ` via ${authState.envVar}` : ''}.`
       : undefined,
-    providerCapabilities.openai?.error ?? authState?.message,
+    codexCapabilities?.error ?? authState?.message,
   ]
     .filter(Boolean)
     .join(' ');
-  const currentTemperature = coerceNumber(localData.temperature, 0.7);
-  const currentMaxTokens = coerceOptionalPositiveInteger(localData.maxTokens) ?? 2048;
+
+  const reviewModeNote =
+    executionMode === 'manual'
+      ? 'Manual mode pauses every completed node. This checkbox only matters when the workflow returns to Auto.'
+      : 'Auto mode continues immediately unless this node explicitly requires review.';
 
   const statusTone: Record<NodeStatus, string> = {
     idle: 'var(--color-muted)',
@@ -298,13 +318,10 @@ export const PropertiesPanel: React.FC = () => {
             style={{
               background: 'var(--color-canvas)',
               border: '1px solid var(--color-hairline)',
+              color: 'var(--color-primary)',
             }}
           >
-            <img
-              src={theme === 'dark' ? openaiDark : openaiLight}
-              alt="OpenAI"
-              className="h-5 w-5"
-            />
+            <TerminalSquare size={15} />
           </div>
           <span
             className="truncate text-xs font-semibold"
@@ -368,22 +385,35 @@ export const PropertiesPanel: React.FC = () => {
 
           <div>
             <label style={LABEL_STYLE}>Provider</label>
-            <div style={READONLY_INLINE_STYLE}>OpenAI</div>
+            <div style={READONLY_INLINE_STYLE}>Codex</div>
           </div>
 
           <div>
             <label style={LABEL_STYLE}>Model</label>
             <Select
               value={currentModel}
-              onChange={(event) =>
+              onChange={(event) => {
+                const nextModel = event.target.value as ModelId;
+                const nextModelCapabilities = getCodexModelById(providerCapabilities, nextModel);
+                const nextReasoningLevel =
+                  !nextModelCapabilities
+                    ? localData.reasoningLevel
+                    : modelSupportsReasoning(nextModelCapabilities)
+                      ? nextModelCapabilities.supportedReasoningLevels.includes(
+                          (localData.reasoningLevel ??
+                            CODEX_DEFAULT_REASONING_LEVEL) as ReasoningLevel
+                        )
+                        ? (localData.reasoningLevel ?? CODEX_DEFAULT_REASONING_LEVEL)
+                        : (nextModelCapabilities.defaultReasoningLevel as ReasoningLevel | undefined)
+                          ?? CODEX_DEFAULT_REASONING_LEVEL
+                      : undefined;
+
                 setLocalData((prev) => ({
                   ...prev,
-                  model: event.target.value as ModelId,
-                  reasoningLevel: isOpenAIReasoningModel(event.target.value)
-                    ? prev.reasoningLevel ?? OPENAI_DEFAULT_REASONING_LEVEL
-                    : undefined,
-                }))
-              }
+                  model: nextModel,
+                  reasoningLevel: nextReasoningLevel,
+                }));
+              }}
               tone="accent"
             >
               {modelOptions.map((model) => (
@@ -470,12 +500,15 @@ export const PropertiesPanel: React.FC = () => {
                 }
               />
               <span className="text-xs" style={{ color: 'var(--color-ink)' }}>
-                Pause after this node and require manual approval
+                Pause after this node when review is required
               </span>
             </label>
+            <div className="mt-2" style={MUTED_NOTE_STYLE}>
+              {reviewModeNote}
+            </div>
           </div>
 
-          {isReasoningModel ? (
+          {isReasoningModel && reasoningOptions.length > 0 && (
             <div>
               <label style={{ ...LABEL_STYLE, color: 'var(--color-timeline-done)' }}>
                 Reasoning Effort
@@ -487,18 +520,20 @@ export const PropertiesPanel: React.FC = () => {
                   border: '1px solid var(--color-hairline)',
                 }}
               >
-                {REASONING_LEVEL_OPTIONS.map((level) => {
+                {reasoningOptions.map((level) => {
                   const isActive =
-                    (localData.reasoningLevel ?? OPENAI_DEFAULT_REASONING_LEVEL) === level.value;
+                    (localData.reasoningLevel
+                      ?? (currentModelCapabilities?.defaultReasoningLevel as ReasoningLevel | undefined)
+                      ?? CODEX_DEFAULT_REASONING_LEVEL) === level;
 
                   return (
                     <button
-                      key={level.value}
+                      key={level}
                       type="button"
                       onClick={() =>
                         setLocalData((prev) => ({
                           ...prev,
-                          reasoningLevel: level.value,
+                          reasoningLevel: level,
                         }))
                       }
                       className="flex-1 rounded-md py-2 text-center transition-all"
@@ -511,7 +546,7 @@ export const PropertiesPanel: React.FC = () => {
                         className="text-xs font-semibold"
                         style={{ color: isActive ? '#fff' : 'var(--color-body)' }}
                       >
-                        {level.label}
+                        {REASONING_LEVEL_LABELS[level].label}
                       </div>
                       <div
                         className="mt-0.5 text-[9px]"
@@ -521,62 +556,14 @@ export const PropertiesPanel: React.FC = () => {
                             : 'var(--color-muted)',
                         }}
                       >
-                        {level.hint}
+                        {REASONING_LEVEL_LABELS[level].hint}
                       </div>
                     </button>
                   );
                 })}
               </div>
             </div>
-          ) : (
-            <div>
-              <label style={LABEL_STYLE}>
-                Temperature
-                <span
-                  style={{
-                    float: 'right',
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 400,
-                    letterSpacing: 0,
-                    textTransform: 'none',
-                    color: 'var(--color-primary)',
-                  }}
-                >
-                  {currentTemperature.toFixed(1)}
-                </span>
-              </label>
-              <input
-                type="range"
-                step="0.1"
-                min="0"
-                max="2"
-                value={currentTemperature}
-                onChange={(event) =>
-                  setLocalData((prev) => ({
-                    ...prev,
-                    temperature: parseFloat(event.target.value),
-                  }))
-                }
-                className="w-full"
-                style={{ accentColor: 'var(--color-primary)' }}
-              />
-            </div>
           )}
-
-          <div>
-            <label style={LABEL_STYLE}>Max Tokens</label>
-            <Input
-              type="number"
-              value={currentMaxTokens}
-              onChange={(event) =>
-                setLocalData((prev) => ({
-                  ...prev,
-                  maxTokens: parseInt(event.target.value, 10) || 0,
-                }))
-              }
-              font="mono"
-            />
-          </div>
         </Section>
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />

@@ -2,7 +2,7 @@
 
 // ─── Enums & Types ─────────────────────────────────────────────────────────────
 
-export type ProviderType = 'openai';
+export type ProviderType = 'codex' | 'openai';
 
 /**
  * Dynamic model identifier.
@@ -14,6 +14,8 @@ export type ModelId = string;
 export type ReasoningLevel = 'low' | 'medium' | 'high' | 'xhigh';
 
 export type RunnerId = 'codex' | 'custom';
+
+export type ExecutionMode = 'auto' | 'manual';
 
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 
@@ -109,6 +111,7 @@ export interface ProviderCapabilities {
 }
 
 export interface ProviderCapabilitiesMap {
+  codex?: ProviderCapabilities;
   openai?: ProviderCapabilities;
 }
 
@@ -227,6 +230,8 @@ export interface Workflow {
   description?: string;
   /** Tags for categorization. */
   tags?: string[];
+  /** Workflow-level review gating mode. */
+  executionMode?: ExecutionMode;
   /** Schema version. */
   fluxionVersion?: FluxionSchemaVersion;
   nodes: WorkflowNode[];

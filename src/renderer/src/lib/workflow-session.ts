@@ -53,11 +53,12 @@ function collectRetryNodeIds(startNodeId: NodeId, edges: WorkflowEdge[]): NodeId
 }
 
 export function buildWorkflowDocument(): Workflow {
-  const { workflowId, workflowName, lastSavedAt } = useWorkflowStore.getState();
+  const { workflowId, workflowName, lastSavedAt, executionMode } = useWorkflowStore.getState();
 
   return {
     id: workflowId,
     name: workflowName,
+    executionMode,
     nodes: mapCanvasNodesToWorkflowNodes(),
     edges: mapCanvasEdgesToWorkflowEdges(),
     updatedAt: lastSavedAt ?? undefined,
@@ -156,6 +157,7 @@ export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
     workflow.nodes,
     workflow.edges,
     workflowStore.workspacePath,
+    workflow.executionMode ?? 'auto',
     resumeFromNodeId
   );
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+const ExecutionModeSchema = z.enum(['auto', 'manual']);
 export const RunStatusSchema = z.enum([
   'pending',
   'running',
@@ -11,6 +12,7 @@ export const RunStatusSchema = z.enum([
 ]);
 
 export const ReviewStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+export const ReviewSourceSchema = z.enum(['node', 'manual']);
 
 export const NodeRunStateSchema = z.object({
   nodeId: z.string().min(1),
@@ -26,6 +28,7 @@ export const NodeRunStateSchema = z.object({
   outputArtifactPaths: z.array(z.string()).default([]),
   humanReview: z.boolean().optional(),
   reviewStatus: ReviewStatusSchema.optional(),
+  reviewSource: ReviewSourceSchema.optional(),
   reviewRequestedAt: z.string().optional(),
   reviewResolvedAt: z.string().optional(),
   reviewComment: z.string().optional(),
@@ -35,6 +38,7 @@ export const WorkflowRunStateSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().min(1),
   workflowId: z.string().min(1),
+  executionMode: ExecutionModeSchema.default('auto'),
   status: RunStatusSchema,
   startedAt: z.string().optional(),
   updatedAt: z.string().min(1),

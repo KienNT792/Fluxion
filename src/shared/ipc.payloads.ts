@@ -1,5 +1,6 @@
 import { AbortReason } from './agent.types';
 import {
+  ExecutionMode,
   NodeId,
   NodeStatus,
   ProviderCapabilitiesMap,
@@ -80,6 +81,7 @@ export interface WorkflowRunPayload {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   workspacePath: string;
+  executionMode?: ExecutionMode;
   resumeFromNodeId?: NodeId;
 }
 

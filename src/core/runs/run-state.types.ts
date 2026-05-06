@@ -1,3 +1,5 @@
+import { ExecutionMode } from '@shared';
+
 export type RunStatus =
   | 'pending'
   | 'running'
@@ -8,6 +10,8 @@ export type RunStatus =
   | 'rejected';
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
+export type ReviewSource = 'node' | 'manual';
 
 export interface NodeRunState {
   nodeId: string;
@@ -23,6 +27,7 @@ export interface NodeRunState {
   outputArtifactPaths: string[];
   humanReview?: boolean;
   reviewStatus?: ReviewStatus;
+  reviewSource?: ReviewSource;
   reviewRequestedAt?: string;
   reviewResolvedAt?: string;
   reviewComment?: string;
@@ -32,6 +37,7 @@ export interface WorkflowRunState {
   schemaVersion: 1;
   runId: string;
   workflowId: string;
+  executionMode: ExecutionMode;
   status: RunStatus;
   startedAt?: string;
   updatedAt: string;

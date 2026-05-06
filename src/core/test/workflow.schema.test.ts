@@ -13,7 +13,7 @@ describe('WorkflowSchema', () => {
           label: 'Node A',
           position: { x: 0, y: 0 },
           data: {
-            provider: 'openai',
+            provider: 'codex',
             model: 'gpt-5.5',
             prompt: 'Do the thing',
           },
@@ -22,6 +22,7 @@ describe('WorkflowSchema', () => {
       edges: [],
     });
 
+    expect(parsed.executionMode).toBe('auto');
     expect(parsed.nodes[0].data.runner).toBe('codex');
     expect(parsed.nodes[0].data.codex).toEqual({
       json: true,
@@ -44,7 +45,7 @@ describe('WorkflowSchema', () => {
           label: 'Node A',
           position: { x: 0, y: 0 },
           data: {
-            provider: 'openai',
+            provider: 'codex',
             model: 'gpt-5.5',
             prompt: 'Do the thing',
             codex: {
@@ -76,7 +77,7 @@ describe('WorkflowSchema', () => {
             label: 'Node A',
             position: { x: 0, y: 0 },
             data: {
-              provider: 'openai',
+              provider: 'codex',
               model: 'gpt-5.5',
               prompt: 'Do the thing',
               codex: {
@@ -102,7 +103,7 @@ describe('WorkflowSchema', () => {
             label: 'Node A',
             position: { x: 0, y: 0 },
             data: {
-              provider: 'openai',
+              provider: 'codex',
               model: 'gpt-5.5',
               prompt: 'Do the thing',
               codex: {
@@ -114,5 +115,29 @@ describe('WorkflowSchema', () => {
         edges: [],
       })
     ).toThrow();
+  });
+
+  it('accepts manual execution mode at the workflow level', () => {
+    const parsed = WorkflowSchema.parse({
+      id: 'workflow-1',
+      name: 'Workflow 1',
+      executionMode: 'manual',
+      nodes: [
+        {
+          id: 'node-a',
+          type: 'agentNode',
+          label: 'Node A',
+          position: { x: 0, y: 0 },
+          data: {
+            provider: 'codex',
+            model: 'gpt-5.5',
+            prompt: 'Do the thing',
+          },
+        },
+      ],
+      edges: [],
+    });
+
+    expect(parsed.executionMode).toBe('manual');
   });
 });

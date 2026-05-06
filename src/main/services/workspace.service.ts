@@ -4,8 +4,8 @@ import { type FSWatcher, watch } from 'chokidar';
 import { z } from 'zod';
 import { ulid } from 'ulid';
 import { 
+  CODEX_DEFAULT_MODEL,
   IpcChannels, 
-  OPENAI_DEFAULT_MODEL,
   Workflow, 
   WorkflowNode, 
   WorkspaceOpenedPayload, 
@@ -34,6 +34,7 @@ const workflowFileSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  executionMode: z.enum(['auto', 'manual']).optional(),
   fluxionVersion: z.string().optional(),
   nodes: z.array(
     z.object({
@@ -68,14 +69,12 @@ function sanitizeWorkflowNodeData(
   const model =
     typeof data.model === 'string' && data.model.trim().length > 0
       ? data.model.trim()
-      : OPENAI_DEFAULT_MODEL;
-  const provider = data.provider === 'openai' ? 'openai' : 'openai';
-  const normalizedModel = data.provider === 'openai' ? model : OPENAI_DEFAULT_MODEL;
+      : CODEX_DEFAULT_MODEL;
 
   return {
     ...data,
-    provider,
-    model: normalizedModel,
+    provider: 'codex',
+    model,
   };
 }
 
@@ -333,6 +332,7 @@ export class WorkspaceService {
     const workflow: Workflow = {
       id: ulid(),
       name,
+      executionMode: 'auto',
       fluxionVersion: '1.0',
       nodes: [],
       edges: [],
@@ -412,6 +412,7 @@ export class WorkspaceService {
     return {
       id: ulid(),
       name: `${workspaceName} Workflow`,
+      executionMode: 'auto',
       fluxionVersion: '1.0',
       nodes: [],
       edges: [],
@@ -426,6 +427,7 @@ export class WorkspaceService {
       name: workflowFile.name,
       description: workflowFile.description,
       tags: workflowFile.tags,
+      executionMode: workflowFile.executionMode ?? 'auto',
       fluxionVersion: (workflowFile.fluxionVersion as FluxionSchemaVersion) || '1.0',
       createdAt: workflowFile.createdAt,
       updatedAt: workflowFile.updatedAt,

@@ -1,6 +1,7 @@
 import { ElectronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  ExecutionMode,
   MemoryContextReadyPayload,
   NodeId,
   ProviderCapabilitiesPayload,
@@ -44,6 +45,7 @@ export interface FluxionAPI {
     nodes: WorkflowNode[],
     edges: WorkflowEdge[],
     workspacePath: string,
+    executionMode: ExecutionMode,
     resumeFromNodeId?: NodeId
   ) => void;
   abortWorkflow: (nodeId?: NodeId, reason?: AbortReason) => void;
