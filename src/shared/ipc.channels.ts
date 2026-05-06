@@ -39,6 +39,10 @@ export const IpcChannels = {
   // Settings
   SETTINGS_GET_PROVIDER_SUMMARY: 'settings:get-provider-summary',
   SETTINGS_SET_OPENAI_API_KEY: 'settings:set-openai-api-key',
+
+  // Shell
+  SHELL_OPEN_PATH: 'shell:open-path',
+  SHELL_REVEAL_PATH: 'shell:reveal-path',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];

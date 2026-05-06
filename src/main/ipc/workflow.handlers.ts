@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, IpcMainEvent } from 'electron';
+import { app, dialog, ipcMain, IpcMainEvent, shell } from 'electron';
 import {
   IpcChannels,
   ProviderSettingsSummaryPayload,
@@ -19,6 +19,7 @@ import { workflowEngine } from '../services/workflow-engine';
 import { providerRegistryService } from '../services/provider-registry.service';
 import { processManager } from '../services/process-manager';
 import { settingsService } from '../services/settings.service';
+import { openShellPath, revealShellPath } from '../services/shell-path.service';
 import { workspaceService } from '../services/workspace.service';
 
 function createWorkflowFailurePayload(
@@ -148,6 +149,14 @@ export function registerWorkflowHandlers(): void {
       return summary;
     }
   );
+
+  ipcMain.handle(IpcChannels.SHELL_OPEN_PATH, async (_event, pathValue: string) => {
+    await openShellPath(shell, pathValue);
+  });
+
+  ipcMain.handle(IpcChannels.SHELL_REVEAL_PATH, async (_event, pathValue: string) => {
+    await revealShellPath(shell, pathValue);
+  });
 
   ipcMain.on(
     IpcChannels.WORKFLOW_RUN,

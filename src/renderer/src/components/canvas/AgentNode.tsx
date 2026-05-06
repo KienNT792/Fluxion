@@ -6,42 +6,16 @@ import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
 import { retryWorkflowFromNode } from '../../lib/workflow-session';
 import { getCodexModelDisplayName } from '../../lib/provider-capabilities';
+import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>;
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  running: { bg: 'var(--color-timeline-thinking)', text: 'var(--color-ink)', label: 'Running' },
-  completed: { bg: 'var(--color-timeline-grep)', text: 'var(--color-ink)', label: 'Done' },
-  error: { bg: 'var(--color-semantic-error)', text: '#ffffff', label: 'Error' },
-  stopping: { bg: 'var(--color-timeline-read)', text: 'var(--color-ink)', label: 'Stopping' },
-  paused: { bg: 'var(--color-timeline-edit)', text: 'var(--color-ink)', label: 'Paused' },
-};
-
-const StatusPill: React.FC<{ status: string }> = ({ status }) => {
-  const style = STATUS_STYLE[status];
-  if (!style) {
-    return null;
-  }
-
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.6px]"
-      style={{
-        background: style.bg,
-        color: style.text,
-        borderRadius: 'var(--radius-pill)',
-        lineHeight: 1.4,
-      }}
-    >
-      {status === 'running' && (
-        <span
-          className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full"
-          style={{ background: style.text, opacity: 0.7 }}
-        />
-      )}
-      {style.label}
-    </span>
-  );
+const STATUS_LABELS: Record<string, { label: string; tone: StatusChipTone }> = {
+  running: { label: 'Running', tone: 'running' },
+  completed: { label: 'Done', tone: 'completed' },
+  error: { label: 'Error', tone: 'error' },
+  stopping: { label: 'Stopping', tone: 'stopping' },
+  paused: { label: 'Paused', tone: 'paused' },
 };
 
 export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
@@ -122,7 +96,12 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
 
         {status !== 'idle' && (
           <div className="mt-0.5 flex-shrink-0">
-            <StatusPill status={status} />
+            <StatusChip
+              tone={STATUS_LABELS[status]?.tone ?? 'idle'}
+              label={STATUS_LABELS[status]?.label ?? status}
+              animate={status === 'running' || status === 'stopping'}
+              className="text-[9px] uppercase tracking-[0.6px]"
+            />
           </div>
         )}
       </div>

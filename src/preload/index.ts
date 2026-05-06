@@ -75,6 +75,10 @@ const api = {
     ipcRenderer.invoke(IpcChannels.SETTINGS_SET_OPENAI_API_KEY, {
       apiKey,
     } satisfies UpdateOpenAIApiKeyPayload) as Promise<ProviderSettingsSummaryPayload>,
+  openPath: (path: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.SHELL_OPEN_PATH, path) as Promise<void>,
+  revealPath: (path: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.SHELL_REVEAL_PATH, path) as Promise<void>,
   runWorkflow: (
     workflowId: string,
     nodes: WorkflowNode[],

@@ -38,6 +38,8 @@ export interface FluxionAPI {
   ) => Promise<ProviderCapabilitiesPayload>;
   getProviderSettingsSummary: () => Promise<ProviderSettingsSummaryPayload>;
   setOpenAIApiKey: (apiKey: string | null) => Promise<ProviderSettingsSummaryPayload>;
+  openPath: (path: string) => Promise<void>;
+  revealPath: (path: string) => Promise<void>;
   
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   createWorkflow: (workspacePath: string, name: string) => Promise<WorkflowCreateResult>;

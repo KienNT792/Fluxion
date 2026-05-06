@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg' | 'icon';
+  size?: 'sm' | 'md' | 'lg' | 'icon' | 'toolbar';
   isActive?: boolean;
 }
 
@@ -57,6 +57,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             padding: '0',
             fontSize: '14px',
           };
+        case 'toolbar':
+          return { minHeight: '32px', padding: '0 12px', fontSize: '13px' };
         case 'md':
         default:
           return { minHeight: '36px', padding: '0 14px', fontSize: '14px' };

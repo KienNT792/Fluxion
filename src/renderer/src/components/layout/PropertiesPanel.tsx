@@ -24,9 +24,12 @@ import {
 } from '../../lib/provider-capabilities';
 import { useExecutionStore } from '../../stores/execution.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
+import { Button } from '../ui/Button';
+import { FilePathCard } from '../ui/FilePathCard';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import { Textarea } from '../ui/Textarea';
+import { StatusChip, StatusChipTone } from '../ui/StatusChip';
+import { TextEditorDialog } from '../ui/TextEditorDialog';
 import { getFormControlStyle } from '../ui/form-control';
 
 function coerceNumber(value: unknown, fallback: number): number {
@@ -105,6 +108,13 @@ const MUTED_NOTE_STYLE: React.CSSProperties = {
   color: 'var(--color-muted)',
 };
 
+interface TextSummary {
+  preview: string;
+  lineCount: number;
+  characterCount: number;
+  isEmpty: boolean;
+}
+
 interface ModelOption {
   id: string;
   label: string;
@@ -126,6 +136,21 @@ function buildModelOptions(models: AgentNodeData['model'], options: ModelOption[
   ];
 }
 
+function summarizeLongText(value: string | undefined, emptyLabel: string): TextSummary {
+  const text = value ?? '';
+  const trimmed = text.trim();
+  const lines = text ? text.split(/\r\n|\r|\n/) : [];
+  const previewLines = lines.slice(0, 5).join('\n').trim();
+  const isClipped = lines.length > 5 || previewLines.length < trimmed.length;
+
+  return {
+    preview: trimmed ? `${previewLines}${isClipped ? '\n...' : ''}` : emptyLabel,
+    lineCount: trimmed ? lines.length : 0,
+    characterCount: text.length,
+    isEmpty: !trimmed,
+  };
+}
+
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
     <div
@@ -135,6 +160,35 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
       <span style={LABEL_STYLE}>{title}</span>
     </div>
     <div className="space-y-4 px-5 py-4">{children}</div>
+  </div>
+);
+
+const PreviewCard: React.FC<{
+  summary: TextSummary;
+  emptyTone?: boolean;
+}> = ({ summary, emptyTone = false }) => (
+  <div
+    className="rounded-md px-3 py-2"
+    style={{
+      background: 'var(--color-surface-card)',
+      border: '1px solid var(--color-hairline)',
+    }}
+  >
+    <pre
+      className="max-h-[120px] overflow-hidden whitespace-pre-wrap text-[11px] leading-5"
+      style={{
+        color: emptyTone || summary.isEmpty ? 'var(--color-muted)' : 'var(--color-body)',
+        fontFamily: 'var(--font-mono)',
+      }}
+    >
+      {summary.preview}
+    </pre>
+    <div
+      className="mt-2 text-[10px]"
+      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+    >
+      {summary.lineCount} lines / {summary.characterCount} chars
+    </div>
   </div>
 );
 
@@ -162,6 +216,7 @@ export const PropertiesPanel: React.FC = () => {
   const nodeOutputPath = useExecutionStore((state) =>
     selectedNodeId ? state.nodeOutputPaths[selectedNodeId] : undefined
   );
+  const setWorkflowError = useExecutionStore((state) => state.setWorkflowError);
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
 
   const selectedNode = useMemo(
@@ -170,6 +225,9 @@ export const PropertiesPanel: React.FC = () => {
   );
 
   const [localData, setLocalData] = useState<Partial<AgentNodeData>>({});
+  const [activeTextEditor, setActiveTextEditor] = useState<
+    'prompt' | 'systemInstruction' | null
+  >(null);
   const skipNextSyncRef = useRef(false);
 
   useEffect(() => {
@@ -181,6 +239,7 @@ export const PropertiesPanel: React.FC = () => {
   useEffect(() => {
     if (!selectedNode) {
       setLocalData({});
+      setActiveTextEditor(null);
       return;
     }
 
@@ -287,20 +346,33 @@ export const PropertiesPanel: React.FC = () => {
       ? 'Manual mode pauses every completed node. This checkbox only matters when the workflow returns to Auto.'
       : 'Auto mode continues immediately unless this node explicitly requires review.';
 
-  const statusTone: Record<NodeStatus, string> = {
-    idle: 'var(--color-muted)',
-    running: 'var(--color-timeline-done)',
-    stopping: 'var(--color-timeline-read)',
-    completed: 'var(--color-semantic-success)',
-    error: 'var(--color-semantic-error)',
-    paused: 'var(--color-timeline-edit)',
+  const statusTone: Record<NodeStatus, StatusChipTone> = {
+    idle: 'idle',
+    running: 'running',
+    stopping: 'stopping',
+    completed: 'completed',
+    error: 'error',
+    paused: 'paused',
   };
+  const promptSummary = summarizeLongText(
+    localData.prompt,
+    'No prompt configured. Add instructions before running this node.'
+  );
+  const systemInstructionSummary = summarizeLongText(
+    localData.systemInstruction,
+    'No node-level override. Workspace/global rules will apply.'
+  );
+  const nodeStatusLabel =
+    nodeStatus === 'completed'
+      ? 'Done'
+      : nodeStatus.charAt(0).toUpperCase() + nodeStatus.slice(1);
 
   return (
+    <>
     <aside
       className="z-40 flex h-full flex-col overflow-hidden"
       style={{
-        width: '300px',
+        width: 'clamp(340px, 28vw, 420px)',
         flexShrink: 0,
         background: 'var(--color-canvas)',
         borderLeft: '1px solid var(--color-hairline)',
@@ -328,7 +400,7 @@ export const PropertiesPanel: React.FC = () => {
           </div>
           <span
             className="truncate text-xs font-semibold"
-            style={{ color: 'var(--color-ink)', maxWidth: '130px', letterSpacing: '-0.1px' }}
+            style={{ color: 'var(--color-ink)', maxWidth: '220px', letterSpacing: '-0.1px' }}
           >
             {localData.label || currentModelDisplayName}
           </span>
@@ -337,6 +409,7 @@ export const PropertiesPanel: React.FC = () => {
         <div className="flex items-center gap-1">
           <button
             type="button"
+            aria-label="Delete node"
             onClick={() => deleteNode(selectedNodeId)}
             className="rounded-md p-1.5 transition-colors"
             style={{ color: 'var(--color-semantic-error)' }}
@@ -352,6 +425,7 @@ export const PropertiesPanel: React.FC = () => {
           </button>
           <button
             type="button"
+            aria-label="Close node inspector"
             onClick={() => setSelectedNode(null)}
             className="rounded-md p-1.5 transition-colors"
             style={{ color: 'var(--color-muted)' }}
@@ -374,7 +448,7 @@ export const PropertiesPanel: React.FC = () => {
         className="flex-1 overflow-y-auto"
         style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
       >
-        <Section title="Identity">
+        <Section title="Overview">
           <div>
             <label style={LABEL_STYLE}>Node Label</label>
             <Input
@@ -391,6 +465,30 @@ export const PropertiesPanel: React.FC = () => {
             <div style={READONLY_INLINE_STYLE}>Codex</div>
           </div>
 
+          <div style={MUTED_NOTE_STYLE}>{providerNote}</div>
+        </Section>
+
+        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
+
+        <Section title="Instructions">
+          <div>
+            <label style={LABEL_STYLE}>Prompt</label>
+            <PreviewCard summary={promptSummary} />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => setActiveTextEditor('prompt')}
+            >
+              Edit Prompt
+            </Button>
+          </div>
+        </Section>
+
+        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
+
+        <Section title="Parameters">
           <div>
             <label style={LABEL_STYLE}>Model</label>
             <Select
@@ -427,61 +525,6 @@ export const PropertiesPanel: React.FC = () => {
             </Select>
           </div>
 
-          <div style={MUTED_NOTE_STYLE}>{providerNote}</div>
-        </Section>
-
-        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
-
-        <Section title="Instructions">
-          <div>
-            <label style={LABEL_STYLE}>Prompt</label>
-            <Textarea
-              value={localData.prompt || ''}
-              onChange={(event) =>
-                setLocalData((prev) => ({ ...prev, prompt: event.target.value }))
-              }
-              placeholder="What should this agent do?"
-              font="mono"
-              rows={5}
-              style={{ resize: 'none' }}
-            />
-          </div>
-
-          <div>
-            <label style={LABEL_STYLE}>
-              System Instruction{' '}
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 400,
-                  textTransform: 'none',
-                  letterSpacing: 0,
-                  color: 'var(--color-muted-soft)',
-                  marginLeft: '4px',
-                }}
-              >
-                Optional
-              </span>
-            </label>
-            <Textarea
-              value={localData.systemInstruction || ''}
-              onChange={(event) =>
-                setLocalData((prev) => ({
-                  ...prev,
-                  systemInstruction: event.target.value,
-                }))
-              }
-              placeholder="You are an expert software engineer..."
-              font="mono"
-              rows={3}
-              style={{ resize: 'none' }}
-            />
-          </div>
-        </Section>
-
-        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
-
-        <Section title="Parameters">
           <div>
             <label style={LABEL_STYLE}>Human Review Checkpoint</label>
             <label
@@ -574,12 +617,11 @@ export const PropertiesPanel: React.FC = () => {
         <Section title="Runtime">
           <div>
             <label style={LABEL_STYLE}>Status</label>
-            <div
-              className="text-xs font-semibold"
-              style={{ color: statusTone[nodeStatus], fontFamily: 'var(--font-mono)' }}
-            >
-              {nodeStatus.toUpperCase()}
-            </div>
+            <StatusChip
+              tone={statusTone[nodeStatus]}
+              label={nodeStatusLabel}
+              animate={nodeStatus === 'running' || nodeStatus === 'stopping'}
+            />
           </div>
 
           <div>
@@ -589,16 +631,10 @@ export const PropertiesPanel: React.FC = () => {
 
           <div>
             <label style={LABEL_STYLE}>Output File</label>
-            <div
-              style={{
-                ...READONLY_BLOCK_STYLE,
-                minHeight: '40px',
-                color: nodeOutputPath ? 'var(--color-ink)' : 'var(--color-muted)',
-              }}
-              title={nodeOutputPath || 'No output written yet'}
-            >
-              {nodeOutputPath || 'No output written yet'}
-            </div>
+            <FilePathCard
+              path={nodeOutputPath}
+              onError={setWorkflowError}
+            />
           </div>
 
           <div>
@@ -617,33 +653,18 @@ export const PropertiesPanel: React.FC = () => {
           </div>
 
           {nodeStatus === 'error' && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => retryWorkflowFromNode(selectedNodeId)}
               disabled={workflowStatus === 'running' || workflowStatus === 'paused'}
-              className="flex w-full items-center justify-center gap-2 rounded-md py-2 transition-colors"
-              style={{
-                background:
-                  workflowStatus === 'running' || workflowStatus === 'paused'
-                    ? 'var(--color-canvas-soft)'
-                    : 'var(--color-surface-card)',
-                border: '1px solid var(--color-hairline)',
-                color:
-                  workflowStatus === 'running' || workflowStatus === 'paused'
-                    ? 'var(--color-muted-soft)'
-                    : 'var(--color-primary)',
-                cursor:
-                  workflowStatus === 'running' || workflowStatus === 'paused'
-                    ? 'not-allowed'
-                    : 'pointer',
-                fontSize: '12px',
-                fontWeight: 600,
-              }}
+              className="w-full"
               title={nodeError || 'Retry this node and its downstream subtree'}
             >
               <RotateCcw size={13} />
               Retry From This Node
-            </button>
+            </Button>
           )}
 
           {nodeStatus === 'paused' && (
@@ -687,7 +708,74 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           )}
         </Section>
+
+        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
+
+        <Section title="Advanced">
+          <div>
+            <label style={LABEL_STYLE}>
+              Node System Override{' '}
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 400,
+                  textTransform: 'none',
+                  letterSpacing: 0,
+                  color: 'var(--color-muted-soft)',
+                  marginLeft: '4px',
+                }}
+              >
+                Optional
+              </span>
+            </label>
+            <PreviewCard summary={systemInstructionSummary} emptyTone />
+            <div className="mt-2" style={MUTED_NOTE_STYLE}>
+              Workspace/global rules stay in Fluxion context. This field only overrides the
+              selected node.
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => setActiveTextEditor('systemInstruction')}
+            >
+              Edit Override
+            </Button>
+          </div>
+        </Section>
       </div>
     </aside>
+
+    <TextEditorDialog
+      isOpen={activeTextEditor === 'prompt'}
+      title="Edit Prompt"
+      helperText="Use the full editor for long node instructions. Save applies the change to this node."
+      value={String(localData.prompt ?? '')}
+      defaultValue=""
+      placeholder="What should this agent do?"
+      showReset
+      onSave={(value) => {
+        setLocalData((prev) => ({ ...prev, prompt: value }));
+        setActiveTextEditor(null);
+      }}
+      onCancel={() => setActiveTextEditor(null)}
+    />
+
+    <TextEditorDialog
+      isOpen={activeTextEditor === 'systemInstruction'}
+      title="Node System Override"
+      helperText="Workspace/global rules remain the default. This override is only for the selected node."
+      value={String(localData.systemInstruction ?? '')}
+      defaultValue=""
+      placeholder="You are an expert software engineer..."
+      showReset
+      onSave={(value) => {
+        setLocalData((prev) => ({ ...prev, systemInstruction: value }));
+        setActiveTextEditor(null);
+      }}
+      onCancel={() => setActiveTextEditor(null)}
+    />
+    </>
   );
 };

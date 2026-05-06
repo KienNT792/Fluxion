@@ -2,7 +2,7 @@
 
 Date: 2026-05-06
 Workspace: `D:\codex-workflow\Fluxion`
-Scope: `FX-027`, `FX-018`, `FX-025`
+Scope: `FX-027`, `FX-018`, `FX-025`, Codex runtime readiness onboarding, UI onboarding clarity pass
 
 This document replaces the older forward plan and records what is now implemented in the repo.
 
@@ -11,11 +11,13 @@ This document replaces the older forward plan and records what is now implemente
 - `FX-027` is implemented: Fluxion now discovers Codex capabilities from the local CLI via `codex debug models`.
 - `FX-018` is implemented: workflow-level `Auto` / `Manual` execution mode is persisted and enforced by the engine.
 - `FX-025` is partially implemented: local Windows smoke baseline is in place, but CI baseline is still missing.
+- Codex runtime readiness onboarding is implemented: Fluxion checks CLI presence/login/catalog before run and blocks only unrecoverable local setup states.
+- UI onboarding clarity is implemented: Welcome, Settings, Topbar, and empty canvas now guide users toward a real Codex workflow with less auth/setup confusion.
 
 ## Verification Snapshot
 
 - `npm run typecheck`: pass
-- `npm test`: pass (`13` files, `65` tests)
+- `npm test`: pass (`14` files, `73` tests)
 - `npm run smoke:win`: pass
 
 ## Delivered Changes
@@ -78,14 +80,40 @@ This document replaces the older forward plan and records what is now implemente
   - `dist/win-unpacked/resources/app.asar`
 - Manual smoke steps are documented in `docs/windows-smoke-checklist.md`.
 
+### Codex runtime readiness onboarding
+
+- Provider capabilities now include runtime-local readiness metadata.
+- `PROVIDERS_GET_CAPABILITIES` accepts `forceRefresh` and reuses the existing IPC channel.
+- Codex discovery runs `codex login status` before catalog discovery.
+- Live catalog uses `codex debug models`; bundled fallback uses `codex debug models --bundled`.
+- `cli_missing` and `auth_missing` are blocking because the workflow cannot run.
+- `auth_unknown`, `catalog_failed`, bundled catalog fallback, and legacy/custom models are warnings and do not block run.
+- Run preflight refreshes readiness when needed before invoking `window.api.runWorkflow`.
+- Settings and onboarding copy now distinguish Codex CLI login from optional OpenAI API key configuration.
+- Capability refresh was optimized to avoid duplicate in-flight discovery and repeated failed CLI candidates.
+
+### UI onboarding clarity and accessibility pass
+
+- Welcome screen now has:
+  - a gear-only Global Settings entry
+  - one primary `Open Project Folder` CTA
+  - a compact Codex readiness card with setup commands and refresh
+- Global Settings now presents `OpenAI API Key` as optional for Codex CLI workflows.
+- Topbar now shows workflow node count and save state more explicitly.
+- Empty canvas now offers `Add Agent` and `Try Simple Chain`; the template creates a runnable `A -> B` Codex DAG.
+- Focus-visible styling uses the existing design tokens.
+- Modal focus trap was added for Settings, input dialogs, confirm dialogs, and context init.
+- Icon-only controls now have `aria-label` coverage across the main shell surfaces.
+
 ## Current Gaps
 
 - `FX-020`: `Explain with AI` is still missing from the error surface.
 - `FX-023`: invalid frontmatter/metadata is not fully blocked before downstream context compilation.
-- `FX-024`: provider auth/config validation is still incomplete across all runtime paths.
+- `FX-024`: provider auth/config validation is still incomplete across all runtime paths beyond the Codex CLI readiness preflight now in place.
 - `FX-025`: CI baseline for `lint` / `typecheck` / `test` / Windows smoke is still missing.
 - `FX-026`: lint baseline and product metadata cleanup are still open.
 - `FX-016`: a second real adapter is still required to close the MVP "2 adapters" gap.
+- Manual visual QA is still useful after UI changes; automated Electron UI coverage is not part of the current baseline.
 
 ## References
 

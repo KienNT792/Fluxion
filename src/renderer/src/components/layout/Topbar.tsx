@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ChevronDown,
+  Copy,
+  ExternalLink,
+  Files,
   FolderOpen,
   Moon,
   Play,
@@ -22,8 +25,11 @@ import {
   runCurrentWorkflow,
   saveCurrentWorkflow,
 } from '../../lib/workflow-session';
+import { BinarySwitch } from '../ui/BinarySwitch';
 import { Button } from '../ui/Button';
+import { splitDisplayPath } from '../ui/FilePathCard';
 import { InputDialog } from '../ui/InputDialog';
+import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 import { Tooltip } from '../ui/Tooltip';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 
@@ -72,7 +78,7 @@ function getChangeToken(changeType: 'add' | 'change' | 'unlink'): string {
 
 function getChangeTokenColor(changeType: 'add' | 'change' | 'unlink'): string {
   if (changeType === 'add') {
-    return 'var(--color-timeline-grep)';
+    return 'var(--color-status-completed)';
   }
 
   if (changeType === 'unlink') {
@@ -82,90 +88,58 @@ function getChangeTokenColor(changeType: 'add' | 'change' | 'unlink'): string {
   return 'var(--color-timeline-read)';
 }
 
-function getPulseState(
-  workflowStatus: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error',
-  isSaving: boolean
+function getWorkflowChipState(
+  workflowStatus: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error'
 ): {
   label: string;
-  color: string;
+  tone: StatusChipTone;
   animate: boolean;
 } {
   if (workflowStatus === 'running') {
-    return {
-      label: 'Executing',
-      color: 'var(--color-timeline-thinking)',
-      animate: true,
-    };
-  }
-
-  if (isSaving) {
-    return {
-      label: 'Saving',
-      color: 'var(--color-timeline-read)',
-      animate: true,
-    };
+    return { label: 'Executing', tone: 'running', animate: true };
   }
 
   if (workflowStatus === 'completed') {
-    return {
-      label: 'Completed',
-      color: 'var(--color-timeline-grep)',
-      animate: false,
-    };
+    return { label: 'Completed', tone: 'completed', animate: false };
   }
 
   if (workflowStatus === 'paused') {
-    return {
-      label: 'Awaiting Review',
-      color: 'var(--color-timeline-edit)',
-      animate: false,
-    };
+    return { label: 'Awaiting Review', tone: 'paused', animate: false };
   }
 
   if (workflowStatus === 'aborted') {
-    return {
-      label: 'Aborted',
-      color: 'var(--color-timeline-read)',
-      animate: false,
-    };
+    return { label: 'Aborted', tone: 'stopping', animate: false };
   }
 
   if (workflowStatus === 'error') {
-    return {
-      label: 'Error',
-      color: 'var(--color-semantic-error)',
-      animate: false,
-    };
+    return { label: 'Error', tone: 'error', animate: false };
   }
 
-  return {
-    label: 'Ready',
-    color: 'var(--color-muted-soft)',
-    animate: false,
-  };
+  return { label: 'Ready', tone: 'idle', animate: false };
 }
 
-function getDirtyDotState(
+function getSaveChipState(
   isDirty: boolean,
-  isSaving: boolean
-): { color: string; animate: boolean; label: string } | null {
+  isSaving: boolean,
+  saveError: string | null
+): {
+  label: string;
+  tone: StatusChipTone;
+  animate: boolean;
+} {
+  if (saveError) {
+    return { label: 'Save failed', tone: 'error', animate: false };
+  }
+
   if (isSaving) {
-    return {
-      color: 'var(--color-timeline-grep)',
-      animate: true,
-      label: 'Saving',
-    };
+    return { label: 'Saving', tone: 'running', animate: true };
   }
 
   if (isDirty) {
-    return {
-      color: 'var(--color-timeline-done)',
-      animate: false,
-      label: 'Unsaved changes',
-    };
+    return { label: 'Unsaved', tone: 'warning', animate: false };
   }
 
-  return null;
+  return { label: 'Saved', tone: 'success', animate: false };
 }
 
 interface ActionTextButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -173,7 +147,7 @@ interface ActionTextButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEle
 }
 
 const ActionTextButton = React.forwardRef<HTMLButtonElement, ActionTextButtonProps>(
-  ({ className = '', dimmed = false, disabled = false, children, ...props }, ref) => (
+  ({ className = '', dimmed = false, disabled = false, children, style, ...props }, ref) => (
     <button
       ref={ref}
       type="button"
@@ -183,6 +157,7 @@ const ActionTextButton = React.forwardRef<HTMLButtonElement, ActionTextButtonPro
         color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
         opacity: dimmed ? 0.5 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
+        ...style,
       }}
       {...props}
     >
@@ -194,16 +169,17 @@ const ActionTextButton = React.forwardRef<HTMLButtonElement, ActionTextButtonPro
 ActionTextButton.displayName = 'ActionTextButton';
 
 const ActionIconButton = React.forwardRef<HTMLButtonElement, ActionTextButtonProps>(
-  ({ className = '', dimmed = false, disabled = false, children, ...props }, ref) => (
+  ({ className = '', dimmed = false, disabled = false, children, style, ...props }, ref) => (
     <button
       ref={ref}
       type="button"
       disabled={disabled}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-card)] hover:text-[var(--color-ink)] ${className}`}
+      className={`relative inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-card)] hover:text-[var(--color-ink)] ${className}`}
       style={{
         color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
         opacity: dimmed ? 0.5 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
+        ...style,
       }}
       {...props}
     >
@@ -218,8 +194,26 @@ const POPOVER_SURFACE_STYLE: React.CSSProperties = {
   background: 'var(--color-surface-card)',
   border: '1px solid var(--color-hairline)',
   borderRadius: 'var(--radius-lg)',
-  boxShadow: '0 18px 40px rgba(38, 37, 30, 0.08)',
+  boxShadow: '0 18px 40px rgba(38, 37, 30, 0.16)',
 };
+
+const ActivityFileAction: React.FC<{
+  label: string;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+}> = ({ label, onClick, children }) => (
+  <Tooltip content={label}>
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-canvas)]"
+      style={{ color: 'var(--color-muted)' }}
+    >
+      {children}
+    </button>
+  </Tooltip>
+);
 
 export const Topbar: React.FC = () => {
   const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false);
@@ -272,27 +266,26 @@ export const Topbar: React.FC = () => {
   const canRun = Boolean(workspacePath) && nodes.length > 0 && !isBusy;
   const canSave = Boolean(workspacePath) && isDirty && !isSaving;
   const editingDimmed = isBusy;
-  const pulseState = getPulseState(workflowStatus, isSaving);
-  const dirtyDotState = getDirtyDotState(isDirty, isSaving);
+  const workflowChipState = getWorkflowChipState(workflowStatus);
   const changeCount = recentWorkspaceChanges.length;
   const activitySummaryLabel =
     changeCount > 0
       ? `${changeCount} file${changeCount === 1 ? '' : 's'} changed`
       : hasExternalWorkflowChange
         ? 'Workflow changed on disk'
-        : 'Workspace steady';
+        : 'No recent file changes';
 
   const statusSubtext = workflowError ?? saveError;
   const codexReadiness = getCodexReadinessBadgeState(
     providerCapabilities,
     nodes.map((node) => String(node.data.model ?? ''))
   );
-  const readinessToneColor =
+  const readinessTone: StatusChipTone =
     codexReadiness.tone === 'ready'
-      ? 'var(--color-semantic-success)'
+      ? 'success'
       : codexReadiness.tone === 'blocked'
-        ? 'var(--color-semantic-error)'
-        : 'var(--color-timeline-edit)';
+        ? 'error'
+        : 'warning';
   const runTooltip = !workspacePath
     ? 'Open a workspace first'
     : nodes.length === 0
@@ -302,25 +295,10 @@ export const Topbar: React.FC = () => {
         : codexReadiness.blocking
           ? codexReadiness.summary
           : 'Run workflow';
-  const saveStateLabel = isSaving
-    ? 'Saving...'
-    : saveError
-      ? 'Save failed'
-      : isDirty
-        ? 'Unsaved changes'
-        : formatSavedLabel(lastSavedAt);
+  const saveStateLabel = saveError ?? formatSavedLabel(lastSavedAt);
+  const saveChipState = getSaveChipState(isDirty, isSaving, saveError);
   const nodeCountLabel = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
-  const saveBadgeLabel = saveError
-    ? 'Save failed'
-    : isSaving
-      ? 'Saving'
-      : isDirty
-        ? 'Unsaved'
-        : 'Saved';
-  const saveBadgeColor = saveError
-    ? 'var(--color-semantic-error)'
-    : dirtyDotState?.color ?? 'var(--color-semantic-success)';
-  const saveBadgeIsAnimated = dirtyDotState?.animate ?? false;
+  const activityHasAttention = changeCount > 0 || hasExternalWorkflowChange;
 
   useEffect(() => {
     if (workflowStatus === 'running') {
@@ -475,481 +453,491 @@ export const Topbar: React.FC = () => {
     window.api.abortWorkflow();
   };
 
+  const handleOpenPath = async (filePath: string): Promise<void> => {
+    try {
+      await window.api.openPath(filePath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to open file.';
+      setWorkflowError(message);
+    }
+  };
+
+  const handleRevealPath = async (filePath: string): Promise<void> => {
+    try {
+      await window.api.revealPath(filePath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to reveal file.';
+      setWorkflowError(message);
+    }
+  };
+
+  const handleCopyPath = async (filePath: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(filePath);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to copy path.';
+      setWorkflowError(message);
+    }
+  };
+
   const activityDetailItems = useMemo(
     () =>
-      recentWorkspaceChanges.map((change) => ({
-        key: `${change.relativePath}-${change.receivedAt}`,
-        token: getChangeToken(change.changeType),
-        tokenColor: getChangeTokenColor(change.changeType),
-        relativePath: change.relativePath,
-        receivedAt: formatChangeTime(change.receivedAt),
-      })),
+      recentWorkspaceChanges.map((change) => {
+        const displayPath = splitDisplayPath(change.relativePath);
+
+        return {
+          key: `${change.filePath}-${change.receivedAt}`,
+          token: getChangeToken(change.changeType),
+          tokenColor: getChangeTokenColor(change.changeType),
+          filePath: change.filePath,
+          relativePath: change.relativePath,
+          basename: displayPath.basename,
+          parentPath: displayPath.parentPath,
+          receivedAt: formatChangeTime(change.receivedAt),
+        };
+      }),
     [recentWorkspaceChanges]
   );
 
+  const workflowChipLabel =
+    workflowStatus === 'running'
+      ? `${workflowChipState.label} ${formatElapsed(elapsedMs)}`
+      : workflowChipState.label;
+
   return (
     <header
-      className="relative z-40 flex h-14 shrink-0 items-center px-4 sm:px-5 lg:px-6"
+      className="relative z-40 flex h-14 shrink-0 items-center px-3 sm:px-4 lg:px-5"
       style={{
         background: 'var(--color-canvas)',
         borderBottom: '1px solid var(--color-hairline)',
       }}
     >
-      <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+      <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
         <div className="min-w-0">
           <Tooltip content={workspacePath || 'No workspace open'}>
             <div className="flex min-w-0 items-center gap-2">
-              <FolderOpen size={14} style={{ color: 'var(--color-muted)' }} />
+              <FolderOpen size={14} className="shrink-0" style={{ color: 'var(--color-muted)' }} />
 
-              <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className="hidden text-[11px] uppercase tracking-[0.08em] lg:inline"
-                  style={{
-                    color: 'var(--color-muted-soft)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  Fluxion
-                </span>
-                <span
-                  className="hidden lg:inline"
-                  style={{ color: 'var(--color-muted-soft)' }}
-                >
-                  /
-                </span>
-                <span
-                  className="truncate text-[11px] uppercase tracking-[0.08em]"
-                  style={{
-                    color: 'var(--color-muted)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {workspaceName}
-                </span>
-                <span style={{ color: 'var(--color-muted-soft)' }}>/</span>
-                <span
-                  className="truncate text-sm font-semibold"
-                  style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
-                >
-                  {workflowName}
-                </span>
-                <span
-                  className="shrink-0 text-[11px]"
-                  style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-                >
-                  ({nodeCountLabel})
-                </span>
-                <Tooltip content={saveError ?? saveStateLabel}>
-                  <span
-                    className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium md:inline-flex"
-                    style={{
-                      color: saveBadgeColor,
-                      background: 'var(--color-surface-card)',
-                      border: '1px solid var(--color-hairline)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${saveBadgeIsAnimated ? 'animate-pulse' : ''}`}
-                      style={{ background: saveBadgeColor }}
-                    />
-                    {saveBadgeLabel}
-                  </span>
-                </Tooltip>
-              </div>
+              <span
+                className="hidden shrink-0 text-[11px] uppercase tracking-[0.08em] xl:inline"
+                style={{
+                  color: 'var(--color-muted-soft)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                Fluxion
+              </span>
+              <span
+                className="hidden shrink-0 xl:inline"
+                style={{ color: 'var(--color-muted-soft)' }}
+              >
+                /
+              </span>
+              <span
+                className="hidden max-w-[160px] truncate text-[11px] uppercase tracking-[0.08em] lg:inline"
+                style={{
+                  color: 'var(--color-muted)',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {workspaceName}
+              </span>
+              <span
+                className="hidden shrink-0 lg:inline"
+                style={{ color: 'var(--color-muted-soft)' }}
+              >
+                /
+              </span>
+              <span
+                className="min-w-0 truncate text-sm font-semibold"
+                style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
+              >
+                {workflowName}
+              </span>
+              <span
+                className="hidden shrink-0 text-[11px] md:inline"
+                style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+              >
+                {nodeCountLabel}
+              </span>
+              <StatusChip
+                tone={saveChipState.tone}
+                label={saveChipState.label}
+                animate={saveChipState.animate}
+                title={saveStateLabel}
+                className="hidden shrink-0 md:inline-flex"
+              />
             </div>
           </Tooltip>
         </div>
 
-        <div className="justify-self-start lg:justify-self-center">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span
-              className="inline-flex items-center gap-2"
-              style={{ color: 'var(--color-body)' }}
+        <div className="hidden items-center gap-2 md:flex">
+          <StatusChip
+            tone={workflowChipState.tone}
+            label={workflowChipLabel}
+            animate={workflowChipState.animate}
+            title={statusSubtext ?? workflowChipLabel}
+            className="max-w-[170px]"
+          />
+
+          <BinarySwitch
+            checked={executionMode === 'manual'}
+            onChange={(checked) => setExecutionMode(checked ? 'manual' : 'auto')}
+            leftLabel="Auto"
+            rightLabel="Manual"
+            disabled={isBusy}
+            ariaLabel="Execution mode"
+            title={
+              executionMode === 'auto'
+                ? 'Only nodes with review checkpoints pause'
+                : 'Every completed node pauses for review'
+            }
+          />
+        </div>
+
+        <div className="flex min-w-0 items-center justify-end gap-1.5">
+          <div className="relative" ref={readinessPopoverRef}>
+            <button
+              type="button"
+              aria-label={`Codex readiness: ${codexReadiness.label}`}
+              aria-expanded={isReadinessPopoverOpen}
+              onClick={() => setIsReadinessPopoverOpen((current) => !current)}
+              className="inline-flex items-center"
             >
-              <span
-                className={`inline-block h-2.5 w-2.5 rounded-full ${pulseState.animate ? 'animate-pulse' : ''}`}
-                style={{ background: pulseState.color }}
-              />
-              <span
-                className="font-medium"
-                style={{ color: 'var(--color-ink)' }}
-              >
-                {pulseState.label}
-                {workflowStatus === 'running' ? ` (${formatElapsed(elapsedMs)})` : ''}
-              </span>
-            </span>
-
-            <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
-
-            <div
-              className="inline-flex items-center rounded-md p-0.5"
-              style={{
-                background: 'var(--color-surface-card)',
-                border: '1px solid var(--color-hairline)',
-              }}
-            >
-              {(['auto', 'manual'] as const).map((mode) => {
-                const isActive = executionMode === mode;
-
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => setExecutionMode(mode)}
-                    disabled={isBusy}
-                    className="min-w-[68px] rounded-[5px] px-2.5 py-1 text-[11px] font-semibold uppercase transition-colors"
-                    style={{
-                      background: isActive ? 'var(--color-primary)' : 'transparent',
-                      color: isActive ? '#ffffff' : 'var(--color-muted)',
-                      cursor: isBusy ? 'not-allowed' : 'pointer',
-                      opacity: isBusy && !isActive ? 0.5 : 1,
-                    }}
-                    title={
-                      mode === 'auto'
-                        ? 'Only nodes with review checkpoints pause'
-                        : 'Every completed node pauses for review'
-                    }
-                  >
-                    {mode}
-                  </button>
-                );
-              })}
-            </div>
-
-            <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
-
-            <div className="relative" ref={readinessPopoverRef}>
-              <button
-                type="button"
-                aria-label={`Codex readiness: ${codexReadiness.label}`}
-                aria-expanded={isReadinessPopoverOpen}
-                onClick={() => setIsReadinessPopoverOpen((current) => !current)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
-                style={{
-                  color: readinessToneColor,
-                  fontFamily: 'var(--font-mono)',
-                }}
+              <StatusChip
+                tone={readinessTone}
+                label={isProviderCapabilitiesLoading ? 'Codex Checking' : `Codex ${codexReadiness.label}`}
                 title={codexReadiness.detail}
+                animate={isProviderCapabilitiesLoading}
+                className="max-w-[170px]"
+              />
+            </button>
+
+            {isReadinessPopoverOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+10px)] z-50 w-[360px] p-3"
+                style={POPOVER_SURFACE_STYLE}
               >
-                Codex: {isProviderCapabilitiesLoading ? 'Checking...' : codexReadiness.label}
-                <ChevronDown size={12} />
-              </button>
-
-              {isReadinessPopoverOpen && (
-                <div
-                  className="absolute left-0 top-[calc(100%+10px)] z-50 w-[360px] p-3"
-                  style={POPOVER_SURFACE_STYLE}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span
-                        className="text-[11px] uppercase tracking-[0.08em]"
-                        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-                      >
-                        Codex Runtime
-                      </span>
-                      <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                        {codexReadiness.summary}
-                      </p>
-                      <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
-                        {codexReadiness.detail}
-                      </p>
-                    </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <span
-                      className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold"
-                      style={{
-                        color: readinessToneColor,
-                        background: 'var(--color-canvas)',
-                        border: '1px solid var(--color-hairline)',
-                      }}
+                      className="text-[11px] uppercase tracking-[0.08em]"
+                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
                     >
-                      {codexReadiness.label}
+                      Codex Runtime
                     </span>
+                    <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                      {codexReadiness.summary}
+                    </p>
+                    <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+                      {codexReadiness.detail}
+                    </p>
                   </div>
-
-                  <div
-                    className="mt-3 rounded-md px-3 py-2 text-[11px] leading-5"
-                    style={{
-                      color: 'var(--color-muted)',
-                      background: 'var(--color-canvas)',
-                      border: '1px solid var(--color-hairline)',
-                    }}
-                  >
-                    Windows native Fluxion only sees Codex installed in the Windows PATH. A Codex
-                    binary installed only inside WSL is not available to this runner yet.
-                  </div>
-
-                  <div className="mt-3 grid gap-2 text-[11px]" style={{ color: 'var(--color-body)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)' }}>Install: npm i -g @openai/codex</div>
-                    <div style={{ fontFamily: 'var(--font-mono)' }}>Login: codex login</div>
-                    <div style={{ fontFamily: 'var(--font-mono)' }}>Check: codex login status</div>
-                    {codexReadiness.catalogSource && (
-                      <div style={{ fontFamily: 'var(--font-mono)' }}>
-                        Catalog: {codexReadiness.catalogSource}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 flex justify-end">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleRefreshReadiness}
-                      disabled={isProviderCapabilitiesLoading || isBusy}
-                    >
-                      {isProviderCapabilitiesLoading ? 'Refreshing...' : 'Refresh'}
-                    </Button>
-                  </div>
+                  <StatusChip tone={readinessTone} label={codexReadiness.label} />
                 </div>
-              )}
-            </div>
 
-            <span style={{ color: 'var(--color-muted-soft)' }}>|</span>
-
-            {changeCount > 0 || hasExternalWorkflowChange ? (
-              <div className="relative" ref={activityPopoverRef}>
-                <button
-                  type="button"
-                  aria-label="Open workspace activity"
-                  aria-expanded={isActivityPopoverOpen}
-                  onClick={() => setIsActivityPopoverOpen((current) => !current)}
-                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
+                <div
+                  className="mt-3 rounded-md px-3 py-2 text-[11px] leading-5"
                   style={{
-                    color: hasExternalWorkflowChange
-                      ? 'var(--color-semantic-error)'
-                      : 'var(--color-muted)',
-                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--color-muted)',
+                    background: 'var(--color-canvas)',
+                    border: '1px solid var(--color-hairline)',
                   }}
                 >
-                  {activitySummaryLabel}
-                  <ChevronDown size={12} />
-                </button>
+                  Windows native Fluxion only sees Codex installed in the Windows PATH. A Codex
+                  binary installed only inside WSL is not available to this runner yet.
+                </div>
 
-                {isActivityPopoverOpen && (
-                  <div
-                    className="absolute left-0 top-[calc(100%+10px)] z-50 w-[320px] p-3"
-                    style={POPOVER_SURFACE_STYLE}
+                <div className="mt-3 grid gap-2 text-[11px]" style={{ color: 'var(--color-body)' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)' }}>Install: npm i -g @openai/codex</div>
+                  <div style={{ fontFamily: 'var(--font-mono)' }}>Login: codex login</div>
+                  <div style={{ fontFamily: 'var(--font-mono)' }}>Check: codex login status</div>
+                  {codexReadiness.catalogSource && (
+                    <div style={{ fontFamily: 'var(--font-mono)' }}>
+                      Catalog: {codexReadiness.catalogSource}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRefreshReadiness}
+                    disabled={isProviderCapabilitiesLoading || isBusy}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className="text-[11px] uppercase tracking-[0.08em]"
-                        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-                      >
-                        Activity
-                      </span>
-                      <span
-                        className="text-[11px]"
-                        style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
-                      >
-                        {saveStateLabel}
-                      </span>
-                    </div>
+                    {isProviderCapabilitiesLoading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
-                    <div className="mt-3 space-y-2">
-                      {activityDetailItems.length > 0 ? (
-                        activityDetailItems.map((item) => (
-                          <div
-                            key={item.key}
-                            className="flex items-start justify-between gap-3 text-xs"
-                          >
-                            <div className="flex min-w-0 items-start gap-2">
-                              <span
-                                className="mt-0.5 font-semibold"
-                                style={{ color: item.tokenColor, fontFamily: 'var(--font-mono)' }}
-                              >
-                                {item.token}
-                              </span>
-                              <span
-                                className="truncate"
-                                style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
-                              >
-                                {item.relativePath}
-                              </span>
-                            </div>
-                            <span
-                              className="shrink-0"
-                              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
-                            >
-                              {item.receivedAt}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <p
-                          className="text-xs"
-                          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-                        >
-                          No recent file changes.
-                        </p>
-                      )}
-                    </div>
+          <div className="relative" ref={activityPopoverRef}>
+            <Tooltip content={activitySummaryLabel}>
+              <ActionIconButton
+                aria-label="Open workspace activity"
+                aria-expanded={isActivityPopoverOpen}
+                onClick={() => setIsActivityPopoverOpen((current) => !current)}
+                style={{
+                  color: hasExternalWorkflowChange
+                    ? 'var(--color-semantic-error)'
+                    : 'var(--color-muted)',
+                }}
+              >
+                <Files size={16} />
+                {activityHasAttention && (
+                  <span
+                    className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
+                    style={{
+                      background: hasExternalWorkflowChange
+                        ? 'var(--color-semantic-error)'
+                        : 'var(--color-status-completed)',
+                    }}
+                  />
+                )}
+              </ActionIconButton>
+            </Tooltip>
 
-                    {hasExternalWorkflowChange && (
+            {isActivityPopoverOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+10px)] z-50 w-[380px] p-3"
+                style={POPOVER_SURFACE_STYLE}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span
+                    className="text-[11px] uppercase tracking-[0.08em]"
+                    style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                  >
+                    Activity
+                  </span>
+                  <span
+                    className="text-[11px]"
+                    style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+                  >
+                    {activitySummaryLabel}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {activityDetailItems.length > 0 ? (
+                    activityDetailItems.map((item) => (
                       <div
-                        className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+                        key={item.key}
+                        className="flex items-center gap-2 rounded-md px-2 py-2"
                         style={{
                           background: 'var(--color-canvas)',
                           border: '1px solid var(--color-hairline)',
                         }}
+                        title={item.relativePath}
                       >
-                        <div className="min-w-0">
-                          <p
-                            className="text-xs font-medium"
-                            style={{ color: 'var(--color-ink)' }}
-                          >
-                            Workflow file changed on disk
-                          </p>
-                          <p
-                            className="mt-1 text-[11px]"
+                        <span
+                          className="shrink-0 text-xs font-semibold"
+                          style={{ color: item.tokenColor, fontFamily: 'var(--font-mono)' }}
+                        >
+                          {item.token}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenPath(item.filePath)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="truncate text-xs font-semibold" style={{ color: 'var(--color-ink)' }}>
+                            {item.basename}
+                          </div>
+                          <div
+                            className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px]"
                             style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
                           >
-                            Reload to sync the canvas with disk.
-                          </p>
+                            <span className="truncate">{item.parentPath}</span>
+                            <span className="shrink-0">{item.receivedAt}</span>
+                          </div>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <ActivityFileAction
+                            label="Open"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleOpenPath(item.filePath);
+                            }}
+                          >
+                            <ExternalLink size={13} />
+                          </ActivityFileAction>
+                          <ActivityFileAction
+                            label="Reveal"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleRevealPath(item.filePath);
+                            }}
+                          >
+                            <FolderOpen size={13} />
+                          </ActivityFileAction>
+                          <ActivityFileAction
+                            label="Copy path"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleCopyPath(item.filePath);
+                            }}
+                          >
+                            <Copy size={13} />
+                          </ActivityFileAction>
                         </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleReload}
-                          disabled={isBusy}
-                        >
-                          <AlertTriangle size={13} />
-                          Reload
-                        </Button>
                       </div>
-                    )}
+                    ))
+                  ) : (
+                    <p
+                      className="rounded-md px-3 py-2 text-xs"
+                      style={{
+                        color: 'var(--color-muted)',
+                        background: 'var(--color-canvas)',
+                        border: '1px solid var(--color-hairline)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      No recent file changes.
+                    </p>
+                  )}
+                </div>
+
+                {hasExternalWorkflowChange && (
+                  <div
+                    className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+                    style={{
+                      background: 'var(--color-canvas)',
+                      border: '1px solid var(--color-hairline)',
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className="text-xs font-medium"
+                        style={{ color: 'var(--color-ink)' }}
+                      >
+                        Workflow file changed on disk
+                      </p>
+                      <p
+                        className="mt-1 text-[11px]"
+                        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                      >
+                        Reload to sync the canvas with disk.
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleReload}
+                      disabled={isBusy}
+                    >
+                      <AlertTriangle size={13} />
+                      Reload
+                    </Button>
                   </div>
                 )}
               </div>
-            ) : null}
+            )}
           </div>
 
-          {statusSubtext && (
-            <p
-              className="mt-1 truncate text-[11px]"
-              style={{ color: 'var(--color-semantic-error)', fontFamily: 'var(--font-mono)' }}
+          <div className="relative" ref={projectMenuRef}>
+            <ActionTextButton
+              aria-expanded={isProjectMenuOpen}
+              onClick={() => setIsProjectMenuOpen((current) => !current)}
+              disabled={isBusy}
+              dimmed={editingDimmed}
+              className="hidden sm:inline-flex"
             >
-              {statusSubtext}
-            </p>
-          )}
-        </div>
+              <span>Project</span>
+              <ChevronDown size={14} />
+            </ActionTextButton>
 
-        <div className="flex items-center justify-between gap-2 lg:justify-end">
-          <div className="flex items-center gap-1">
-            <div className="relative" ref={projectMenuRef}>
-              <ActionTextButton
-                aria-expanded={isProjectMenuOpen}
-                onClick={() => setIsProjectMenuOpen((current) => !current)}
-                disabled={isBusy}
-                dimmed={editingDimmed}
+            {isProjectMenuOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] p-2"
+                style={POPOVER_SURFACE_STYLE}
               >
-                <span>Project</span>
-                <ChevronDown size={14} />
-              </ActionTextButton>
-
-              {isProjectMenuOpen && (
-                <div
-                  className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] p-2"
-                  style={POPOVER_SURFACE_STYLE}
+                <button
+                  type="button"
+                  onClick={handleOpenWorkspace}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
+                  style={{ color: 'var(--color-ink)' }}
                 >
-                  <button
-                    type="button"
-                    onClick={handleOpenWorkspace}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
-                    style={{ color: 'var(--color-ink)' }}
-                  >
-                    <FolderOpen size={14} />
-                    Open Workspace
-                  </button>
+                  <FolderOpen size={14} />
+                  Open Workspace
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateWorkflowDialog}
-                    disabled={!workspacePath || isBusy}
-                    className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
-                    style={{
-                      color:
-                        !workspacePath || isBusy
-                          ? 'var(--color-muted-soft)'
-                          : 'var(--color-ink)',
-                    }}
-                  >
-                    <Plus size={14} />
-                    New Workflow
-                  </button>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateWorkflowDialog}
+                  disabled={!workspacePath || isBusy}
+                  className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                  style={{
+                    color:
+                      !workspacePath || isBusy
+                        ? 'var(--color-muted-soft)'
+                        : 'var(--color-ink)',
+                  }}
+                >
+                  <Plus size={14} />
+                  New Workflow
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!canSave}
-                    className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
-                    style={{
-                      color: canSave ? 'var(--color-ink)' : 'var(--color-muted-soft)',
-                    }}
-                  >
-                    <Save size={14} />
-                    Save Workflow
-                  </button>
-
-                  <div
-                    className="mt-2 px-3 pt-2 text-[11px]"
-                    style={{
-                      color: saveError ? 'var(--color-semantic-error)' : 'var(--color-muted)',
-                      fontFamily: 'var(--font-mono)',
-                      borderTop: '1px solid var(--color-hairline)',
-                    }}
-                  >
-                    {saveError ?? saveStateLabel}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <Tooltip content="Global Settings">
-              <ActionIconButton
-                aria-label="Open Global Settings"
-                onClick={() => setIsSettingsOpen(true)}
-                disabled={isBusy}
-                dimmed={editingDimmed}
-              >
-                <Settings size={16} />
-              </ActionIconButton>
-            </Tooltip>
-
-            <Tooltip content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
-              <ActionIconButton
-                aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                onClick={toggleTheme}
-              >
-                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              </ActionIconButton>
-            </Tooltip>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!canSave}
+                  className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                  style={{
+                    color: canSave ? 'var(--color-ink)' : 'var(--color-muted-soft)',
+                  }}
+                >
+                  <Save size={14} />
+                  Save Workflow
+                </button>
+              </div>
+            )}
           </div>
+
+          <Tooltip content="Global Settings">
+            <ActionIconButton
+              aria-label="Open Global Settings"
+              onClick={() => setIsSettingsOpen(true)}
+              disabled={isBusy}
+              dimmed={editingDimmed}
+            >
+              <Settings size={16} />
+            </ActionIconButton>
+          </Tooltip>
+
+          <Tooltip content={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+            <ActionIconButton
+              aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              onClick={toggleTheme}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </ActionIconButton>
+          </Tooltip>
 
           {!isBusy ? (
             <Tooltip content={runTooltip}>
               <Button
                 variant="primary"
-                size="md"
-                className="min-w-[112px] shrink-0"
+                size="toolbar"
+                className="min-w-[88px] shrink-0"
                 onClick={handleRun}
                 disabled={!canRun}
               >
-                <Play size={14} fill="currentColor" />
-                RUN
+                <Play size={13} fill="currentColor" />
+                Run
               </Button>
             </Tooltip>
           ) : (
             <Tooltip content="Abort current workflow">
               <Button
                 variant="danger"
-                size="md"
-                className="min-w-[112px] shrink-0"
+                size="toolbar"
+                className="min-w-[88px] shrink-0"
                 onClick={handleAbort}
               >
-                <Square size={14} fill="currentColor" />
-                ABORT
+                <Square size={13} fill="currentColor" />
+                Abort
               </Button>
             </Tooltip>
           )}

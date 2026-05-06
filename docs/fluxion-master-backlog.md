@@ -29,13 +29,15 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Current Snapshot
 
-- `git status`: working tree contains local implementation changes for `FX-018`, `FX-025`, `FX-027`, docs, and supporting tests.
+- `git status`: working tree contains local implementation changes for `FX-018`, `FX-025`, `FX-027`, Codex readiness onboarding, UI onboarding clarity/accessibility, docs, and supporting tests.
 - `npm run typecheck`: pass
-- `npm test`: pass (`13` files, `65` tests)
+- `npm test`: pass (`14` files, `73` tests)
 - `npm run smoke:win`: pass
 - P0/P0.1/P1 runtime foundation cho Codex CLI tren Windows da xong.
 - Run-state persistence, artifact gates, va V2 memory frontmatter da co trong code va test.
 - Workflow-level `Auto` / `Manual` execution mode, dynamic Codex capability discovery, va local Windows unpacked smoke baseline da duoc wire xong.
+- Codex runtime readiness onboarding da co: app check `codex login status`, live/bundled model catalog, force refresh, va chi block run khi CLI missing hoac auth missing.
+- UI onboarding clarity pass da co: Welcome readiness, Settings copy cleanup, Topbar node/save state, empty-state `Add Agent` / `Try Simple Chain`, va modal/icon accessibility pass.
 - Gap con lai co tac dong lon nhat hien nay la `Explain with AI`, retry attempt lineage, provider config validation, CI baseline, va product hardening.
 
 ## Release Gates
@@ -208,6 +210,30 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - [x] Fluxion hien trang thai unavailable ro rang neu Codex CLI khong co trong PATH.
 - [x] Legacy/custom model slug van load/save duoc.
 
+### FX-028 Codex runtime readiness onboarding [DONE]
+
+- Priority: `P1`
+- Outcome: Fluxion phan biet ro may da san sang Codex CLI, thieu CLI, thieu login, auth unknown, va catalog warning truoc khi run.
+- Deliverable: Runtime-local readiness state, force refresh, setup copy, va run preflight.
+- Acceptance:
+- [x] `codex login status` duoc chay truoc catalog discovery.
+- [x] Live catalog dung `codex debug models`, fallback dung `codex debug models --bundled`.
+- [x] `cli_missing` va `auth_missing` block `Run` voi message co action ro.
+- [x] `auth_unknown`, `catalog_failed`, bundled catalog, va legacy/custom model chi warning va van cho run.
+- [x] Refresh capabilities co force refresh va da duoc toi uu de tranh duplicate in-flight discovery.
+
+### FX-029 Codex-first onboarding and UI clarity pass [DONE]
+
+- Priority: `P2`
+- Outcome: Onboarding va toolbar giam nham lan giua Codex CLI va OpenAI API key, dong thoi dua user vao workflow that nhanh hon.
+- Deliverable: Welcome readiness, Settings copy cleanup, Topbar node/save state, empty-state quick actions, va accessibility pass.
+- Acceptance:
+- [x] Welcome co Codex readiness card, gear settings, va chi mot CTA chinh `Open Project Folder`.
+- [x] Global Settings lam ro `OpenAI API Key` la optional cho Codex CLI workflows.
+- [x] Topbar hien node count va save state ro hon.
+- [x] Empty canvas co `Add Agent` va `Try Simple Chain` de tao nhanh DAG `A -> B`.
+- [x] Icon-only controls co `aria-label`, modal co focus trap, focus ring dung design token hien co.
+
 ## Phase E - Error Handling and Operator UX
 
 ### FX-020 Add node-level error surface with actions [CURRENT]
@@ -258,6 +284,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Acceptance:
 - [x] API key khong nam trong source code.
 - [x] User co the cau hinh OpenAI provider trong app.
+- [x] Codex CLI readiness preflight chan CLI missing va auth missing truoc khi run.
 - [ ] App validate thieu auth/config truoc khi run cho tat ca provider/runtime lien quan.
 
 ### FX-025 Establish test matrix and CI baseline [PARTIAL]
@@ -295,11 +322,11 @@ Sprint tiep theo nen tap trung vao 6 item:
 - `FX-020` Hoan tat `Explain with AI` tren error surface da co.
 - `FX-023` Chan metadata/frontmatter khong hop le truoc khi dua vao downstream context.
 - `FX-025` Dua local `smoke:win` thanh CI baseline cho `typecheck` / `test` / smoke build.
-- `FX-024` Validate auth/config truoc khi run cho tat ca runtime lien quan.
+- `FX-024` Mo rong validate auth/config truoc khi run cho tat ca runtime/provider lien quan ngoai Codex CLI readiness da co.
 - `FX-026` Don dep lint baseline va metadata san pham.
 - `FX-016` Bat dau adapter that thu hai de dong MVP gap "2 real adapters".
 
-Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co smoke baseline" sang "beta candidate co verification lap lai duoc va operator UX tot hon".
+Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co smoke baseline va onboarding ro rang" sang "beta candidate co verification lap lai duoc, error intelligence, va product hardening tot hon".
 
 ## Deferred for Later
 
