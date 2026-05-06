@@ -1,11 +1,18 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, FolderOpen, Settings, Workflow } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Settings, Workflow } from 'lucide-react';
 import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
 import { openWorkspaceFromDialog } from '../../lib/workflow-session';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
+import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 import { Tooltip } from '../ui/Tooltip';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
+
+const ONBOARDING_STEPS = [
+  'Open your codebase',
+  'Define Codex agents',
+  'Run and review outputs',
+] as const;
 
 export const WelcomeScreen: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
@@ -35,10 +42,25 @@ export const WelcomeScreen: React.FC = () => {
       : codexReadiness.tone === 'blocked'
         ? 'var(--color-semantic-error)'
         : 'var(--color-timeline-done)';
+  const readinessChipTone: StatusChipTone = isProviderCapabilitiesLoading
+    ? 'running'
+    : codexReadiness.tone === 'ready'
+      ? 'success'
+      : codexReadiness.tone === 'blocked'
+        ? 'error'
+        : 'warning';
+  const compactReadinessLabel = isProviderCapabilitiesLoading
+    ? 'Checking Codex CLI...'
+    : 'Codex CLI ready';
+  const shouldShowReadinessCard =
+    !isProviderCapabilitiesLoading && codexReadiness.tone !== 'ready';
+  const readinessCardTitle = codexReadiness.blocking
+    ? 'Codex setup needed'
+    : 'Codex warning';
 
   return (
     <div
-      className="relative flex-1 h-screen w-full flex items-center justify-center select-none"
+      className="relative flex h-screen w-full flex-1 select-none items-center justify-center overflow-auto px-5 py-10"
       style={{ background: 'var(--color-canvas)' }}
     >
       <div className="absolute right-5 top-5">
@@ -59,11 +81,10 @@ export const WelcomeScreen: React.FC = () => {
         </Tooltip>
       </div>
 
-      <div className="flex flex-col items-center gap-10 max-w-md px-8">
-        {/* ── Logo & Branding ── */}
-        <div className="flex flex-col items-center gap-5">
+      <div className="flex w-full max-w-xl flex-col items-center gap-7">
+        <div className="flex flex-col items-center gap-5 text-center">
           <div
-            className="w-20 h-20 rounded-2xl flex items-center justify-center"
+            className="flex h-20 w-20 items-center justify-center rounded-2xl"
             style={{
               background: 'var(--color-surface-card)',
               border: '1px solid var(--color-hairline)',
@@ -72,7 +93,7 @@ export const WelcomeScreen: React.FC = () => {
             <Workflow size={36} style={{ color: 'var(--color-primary)' }} />
           </div>
 
-          <div className="text-center">
+          <div>
             <h1
               className="text-3xl font-normal"
               style={{
@@ -84,79 +105,122 @@ export const WelcomeScreen: React.FC = () => {
               Fluxion
             </h1>
             <p
-              className="text-sm mt-2"
+              className="mt-2 text-sm"
               style={{ color: 'var(--color-muted)', lineHeight: 1.5 }}
             >
-              AI Agent Workflow Orchestrator
+              Run Codex agents across your codebase as a workflow.
             </p>
           </div>
         </div>
 
-        {/* ── Accent hairline ── */}
         <div
-          className="w-full h-px"
+          className="h-px w-full"
           style={{
             background:
               'linear-gradient(90deg, transparent 0%, var(--color-hairline-strong) 50%, transparent 100%)',
           }}
         />
 
-        {/* ── CTA Section ── */}
-        <div className="flex flex-col items-center gap-4 w-full">
-          <p
-            className="text-xs text-center"
-            style={{ color: 'var(--color-muted)', lineHeight: 1.6 }}
-          >
-            Open a project folder to begin orchestrating your AI workflow.
-            <br />
-            Fluxion runs real workflows through your local Codex CLI.
-          </p>
-
-          <div className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Button variant="primary" size="lg" onClick={handleOpenWorkspace}>
-              <FolderOpen size={16} />
-              Open Project Folder
-            </Button>
-          </div>
-        </div>
-
-        {/* ── Codex readiness ── */}
         <div
-          className="w-full rounded-lg px-3 py-3"
+          className="w-full rounded-lg px-4 py-4"
           style={{
             background: 'var(--color-surface-card)',
             border: '1px solid var(--color-hairline)',
           }}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              {codexReadiness.tone === 'ready' ? (
-                <CheckCircle2 size={14} style={{ color: readinessTone }} />
-              ) : (
-                <AlertTriangle size={14} style={{ color: readinessTone }} />
-              )}
-              <span
-                className="truncate text-xs font-semibold"
-                style={{ color: 'var(--color-ink)' }}
-              >
-                Codex CLI
-              </span>
-            </div>
-            <span
-              className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold"
-              style={{
-                color: readinessTone,
-                background: 'var(--color-canvas)',
-                border: '1px solid var(--color-hairline)',
-              }}
-            >
-              {isProviderCapabilitiesLoading ? 'Checking...' : codexReadiness.label}
-            </span>
-          </div>
-          <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-            {codexReadiness.detail}
+          <p
+            className="text-center text-[11px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            Build AI workflows in 3 steps
           </p>
-          {codexReadiness.blocking && (
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {ONBOARDING_STEPS.map((step, index) => (
+              <div
+                key={step}
+                className="flex min-w-0 items-center gap-2 sm:flex-col sm:text-center"
+              >
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold"
+                  style={{
+                    color: 'var(--color-primary)',
+                    background: 'var(--color-canvas)',
+                    border: '1px solid var(--color-hairline)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <span
+                  className="min-w-0 text-xs font-medium"
+                  style={{ color: 'var(--color-body-strong)' }}
+                >
+                  {step}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex w-full flex-col items-center gap-4">
+          <p
+            className="max-w-lg text-center text-xs"
+            style={{ color: 'var(--color-muted)', lineHeight: 1.6 }}
+          >
+            Open a project folder so Fluxion can read context, save workflow files, and
+            write agent output locally.
+          </p>
+
+          <Button variant="primary" size="lg" onClick={handleOpenWorkspace}>
+            <FolderOpen size={16} />
+            Open Project Folder
+          </Button>
+
+          <p
+            className="text-[11px]"
+            style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+          >
+            You can also drop a project folder here.
+          </p>
+        </div>
+
+        {shouldShowReadinessCard ? (
+          <div
+            className="w-full rounded-lg px-4 py-3"
+            style={{
+              background: 'var(--color-surface-card)',
+              border: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+                style={{
+                  background: 'var(--color-canvas)',
+                  border: '1px solid var(--color-hairline)',
+                  color: readinessTone,
+                }}
+              >
+                <AlertTriangle size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                    {readinessCardTitle}
+                  </h2>
+                  <StatusChip
+                    tone={readinessChipTone}
+                    label={codexReadiness.label}
+                    className="shrink-0"
+                  />
+                </div>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                  {codexReadiness.detail}
+                </p>
+              </div>
+            </div>
+
             <div
               className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-2"
               style={{
@@ -179,15 +243,18 @@ export const WelcomeScreen: React.FC = () => {
                 Refresh
               </Button>
             </div>
-          )}
-        </div>
-
-        <p
-          className="text-[11px] font-mono"
-          style={{ color: 'var(--color-muted-soft)' }}
-        >
-          or drag a folder onto this window
-        </p>
+          </div>
+        ) : (
+          <Tooltip content={codexReadiness.detail}>
+            <div className="flex items-center justify-center">
+              <StatusChip
+                tone={readinessChipTone}
+                label={compactReadinessLabel}
+                animate={isProviderCapabilitiesLoading}
+              />
+            </div>
+          </Tooltip>
+        )}
       </div>
 
       <GlobalSettingsDialog
