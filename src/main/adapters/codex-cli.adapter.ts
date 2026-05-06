@@ -94,6 +94,7 @@ export class CodexCliAdapter extends BaseAdapter {
             output: runnerResult.output,
             error: abortReason ? buildAbortMessage(abortReason) : runnerResult.error,
             exitCode: runnerResult.exitCode,
+            runnerSessionId: runnerResult.runnerSessionId,
             abortReason,
           };
           break;

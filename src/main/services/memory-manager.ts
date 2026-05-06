@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import matter from 'gray-matter';
 import { NodeId } from '../../shared/workflow.types';
-import { FrontmatterMetadata } from '../../shared/memory.types';
+import { SaveNodeOutputParams } from '../../shared/memory.types';
 
 export class MemoryManager {
   private static instance: MemoryManager;
@@ -71,11 +71,9 @@ export class MemoryManager {
           const nodePath = path.join(memoryDir, 'short-term', workflowId, `${nodeId}.md`);
           const nodeContent = await fs.readFile(nodePath, 'utf-8');
           const parsedNode = matter(nodeContent);
-          const provider = typeof parsedNode.data.provider === 'string' ? parsedNode.data.provider : 'Unknown';
-          const model = typeof parsedNode.data.model === 'string' ? parsedNode.data.model : '';
-          const sourceLabel = model ? `${provider} / ${model}` : provider;
+          const source = this.getNodeSourceLabel(parsedNode.data);
 
-          context += `--- Output from Node ${nodeId} (${sourceLabel}) ---\n`;
+          context += `--- Output from Node ${nodeId} (${source}) ---\n`;
           context += `${parsedNode.content}\n\n`;
         } catch (e) {
           console.warn(`Could not read short-term context for node ${nodeId}`, e);
@@ -100,27 +98,48 @@ export class MemoryManager {
   public async saveNodeOutput(
     workspacePath: string,
     workflowId: string,
-    nodeId: NodeId,
-    provider: FrontmatterMetadata['provider'],
-    model: FrontmatterMetadata['model'],
-    content: string,
-    status: FrontmatterMetadata['status'] = 'completed'
-  ): Promise<void> {
+    params: SaveNodeOutputParams
+  ): Promise<string> {
     const memoryDir = path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId);
-    
+
     // Ensure directory exists
     await fs.mkdir(memoryDir, { recursive: true });
 
-    const mdContent = matter.stringify(content, {
-      schemaVersion: '1.0',
-      nodeId,
-      provider,
-      model,
-      timestamp: Date.now(),
-      status
-    });
+    const frontmatter: Record<string, unknown> = {
+      schemaVersion: '2.0',
+      nodeId: params.nodeId,
+      runId: params.runId,
+      runner: params.runner,
+      model: params.model,
+      status: params.status,
+      startedAt: params.startedAt,
+      completedAt: params.completedAt,
+    };
 
-    await fs.writeFile(path.join(memoryDir, `${nodeId}.md`), mdContent, 'utf-8');
+    if (params.exitCode !== undefined) {
+      frontmatter.exitCode = params.exitCode;
+    }
+    if (params.runnerSessionId !== undefined) {
+      frontmatter.runnerSessionId = params.runnerSessionId;
+    }
+    if (params.provider !== undefined) {
+      frontmatter.provider = params.provider;
+    }
+
+    const mdContent = matter.stringify(params.content, frontmatter);
+
+    const outputPath = path.join(memoryDir, `${params.nodeId}.md`);
+    await fs.writeFile(outputPath, mdContent, 'utf-8');
+    return outputPath;
+  }
+
+  private getNodeSourceLabel(frontmatter: Record<string, unknown>): string {
+    const runner = typeof frontmatter.runner === 'string' ? frontmatter.runner : '';
+    const provider = typeof frontmatter.provider === 'string' ? frontmatter.provider : '';
+    const model = typeof frontmatter.model === 'string' ? frontmatter.model : '';
+    const owner = runner || provider || 'Unknown';
+
+    return model ? `${owner} / ${model}` : owner;
   }
 }
 

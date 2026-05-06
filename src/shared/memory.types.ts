@@ -1,4 +1,4 @@
-import { ProviderType, ModelId, NodeId } from './workflow.types';
+import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types';
 
 // ─── Memory Tier ──────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ export enum MemoryTier {
  * schemaVersion allows future Fluxion releases to safely parse old .md files
  * without crashing — parse logic can branch on version number.
  */
-export interface FrontmatterMetadata {
+export interface FrontmatterMetadataV1 {
   /** Version of this Frontmatter schema. Increment only on breaking changes. */
   schemaVersion: '1.0';
   nodeId: NodeId;
@@ -40,6 +40,23 @@ export interface FrontmatterMetadata {
   modelName?: string;
 }
 
+export interface FrontmatterMetadataV2 {
+  schemaVersion: '2.0';
+  nodeId: NodeId;
+  runId: string;
+  runner: RunnerId | string;
+  model: ModelId;
+  status: 'completed';
+  startedAt: string;
+  completedAt: string;
+  exitCode?: number;
+  runnerSessionId?: string;
+  /** Transitional field retained for older readers during migration. */
+  provider?: ProviderType;
+}
+
+export type FrontmatterMetadata = FrontmatterMetadataV1 | FrontmatterMetadataV2;
+
 // ─── Memory Records ──────────────────────────────────────────────────────────
 
 /**
@@ -49,6 +66,20 @@ export interface FrontmatterMetadata {
 export interface NodeMemoryOutput {
   meta: FrontmatterMetadata;
   /** Raw markdown content (the body below the frontmatter block). */
+  content: string;
+}
+
+export interface SaveNodeOutputParams {
+  runId: string;
+  nodeId: NodeId;
+  runner: RunnerId | string;
+  model: ModelId;
+  status: 'completed';
+  startedAt: string;
+  completedAt: string;
+  exitCode?: number;
+  runnerSessionId?: string;
+  provider?: ProviderType;
   content: string;
 }
 

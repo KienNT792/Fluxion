@@ -57,5 +57,7 @@ export interface AgentResult {
   outputFilePath?: string;
   error?: string;
   exitCode?: number;
+  /** Runner-native session identifier, reserved for future resume support. */
+  runnerSessionId?: string;
   abortReason?: AbortReason;
 }
