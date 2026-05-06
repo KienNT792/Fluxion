@@ -12,7 +12,12 @@ import {
   getOpenAIModelPreset,
   isOpenAIReasoningModel,
 } from '@shared';
-import { retryWorkflowFromNode } from '../../lib/workflow-session';
+import {
+  approveReviewNode,
+  rejectReviewNode,
+  rerunReviewNode,
+  retryWorkflowFromNode,
+} from '../../lib/workflow-session';
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
@@ -54,6 +59,7 @@ const nodeDataSchema = z.object({
   label: z.string().optional(),
   prompt: z.string(),
   systemInstruction: z.string().optional(),
+  humanReview: z.boolean().optional(),
   maxTokens: z.preprocess(coerceOptionalPositiveInteger, z.number().optional()),
   temperature: z.preprocess(
     (value) => coerceNumber(value, 0.7),
@@ -189,6 +195,7 @@ export const PropertiesPanel: React.FC = () => {
         typeof selectedNode.data.systemInstruction === 'string'
           ? selectedNode.data.systemInstruction
           : '',
+      humanReview: Boolean(selectedNode.data.humanReview),
       maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens) ?? 2048,
       temperature: coerceNumber(selectedNode.data.temperature, 0.7),
       reasoningLevel: selectedNode.data.reasoningLevel,
@@ -442,6 +449,32 @@ export const PropertiesPanel: React.FC = () => {
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
 
         <Section title="Parameters">
+          <div>
+            <label style={LABEL_STYLE}>Human Review Checkpoint</label>
+            <label
+              className="flex items-center gap-2 rounded-md px-3 py-2"
+              style={{
+                border: '1px solid var(--color-hairline)',
+                background: 'var(--color-surface-card)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(localData.humanReview)}
+                onChange={(event) =>
+                  setLocalData((prev) => ({
+                    ...prev,
+                    humanReview: event.target.checked,
+                  }))
+                }
+              />
+              <span className="text-xs" style={{ color: 'var(--color-ink)' }}>
+                Pause after this node and require manual approval
+              </span>
+            </label>
+          </div>
+
           {isReasoningModel ? (
             <div>
               <label style={{ ...LABEL_STYLE, color: 'var(--color-timeline-done)' }}>
@@ -597,19 +630,22 @@ export const PropertiesPanel: React.FC = () => {
             <button
               type="button"
               onClick={() => retryWorkflowFromNode(selectedNodeId)}
-              disabled={workflowStatus === 'running'}
+              disabled={workflowStatus === 'running' || workflowStatus === 'paused'}
               className="flex w-full items-center justify-center gap-2 rounded-md py-2 transition-colors"
               style={{
                 background:
-                  workflowStatus === 'running'
+                  workflowStatus === 'running' || workflowStatus === 'paused'
                     ? 'var(--color-canvas-soft)'
                     : 'var(--color-surface-card)',
                 border: '1px solid var(--color-hairline)',
                 color:
-                  workflowStatus === 'running'
+                  workflowStatus === 'running' || workflowStatus === 'paused'
                     ? 'var(--color-muted-soft)'
                     : 'var(--color-primary)',
-                cursor: workflowStatus === 'running' ? 'not-allowed' : 'pointer',
+                cursor:
+                  workflowStatus === 'running' || workflowStatus === 'paused'
+                    ? 'not-allowed'
+                    : 'pointer',
                 fontSize: '12px',
                 fontWeight: 600,
               }}
@@ -618,6 +654,47 @@ export const PropertiesPanel: React.FC = () => {
               <RotateCcw size={13} />
               Retry From This Node
             </button>
+          )}
+
+          {nodeStatus === 'paused' && (
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => approveReviewNode(selectedNodeId)}
+                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
+                style={{
+                  background: 'var(--color-timeline-grep)',
+                  color: 'var(--color-ink)',
+                  border: '1px solid var(--color-hairline)',
+                }}
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => rerunReviewNode(selectedNodeId)}
+                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
+                style={{
+                  background: 'var(--color-surface-card)',
+                  color: 'var(--color-primary)',
+                  border: '1px solid var(--color-hairline)',
+                }}
+              >
+                Rerun
+              </button>
+              <button
+                type="button"
+                onClick={() => rejectReviewNode(selectedNodeId)}
+                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
+                style={{
+                  background: 'var(--color-surface-card)',
+                  color: 'var(--color-semantic-error)',
+                  border: '1px solid var(--color-hairline)',
+                }}
+              >
+                Reject
+              </button>
+            </div>
           )}
         </Section>
       </div>

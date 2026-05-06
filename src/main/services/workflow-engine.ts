@@ -7,13 +7,22 @@ import {
   NodeStatus,
   SaveNodeOutputParams,
   Workflow,
+  WorkflowReviewActionPayload,
   WorkflowNode,
 } from '@shared';
 import { CodexCliAdapter } from '../adapters/codex-cli.adapter';
 import { IAgentAdapter } from '../adapters/base.adapter';
-import { artifactGateService, ArtifactGateService, ArtifactSnapshot } from './artifact-gate-service';
+import {
+  artifactGateService,
+  ArtifactGateService,
+  ArtifactSnapshot,
+} from './artifact-gate-service';
 import { memoryManager, MemoryManager } from './memory-manager';
-import { InitializeRunOptions, runStateStore, RunStateStore } from './run-state-store';
+import {
+  InitializeRunOptions,
+  runStateStore,
+  RunStateStore,
+} from './run-state-store';
 
 export interface WorkflowEventSender {
   send(channel: string, payload: unknown): void;
@@ -21,16 +30,54 @@ export interface WorkflowEventSender {
 
 interface WorkflowEngineDependencies {
   adapter?: IAgentAdapter;
-  memoryManager?: Pick<MemoryManager, 'initWorkspace' | 'compileContext' | 'saveNodeOutput'>;
+  memoryManager?: Pick<
+    MemoryManager,
+    | 'initWorkspace'
+    | 'compileContext'
+    | 'saveNodeOutput'
+    | 'getNodeOutputPath'
+    | 'deleteNodeOutput'
+  >;
   runStateStore?: Pick<
     RunStateStore,
-    'initializeRun' | 'markNodeRunning' | 'markNodeCompleted' | 'markNodeFailed' | 'markNodeAborted' | 'finalizeWorkflow'
+    | 'initializeRun'
+    | 'markNodeRunning'
+    | 'markNodeCompleted'
+    | 'markNodeAwaitingReview'
+    | 'markReviewApproved'
+    | 'markReviewRejected'
+    | 'resetNodeForRerun'
+    | 'markNodeFailed'
+    | 'markNodeAborted'
+    | 'finalizeWorkflow'
   >;
   artifactGateService?: Pick<
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >;
 }
+
+interface WorkflowRuntime {
+  workflow: Workflow;
+  workspacePath: string;
+  sender: WorkflowEventSender;
+  runId: string;
+  startTime: number;
+  executionNodeIds: Set<NodeId>;
+  nodes: Map<NodeId, WorkflowNode>;
+  graph: Map<NodeId, NodeId[]>;
+  inDegree: Map<NodeId, number>;
+  readyQueue: NodeId[];
+  awaitingReviewNodeIds: Set<NodeId>;
+}
+
+type HaltReason = 'aborted' | 'error' | 'rejected' | null;
+
+type NodeExecutionResult =
+  | { nodeId: NodeId; kind: 'completed' }
+  | { nodeId: NodeId; kind: 'awaiting_review' }
+  | { nodeId: NodeId; kind: 'failed' }
+  | { nodeId: NodeId; kind: 'aborted' };
 
 function buildPrompt(node: WorkflowNode, context: string): string {
   const promptSections = [context.trim()];
@@ -45,29 +92,62 @@ function buildPrompt(node: WorkflowNode, context: string): string {
   return promptSections.filter((section) => section.length > 0).join('\n\n');
 }
 
+function createWorkflowCompletedPayload(
+  workflowId: string,
+  startTime: number,
+  status: 'completed' | 'failed' | 'aborted' | 'rejected',
+  error?: string
+): {
+  workflowId: string;
+  success: boolean;
+  totalTimeMs: number;
+  aborted?: boolean;
+  error?: string;
+} {
+  return {
+    workflowId,
+    success: status === 'completed',
+    totalTimeMs: Date.now() - startTime,
+    aborted: status === 'aborted' ? true : undefined,
+    error: status === 'completed' ? undefined : error,
+  };
+}
+
 export class WorkflowEngine {
   private static instance: WorkflowEngine;
 
   private isHalted = false;
-  private currentWorkflowId: string | null = null;
-  private currentRunId: string | null = null;
-  private currentWorkspacePath: string | null = null;
-  private activeNodes: Set<NodeId> = new Set();
-  private haltReason: 'aborted' | 'error' | null = null;
+  private haltReason: HaltReason = null;
   private haltError: string | null = null;
+  private readonly activeNodes: Set<NodeId> = new Set();
   private readonly adapter: IAgentAdapter;
   private readonly memoryManager: Pick<
     MemoryManager,
-    'initWorkspace' | 'compileContext' | 'saveNodeOutput'
+    | 'initWorkspace'
+    | 'compileContext'
+    | 'saveNodeOutput'
+    | 'getNodeOutputPath'
+    | 'deleteNodeOutput'
   >;
   private readonly runStateStore: Pick<
     RunStateStore,
-    'initializeRun' | 'markNodeRunning' | 'markNodeCompleted' | 'markNodeFailed' | 'markNodeAborted' | 'finalizeWorkflow'
+    | 'initializeRun'
+    | 'markNodeRunning'
+    | 'markNodeCompleted'
+    | 'markNodeAwaitingReview'
+    | 'markReviewApproved'
+    | 'markReviewRejected'
+    | 'resetNodeForRerun'
+    | 'markNodeFailed'
+    | 'markNodeAborted'
+    | 'finalizeWorkflow'
   >;
   private readonly artifactGateService: Pick<
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >;
+  private currentRuntime: WorkflowRuntime | null = null;
+  private continuationPromise: Promise<void> | null = null;
 
   private constructor(dependencies: WorkflowEngineDependencies = {}) {
     this.adapter = dependencies.adapter ?? new CodexCliAdapter();
@@ -87,28 +167,20 @@ export class WorkflowEngine {
     return new WorkflowEngine(dependencies);
   }
 
-  /**
-   * Starts executing a workflow DAG.
-   */
   public async start(
     workflow: Workflow,
     workspacePath: string,
     sender: WorkflowEventSender,
     resumeFromNodeId?: NodeId
   ): Promise<void> {
-    if (this.currentWorkflowId) {
+    if (this.currentRuntime) {
       throw new Error('A workflow is already running.');
     }
 
-    this.isHalted = false;
-    this.currentWorkflowId = workflow.id;
-    this.currentRunId = randomUUID();
-    this.currentWorkspacePath = workspacePath;
-    this.haltReason = null;
-    this.haltError = null;
+    this.resetRuntimeFlags();
+    const runId = randomUUID();
     const startTime = Date.now();
     const executionNodeIds = this.getExecutionNodeIds(workflow, resumeFromNodeId);
-    let runInitialized = false;
 
     try {
       await this.memoryManager.initWorkspace(workspacePath);
@@ -116,83 +188,140 @@ export class WorkflowEngine {
         workspacePath,
         workflow,
         executionNodeIds,
-        runId: this.currentRunId,
+        runId,
       } satisfies InitializeRunOptions);
-      runInitialized = true;
 
-      await this.executeDag(workflow, workspacePath, sender, executionNodeIds);
-      await this.runStateStore.finalizeWorkflow(
+      this.currentRuntime = this.createRuntime(
+        workflow,
         workspacePath,
-        this.currentRunId,
-        this.getFinalRunStatus()
+        sender,
+        runId,
+        startTime,
+        executionNodeIds
       );
 
-      if (!this.isHalted) {
-        sender.send(IpcChannels.WORKFLOW_COMPLETED, {
-          workflowId: workflow.id,
-          success: true,
-          totalTimeMs: Date.now() - startTime,
-        });
-      } else {
-        sender.send(IpcChannels.WORKFLOW_COMPLETED, {
-          workflowId: workflow.id,
-          success: false,
-          totalTimeMs: Date.now() - startTime,
-          aborted: this.haltReason === 'aborted',
-          error: this.haltError ?? undefined,
-        });
-      }
-    } catch (err) {
+      await this.continueCurrentRuntime();
+    } catch (error) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown workflow execution error';
-      console.error('Workflow execution failed:', err);
-      this.markWorkflowFailed(errorMessage);
+        error instanceof Error ? error.message : 'Unknown workflow execution error';
+      console.error('Workflow execution failed:', error);
 
-      if (runInitialized && this.currentRunId && this.currentWorkspacePath) {
-        await this.runStateStore.finalizeWorkflow(
-          this.currentWorkspacePath,
-          this.currentRunId,
-          this.getFinalRunStatus()
-        );
+      if (this.currentRuntime?.runId === runId) {
+        this.markWorkflowFailed(errorMessage);
+        await this.finalizeRuntime(this.getFinalRunStatus(), errorMessage);
+        return;
       }
 
-      sender.send(IpcChannels.WORKFLOW_COMPLETED, {
-        workflowId: workflow.id,
-        success: false,
-        totalTimeMs: Date.now() - startTime,
-        aborted: this.haltReason === 'aborted',
-        error: errorMessage,
-      });
-    } finally {
-      this.currentWorkflowId = null;
-      this.currentRunId = null;
-      this.currentWorkspacePath = null;
-      this.activeNodes.clear();
-      this.haltReason = null;
-      this.haltError = null;
+      sender.send(
+        IpcChannels.WORKFLOW_COMPLETED,
+        createWorkflowCompletedPayload(workflow.id, startTime, 'failed', errorMessage)
+      );
     }
   }
 
-  /**
-   * Aborts the entire workflow or a specific node.
-   */
+  public async approveReview(payload: WorkflowReviewActionPayload): Promise<void> {
+    const runtime = this.requireReviewRuntime(payload);
+    if (!runtime.awaitingReviewNodeIds.has(payload.nodeId)) {
+      throw new Error(`Node ${payload.nodeId} is not awaiting review.`);
+    }
+
+    await this.runStateStore.markReviewApproved(runtime.workspacePath, runtime.runId, payload.nodeId, {
+      comment: payload.comment,
+    });
+    runtime.awaitingReviewNodeIds.delete(payload.nodeId);
+    this.sendNodeStatus(runtime.sender, payload.nodeId, 'completed');
+    this.unlockNeighbors(runtime, payload.nodeId);
+
+    if (runtime.awaitingReviewNodeIds.size === 0 && !this.isHalted) {
+      await this.continueCurrentRuntime();
+    }
+  }
+
+  public async rejectReview(payload: WorkflowReviewActionPayload): Promise<void> {
+    const runtime = this.requireReviewRuntime(payload);
+    if (!runtime.awaitingReviewNodeIds.has(payload.nodeId)) {
+      throw new Error(`Node ${payload.nodeId} is not awaiting review.`);
+    }
+
+    const errorMessage = payload.comment?.trim()
+      ? `Review rejected for node ${payload.nodeId}: ${payload.comment.trim()}`
+      : `Review rejected for node ${payload.nodeId}.`;
+
+    await this.runStateStore.markReviewRejected(runtime.workspacePath, runtime.runId, payload.nodeId, {
+      comment: payload.comment,
+    });
+    runtime.awaitingReviewNodeIds.delete(payload.nodeId);
+    this.sendNodeStatus(runtime.sender, payload.nodeId, 'error', errorMessage);
+    this.isHalted = true;
+    this.haltReason = 'rejected';
+    this.haltError = errorMessage;
+    await this.finalizeRuntime('rejected', errorMessage);
+  }
+
+  public async rerunReviewNode(payload: WorkflowReviewActionPayload): Promise<void> {
+    const runtime = this.requireReviewRuntime(payload);
+    if (!runtime.awaitingReviewNodeIds.has(payload.nodeId)) {
+      throw new Error(`Node ${payload.nodeId} is not awaiting review.`);
+    }
+
+    const node = runtime.nodes.get(payload.nodeId);
+    if (!node) {
+      throw new Error(`Node ${payload.nodeId} is not part of the active workflow run.`);
+    }
+
+    runtime.awaitingReviewNodeIds.delete(payload.nodeId);
+    await this.runStateStore.resetNodeForRerun(runtime.workspacePath, runtime.runId, payload.nodeId);
+    await this.memoryManager.deleteNodeOutput(runtime.workspacePath, runtime.workflow.id, payload.nodeId);
+    runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
+      nodeId: payload.nodeId,
+      status: 'idle',
+      outputFilePath: undefined,
+    });
+    this.sendNodeStatus(runtime.sender, payload.nodeId, 'idle');
+
+    const previousNodeIds = this.getPreviousNodeIds(runtime, payload.nodeId);
+    const rerunResult = await this.runNode(node, runtime, previousNodeIds);
+    await this.handleNodeResult(runtime, rerunResult);
+
+    if (this.isHalted) {
+      await this.finalizeRuntime(this.getFinalRunStatus(), this.haltError ?? undefined);
+      return;
+    }
+
+    if (runtime.awaitingReviewNodeIds.size === 0 && runtime.readyQueue.length > 0) {
+      await this.continueCurrentRuntime();
+      return;
+    }
+
+    if (runtime.awaitingReviewNodeIds.size === 0) {
+      await this.finalizeRuntime('completed');
+    }
+  }
+
   public async abort(
     nodeId?: NodeId,
     reason: AbortReason = AbortReason.USER_REQUESTED
   ): Promise<void> {
+    if (!this.currentRuntime) {
+      return;
+    }
+
     if (nodeId) {
       this.isHalted = true;
       this.haltReason = 'aborted';
       this.haltError = `Execution stopped for node ${nodeId}.`;
       await this.abortNode(nodeId, reason);
-      return;
+    } else {
+      this.isHalted = true;
+      this.haltReason = 'aborted';
+      this.haltError = 'Workflow aborted by user.';
+      const promises = Array.from(this.activeNodes).map((id) => this.abortNode(id, reason));
+      await Promise.all(promises);
     }
 
-    this.isHalted = true;
-    this.haltReason = 'aborted';
-    this.haltError = 'Workflow aborted by user.';
-    const promises = Array.from(this.activeNodes).map((id) => this.abortNode(id, reason));
-    await Promise.all(promises);
+    if (this.currentRuntime.awaitingReviewNodeIds.size > 0 && this.activeNodes.size === 0) {
+      await this.finalizeRuntime('aborted', this.haltError ?? 'Workflow aborted by user.');
+    }
   }
 
   private async abortNode(nodeId: NodeId, reason: AbortReason): Promise<void> {
@@ -221,9 +350,13 @@ export class WorkflowEngine {
     this.haltError = error;
   }
 
-  private getFinalRunStatus(): 'completed' | 'failed' | 'aborted' {
+  private getFinalRunStatus(): 'completed' | 'failed' | 'aborted' | 'rejected' {
     if (this.haltReason === 'aborted') {
       return 'aborted';
+    }
+
+    if (this.haltReason === 'rejected') {
+      return 'rejected';
     }
 
     if (this.isHalted) {
@@ -265,16 +398,14 @@ export class WorkflowEngine {
     return selectedNodeIds;
   }
 
-  /**
-   * Executes the DAG using a topological approach.
-   * Finds nodes with indegree=0, runs them, then removes them from the graph.
-   */
-  private async executeDag(
+  private createRuntime(
     workflow: Workflow,
     workspacePath: string,
     sender: WorkflowEventSender,
+    runId: string,
+    startTime: number,
     executionNodeIds: Set<NodeId>
-  ): Promise<void> {
+  ): WorkflowRuntime {
     const nodes = new Map<NodeId, WorkflowNode>();
     workflow.nodes
       .filter((node) => executionNodeIds.has(node.id))
@@ -297,100 +428,150 @@ export class WorkflowEngine {
       }
     });
 
-    const queue: NodeId[] = [];
+    const readyQueue: NodeId[] = [];
     inDegree.forEach((degree, id) => {
       if (degree === 0) {
-        queue.push(id);
+        readyQueue.push(id);
       }
     });
 
-    while (queue.length > 0 && !this.isHalted) {
-      const currentBatch = [...queue];
-      queue.length = 0;
+    return {
+      workflow,
+      workspacePath,
+      sender,
+      runId,
+      startTime,
+      executionNodeIds,
+      nodes,
+      graph,
+      inDegree,
+      readyQueue,
+      awaitingReviewNodeIds: new Set<NodeId>(),
+    };
+  }
 
-      const batchPromises = currentBatch.map(async (nodeId) => {
-        if (this.isHalted) {
-          return;
-        }
+  private async continueCurrentRuntime(): Promise<void> {
+    if (!this.currentRuntime) {
+      return;
+    }
 
-        const node = nodes.get(nodeId);
-        if (!node) {
-          return;
-        }
+    if (this.continuationPromise) {
+      await this.continuationPromise;
+      return;
+    }
 
-        const previousNodes = workflow.edges
-          .filter((edge) => edge.target === nodeId && executionNodeIds.has(edge.source))
-          .map((edge) => edge.source);
+    const continuation = this.performContinuation(this.currentRuntime).finally(() => {
+      if (this.continuationPromise === continuation) {
+        this.continuationPromise = null;
+      }
+    });
 
-        const nodeCompleted = await this.runNode(node, workspacePath, previousNodes, sender);
-        if (nodeCompleted && !this.isHalted) {
-          const neighbors = graph.get(nodeId) ?? [];
-          for (const neighbor of neighbors) {
-            const nextDegree = (inDegree.get(neighbor) ?? 0) - 1;
-            inDegree.set(neighbor, nextDegree);
-            if (nextDegree === 0) {
-              queue.push(neighbor);
-            }
+    this.continuationPromise = continuation;
+    await continuation;
+  }
+
+  private async performContinuation(runtime: WorkflowRuntime): Promise<void> {
+    while (runtime.readyQueue.length > 0 && !this.isHalted) {
+      const currentBatch = [...runtime.readyQueue];
+      runtime.readyQueue = [];
+
+      const batchResults = await Promise.all(
+        currentBatch.map(async (nodeId) => {
+          const node = runtime.nodes.get(nodeId);
+          if (!node) {
+            throw new Error(`Node ${nodeId} is missing from the runtime graph.`);
           }
-        }
-      });
 
-      await Promise.all(batchPromises);
+          const previousNodeIds = this.getPreviousNodeIds(runtime, nodeId);
+          return this.runNode(node, runtime, previousNodeIds);
+        })
+      );
+
+      for (const result of batchResults) {
+        await this.handleNodeResult(runtime, result);
+      }
+
+      if (this.isHalted) {
+        await this.finalizeRuntime(this.getFinalRunStatus(), this.haltError ?? undefined);
+        return;
+      }
+
+      if (runtime.awaitingReviewNodeIds.size > 0) {
+        return;
+      }
+    }
+
+    if (this.isHalted) {
+      await this.finalizeRuntime(this.getFinalRunStatus(), this.haltError ?? undefined);
+      return;
+    }
+
+    if (runtime.awaitingReviewNodeIds.size > 0) {
+      return;
+    }
+
+    await this.finalizeRuntime('completed');
+  }
+
+  private async handleNodeResult(
+    runtime: WorkflowRuntime,
+    result: NodeExecutionResult
+  ): Promise<void> {
+    if (result.kind === 'completed') {
+      this.unlockNeighbors(runtime, result.nodeId);
+      return;
+    }
+
+    if (result.kind === 'awaiting_review') {
+      runtime.awaitingReviewNodeIds.add(result.nodeId);
     }
   }
 
   private async runNode(
     node: WorkflowNode,
-    workspacePath: string,
-    previousNodeIds: NodeId[],
-    sender: WorkflowEventSender
-  ): Promise<boolean> {
-    const workflowId = this.currentWorkflowId;
-    const runId = this.currentRunId;
-    if (!workflowId || !runId) {
-      throw new Error('Workflow runtime context is not initialized.');
-    }
-
+    runtime: WorkflowRuntime,
+    previousNodeIds: NodeId[]
+  ): Promise<NodeExecutionResult> {
     try {
-      await this.ensureRequiredArtifacts(workspacePath, node);
+      await this.ensureRequiredArtifacts(runtime.workspacePath, node);
       const produceSnapshots = await this.artifactGateService.snapshotProduces(
-        workspacePath,
+        runtime.workspacePath,
         node.data.produces ?? []
       );
       const runningState = await this.runStateStore.markNodeRunning(
-        workspacePath,
-        runId,
+        runtime.workspacePath,
+        runtime.runId,
         node.id
       );
       const startedAt = runningState.nodes[node.id]?.startedAt ?? new Date().toISOString();
 
       this.activeNodes.add(node.id);
-      this.sendNodeStatus(sender, node.id, 'running');
+      this.sendNodeStatus(runtime.sender, node.id, 'running');
 
       const context = await this.memoryManager.compileContext(
-        workspacePath,
-        workflowId,
+        runtime.workspacePath,
+        runtime.workflow.id,
         previousNodeIds
       );
-      sender.send(IpcChannels.MEMORY_CONTEXT_READY, {
+      runtime.sender.send(IpcChannels.MEMORY_CONTEXT_READY, {
         nodeId: node.id,
         compiledContext: context,
       });
 
       const fullPrompt = buildPrompt(node, context);
-      const result = await this.executeNode(node, fullPrompt, workspacePath, sender);
+      const result = await this.executeNode(node, fullPrompt, runtime);
 
-      sender.send(IpcChannels.TERMINAL_EXIT, {
+      runtime.sender.send(IpcChannels.TERMINAL_EXIT, {
         nodeId: node.id,
         code: result.exitCode ?? null,
       });
 
       if (result.abortReason) {
         const errorMessage = result.error ?? 'Workflow aborted.';
-        this.sendNodeStatus(sender, node.id, 'stopping', errorMessage, result.exitCode);
+        this.sendNodeStatus(runtime.sender, node.id, 'stopping', errorMessage, result.exitCode);
         await this.runStateStore.markNodeAborted(
-          workspacePath,
-          runId,
+          runtime.workspacePath,
+          runtime.runId,
           node.id,
           errorMessage,
           result.exitCode
@@ -400,82 +581,103 @@ export class WorkflowEngine {
           this.haltReason = 'aborted';
           this.haltError = errorMessage;
         }
-        return false;
+        return { nodeId: node.id, kind: 'aborted' };
       }
 
       if (!result.success) {
         const errorMessage =
           result.error ?? `Agent exited with code ${result.exitCode ?? 'unknown'}.`;
-        sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage });
-        this.sendNodeStatus(sender, node.id, 'error', errorMessage, result.exitCode);
-        await this.runStateStore.markNodeFailed(workspacePath, runId, node.id, {
+        runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage });
+        this.sendNodeStatus(runtime.sender, node.id, 'error', errorMessage, result.exitCode);
+        await this.runStateStore.markNodeFailed(runtime.workspacePath, runtime.runId, node.id, {
           error: errorMessage,
           exitCode: result.exitCode,
         });
         this.markWorkflowFailed(errorMessage);
         await this.haltActiveNodes(node.id);
-        return false;
+        return { nodeId: node.id, kind: 'failed' };
       }
 
       if (this.isHalted) {
         const errorMessage = this.haltError ?? 'Workflow halted before node completion.';
-        this.sendNodeStatus(sender, node.id, 'stopping', errorMessage, result.exitCode);
+        this.sendNodeStatus(runtime.sender, node.id, 'stopping', errorMessage, result.exitCode);
         await this.runStateStore.markNodeAborted(
-          workspacePath,
-          runId,
+          runtime.workspacePath,
+          runtime.runId,
           node.id,
           errorMessage,
           result.exitCode
         );
-        return false;
+        return { nodeId: node.id, kind: 'aborted' };
       }
 
       const producedPaths = await this.ensureProducedArtifacts(
-        workspacePath,
+        runtime.workspacePath,
         node,
         produceSnapshots
       );
       const completedAt = new Date().toISOString();
       const outputFilePath = await this.memoryManager.saveNodeOutput(
-        workspacePath,
-        workflowId,
-        this.createSaveNodeOutputParams(node, runId, startedAt, completedAt, result)
+        runtime.workspacePath,
+        runtime.workflow.id,
+        this.createSaveNodeOutputParams(node, runtime.runId, startedAt, completedAt, result)
       );
 
-      await this.runStateStore.markNodeCompleted(workspacePath, runId, node.id, {
+      if (node.data.humanReview) {
+        await this.runStateStore.markNodeAwaitingReview(runtime.workspacePath, runtime.runId, node.id, {
+          completedAt,
+          exitCode: result.exitCode,
+          runnerSessionId: result.runnerSessionId,
+          outputArtifactPaths: producedPaths,
+        });
+        runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
+          nodeId: node.id,
+          status: 'paused',
+          outputFilePath,
+        });
+        this.sendNodeStatus(runtime.sender, node.id, 'paused', undefined, result.exitCode);
+        runtime.sender.send(IpcChannels.WORKFLOW_REVIEW_REQUIRED, {
+          workflowId: runtime.workflow.id,
+          runId: runtime.runId,
+          nodeId: node.id,
+          outputFilePath,
+          status: 'awaiting_review',
+        });
+        return { nodeId: node.id, kind: 'awaiting_review' };
+      }
+
+      await this.runStateStore.markNodeCompleted(runtime.workspacePath, runtime.runId, node.id, {
         completedAt,
         exitCode: result.exitCode,
         runnerSessionId: result.runnerSessionId,
         outputArtifactPaths: producedPaths,
       });
 
-      this.sendNodeStatus(sender, node.id, 'completed', undefined, result.exitCode);
-      sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
+      this.sendNodeStatus(runtime.sender, node.id, 'completed', undefined, result.exitCode);
+      runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
         nodeId: node.id,
         status: 'completed',
         outputFilePath,
       });
 
-      return true;
-    } catch (err) {
+      return { nodeId: node.id, kind: 'completed' };
+    } catch (error) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown node execution error';
-      sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage });
-      this.sendNodeStatus(sender, node.id, 'error', errorMessage);
+        error instanceof Error ? error.message : 'Unknown node execution error';
+      runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage });
+      this.sendNodeStatus(runtime.sender, node.id, 'error', errorMessage);
 
-      if (this.currentRunId) {
-        try {
-          await this.runStateStore.markNodeFailed(workspacePath, this.currentRunId, node.id, {
-            error: errorMessage,
-          });
-        } catch {
-          // Best-effort: do not hide the original node error if persistence update also fails.
-        }
+      try {
+        await this.runStateStore.markNodeFailed(runtime.workspacePath, runtime.runId, node.id, {
+          error: errorMessage,
+        });
+      } catch {
+        // Keep the original node execution error as the primary failure signal.
       }
 
       this.markWorkflowFailed(errorMessage);
       await this.haltActiveNodes(node.id);
-      return false;
+      return { nodeId: node.id, kind: 'failed' };
     } finally {
       this.activeNodes.delete(node.id);
     }
@@ -484,8 +686,7 @@ export class WorkflowEngine {
   private async executeNode(
     node: WorkflowNode,
     fullPrompt: string,
-    workspacePath: string,
-    sender: WorkflowEventSender
+    runtime: WorkflowRuntime
   ): Promise<AgentResult> {
     const batches: Record<'stdout' | 'stderr', string[]> = {
       stdout: [],
@@ -498,7 +699,7 @@ export class WorkflowEngine {
           continue;
         }
 
-        sender.send(IpcChannels.TERMINAL_DATA_BATCH, {
+        runtime.sender.send(IpcChannels.TERMINAL_DATA_BATCH, {
           nodeId: node.id,
           batch: [...batches[sourceType]],
           sourceType,
@@ -515,7 +716,7 @@ export class WorkflowEngine {
         success: false,
         error: 'Agent execution exited without a result.',
       };
-      const iterator = this.adapter.execute(node.id, node.data, fullPrompt, workspacePath);
+      const iterator = this.adapter.execute(node.id, node.data, fullPrompt, runtime.workspacePath);
 
       while (true) {
         const next = await iterator.next();
@@ -558,9 +759,7 @@ export class WorkflowEngine {
       return;
     }
 
-    throw new Error(
-      result.error ?? `Required artifact validation failed for node ${node.id}.`
-    );
+    throw new Error(result.error ?? `Required artifact validation failed for node ${node.id}.`);
   }
 
   private async ensureProducedArtifacts(
@@ -578,9 +777,7 @@ export class WorkflowEngine {
       return result.artifactPaths;
     }
 
-    throw new Error(
-      result.error ?? `Produced artifact validation failed for node ${node.id}.`
-    );
+    throw new Error(result.error ?? `Produced artifact validation failed for node ${node.id}.`);
   }
 
   private createSaveNodeOutputParams(
@@ -603,6 +800,81 @@ export class WorkflowEngine {
       provider: node.data.provider,
       content: result.output ?? '',
     };
+  }
+
+  private unlockNeighbors(runtime: WorkflowRuntime, nodeId: NodeId): void {
+    const neighbors = runtime.graph.get(nodeId) ?? [];
+    for (const neighbor of neighbors) {
+      const nextDegree = (runtime.inDegree.get(neighbor) ?? 0) - 1;
+      runtime.inDegree.set(neighbor, nextDegree);
+      if (nextDegree === 0) {
+        runtime.readyQueue.push(neighbor);
+      }
+    }
+  }
+
+  private getPreviousNodeIds(runtime: WorkflowRuntime, nodeId: NodeId): NodeId[] {
+    return runtime.workflow.edges
+      .filter(
+        (edge) =>
+          edge.target === nodeId &&
+          runtime.executionNodeIds.has(edge.source) &&
+          runtime.executionNodeIds.has(edge.target)
+      )
+      .map((edge) => edge.source);
+  }
+
+  private requireReviewRuntime(payload: WorkflowReviewActionPayload): WorkflowRuntime {
+    if (!this.currentRuntime) {
+      throw new Error(
+        'No active workflow runtime is available. Review recovery after app restart is not implemented in P3.'
+      );
+    }
+
+    if (this.currentRuntime.workflow.id !== payload.workflowId) {
+      throw new Error(`Workflow ${payload.workflowId} is not the active runtime.`);
+    }
+
+    if (this.currentRuntime.runId !== payload.runId) {
+      throw new Error(`Run ${payload.runId} is not the active runtime.`);
+    }
+
+    if (!this.currentRuntime.executionNodeIds.has(payload.nodeId)) {
+      throw new Error(`Node ${payload.nodeId} is not part of the active workflow run.`);
+    }
+
+    return this.currentRuntime;
+  }
+
+  private async finalizeRuntime(
+    status: 'completed' | 'failed' | 'aborted' | 'rejected',
+    error?: string
+  ): Promise<void> {
+    const runtime = this.currentRuntime;
+    if (!runtime) {
+      return;
+    }
+
+    await this.runStateStore.finalizeWorkflow(runtime.workspacePath, runtime.runId, status);
+    runtime.sender.send(
+      IpcChannels.WORKFLOW_COMPLETED,
+      createWorkflowCompletedPayload(runtime.workflow.id, runtime.startTime, status, error)
+    );
+    this.cleanupRuntime(runtime.runId);
+  }
+
+  private cleanupRuntime(runId: string): void {
+    if (this.currentRuntime?.runId === runId) {
+      this.currentRuntime = null;
+    }
+    this.activeNodes.clear();
+    this.resetRuntimeFlags();
+  }
+
+  private resetRuntimeFlags(): void {
+    this.isHalted = false;
+    this.haltReason = null;
+    this.haltError = null;
   }
 }
 

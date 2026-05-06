@@ -6,6 +6,7 @@ import {
   Workflow,
   WorkflowAbortPayload,
   WorkflowCompletedPayload,
+  WorkflowReviewActionPayload,
   WorkflowRunPayload,
   WorkflowSavePayload,
   WorkflowCreatePayload,
@@ -199,6 +200,39 @@ export function registerWorkflowHandlers(): void {
         await workflowEngine.abort(payload.nodeId, payload.reason);
       } catch (error) {
         console.error('Error aborting workflow:', error);
+      }
+    }
+  );
+
+  ipcMain.on(
+    IpcChannels.WORKFLOW_REVIEW_APPROVE,
+    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
+      try {
+        await workflowEngine.approveReview(payload);
+      } catch (error) {
+        console.error('Error approving workflow review:', error);
+      }
+    }
+  );
+
+  ipcMain.on(
+    IpcChannels.WORKFLOW_REVIEW_REJECT,
+    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
+      try {
+        await workflowEngine.rejectReview(payload);
+      } catch (error) {
+        console.error('Error rejecting workflow review:', error);
+      }
+    }
+  );
+
+  ipcMain.on(
+    IpcChannels.WORKFLOW_REVIEW_RERUN,
+    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
+      try {
+        await workflowEngine.rerunReviewNode(payload);
+      } catch (error) {
+        console.error('Error rerunning review node:', error);
       }
     }
   );

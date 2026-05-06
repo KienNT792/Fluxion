@@ -10,6 +10,7 @@ import {
   IpcChannels,
   Workflow,
   WorkflowEdge,
+  WorkflowReviewActionPayload,
   WorkflowNode,
 } from '@shared';
 import { IAgentAdapter } from '../adapters/base.adapter';
@@ -140,7 +141,16 @@ async function readSingleRunState(workspacePath: string): Promise<{
   runId: string;
   status: string;
   currentNodeIds: string[];
-  nodes: Record<string, { status: string; outputArtifactPaths: string[] }>;
+  awaitingReviewNodeIds: string[];
+  nodes: Record<
+    string,
+    {
+      status: string;
+      outputArtifactPaths: string[];
+      attempts?: number;
+      reviewStatus?: string;
+    }
+  >;
 }> {
   const runsDir = join(workspacePath, '.fluxion', 'runs');
   const files = await readdir(runsDir);
@@ -149,7 +159,24 @@ async function readSingleRunState(workspacePath: string): Promise<{
     runId: string;
     status: string;
     currentNodeIds: string[];
-    nodes: Record<string, { status: string; outputArtifactPaths: string[] }>;
+    awaitingReviewNodeIds: string[];
+    nodes: Record<
+      string,
+      {
+        status: string;
+        outputArtifactPaths: string[];
+        attempts?: number;
+        reviewStatus?: string;
+      }
+    >;
+  };
+}
+
+function reviewAction(runId: string, nodeId: string): WorkflowReviewActionPayload {
+  return {
+    workflowId: 'workflow-1',
+    runId,
+    nodeId,
   };
 }
 
@@ -394,5 +421,136 @@ describe('WorkflowEngine', () => {
     const runState = await readSingleRunState(workspacePath);
     expect(runState.nodes['node-a']?.status).toBe('completed');
     expect(runState.nodes['node-a']?.outputArtifactPaths).toEqual(['docs/output.md']);
+  });
+
+  it('pauses at a human review checkpoint and resumes downstream after approval', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Review this output',
+      },
+      'node-b': {
+        output: 'Downstream output',
+      },
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow(
+      [
+        createNode('node-a', { humanReview: true }),
+        createNode('node-b'),
+      ],
+      [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }]
+    );
+
+    await engine.start(workflow, workspacePath, sender);
+
+    let runState = await readSingleRunState(workspacePath);
+    expect(runState.status).toBe('awaiting_review');
+    expect(runState.awaitingReviewNodeIds).toEqual(['node-a']);
+    expect(runState.nodes['node-a']?.status).toBe('awaiting_review');
+    expect(runState.nodes['node-a']?.reviewStatus).toBe('pending');
+    expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a']);
+    expect(
+      sender.events.some((event) => event.channel === IpcChannels.WORKFLOW_REVIEW_REQUIRED)
+    ).toBe(true);
+    expect(
+      sender.events.some((event) => event.channel === IpcChannels.WORKFLOW_COMPLETED)
+    ).toBe(false);
+
+    await engine.approveReview(reviewAction(runState.runId, 'node-a'));
+
+    runState = await readSingleRunState(workspacePath);
+    expect(runState.status).toBe('completed');
+    expect(runState.awaitingReviewNodeIds).toEqual([]);
+    expect(runState.nodes['node-a']?.reviewStatus).toBe('approved');
+    expect(runState.nodes['node-b']?.status).toBe('completed');
+    expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
+  });
+
+  it('rejects a review checkpoint and finalizes the workflow as rejected', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Needs manual review',
+      },
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow([createNode('node-a', { humanReview: true })]);
+
+    await engine.start(workflow, workspacePath, sender);
+    const runState = await readSingleRunState(workspacePath);
+
+    await engine.rejectReview({
+      ...reviewAction(runState.runId, 'node-a'),
+      comment: 'output is not acceptable',
+    });
+
+    const finalState = await readSingleRunState(workspacePath);
+    expect(finalState.status).toBe('rejected');
+    expect(finalState.nodes['node-a']?.status).toBe('rejected');
+    expect(finalState.nodes['node-a']?.reviewStatus).toBe('rejected');
+
+    const completedEvent = [...sender.events]
+      .reverse()
+      .find((event) => event.channel === IpcChannels.WORKFLOW_COMPLETED);
+    expect(completedEvent).toMatchObject({
+      payload: expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('Review rejected'),
+      }),
+    });
+  });
+
+  it('reruns a paused review node and overwrites its saved output before re-pausing', async () => {
+    let executionCount = 0;
+    const adapter = new FakeAdapter({
+      'node-a': {
+        onExecute: async () => {
+          executionCount += 1;
+        },
+        get output() {
+          return executionCount === 1 ? 'First review output' : 'Second review output';
+        },
+      } as AdapterBehavior,
+    });
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+    });
+    const sender = new FakeSender();
+    const workflow = createWorkflow([createNode('node-a', { humanReview: true })]);
+
+    await engine.start(workflow, workspacePath, sender);
+    let runState = await readSingleRunState(workspacePath);
+    const outputPath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      'node-a.md'
+    );
+    expect(await readFile(outputPath, 'utf8')).toContain('First review output');
+
+    await engine.rerunReviewNode(reviewAction(runState.runId, 'node-a'));
+
+    runState = await readSingleRunState(workspacePath);
+    expect(runState.status).toBe('awaiting_review');
+    expect(runState.nodes['node-a']?.status).toBe('awaiting_review');
+    expect(runState.nodes['node-a']?.attempts).toBe(2);
+    expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-a']);
+    expect(await readFile(outputPath, 'utf8')).toContain('Second review output');
   });
 });

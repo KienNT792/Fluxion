@@ -10,6 +10,7 @@ describe('WorkflowRunStateSchema', () => {
       status: 'pending',
       updatedAt: '2026-05-05T00:00:00.000Z',
       currentNodeIds: [],
+      awaitingReviewNodeIds: [],
       nodes: {
         'node-a': {
           nodeId: 'node-a',
@@ -34,12 +35,13 @@ describe('WorkflowRunStateSchema', () => {
       WorkflowRunStateSchema.parse({
         schemaVersion: 1,
         runId: 'run-1',
-        workflowId: 'workflow-1',
-        status: 'idle',
-        updatedAt: '2026-05-05T00:00:00.000Z',
-        currentNodeIds: [],
-        nodes: {
-          'node-a': {
+      workflowId: 'workflow-1',
+      status: 'idle',
+      updatedAt: '2026-05-05T00:00:00.000Z',
+      currentNodeIds: [],
+      awaitingReviewNodeIds: [],
+      nodes: {
+        'node-a': {
             nodeId: 'node-a',
             runner: 'codex',
             status: 'pending',
@@ -50,5 +52,32 @@ describe('WorkflowRunStateSchema', () => {
       })
     ).toThrow();
   });
-});
 
+  it('accepts awaiting review metadata for human review checkpoints', () => {
+    const parsed = WorkflowRunStateSchema.parse({
+      schemaVersion: 1,
+      runId: 'run-2',
+      workflowId: 'workflow-1',
+      status: 'awaiting_review',
+      updatedAt: '2026-05-05T00:00:00.000Z',
+      currentNodeIds: [],
+      awaitingReviewNodeIds: ['node-a'],
+      nodes: {
+        'node-a': {
+          nodeId: 'node-a',
+          runner: 'codex',
+          status: 'awaiting_review',
+          attempts: 1,
+          model: 'gpt-5.5',
+          humanReview: true,
+          reviewStatus: 'pending',
+          reviewRequestedAt: '2026-05-05T00:00:00.000Z',
+          outputArtifactPaths: ['docs/review.md'],
+        },
+      },
+    });
+
+    expect(parsed.awaitingReviewNodeIds).toEqual(['node-a']);
+    expect(parsed.nodes['node-a']?.reviewStatus).toBe('pending');
+  });
+});

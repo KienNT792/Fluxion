@@ -17,8 +17,12 @@ export const IpcChannels = {
   // Workflow
   WORKFLOW_RUN: 'workflow:run',
   WORKFLOW_ABORT: 'workflow:abort',
+  WORKFLOW_REVIEW_APPROVE: 'workflow:review-approve',
+  WORKFLOW_REVIEW_REJECT: 'workflow:review-reject',
+  WORKFLOW_REVIEW_RERUN: 'workflow:review-rerun',
   WORKFLOW_NODE_STATUS: 'workflow:node-status',
   WORKFLOW_NODE_OUTPUT: 'workflow:node-output',
+  WORKFLOW_REVIEW_REQUIRED: 'workflow:review-required',
   WORKFLOW_COMPLETED: 'workflow:completed',
 
   // Terminal

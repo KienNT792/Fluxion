@@ -65,7 +65,10 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
   const nodeError = useExecutionStore((state) => state.nodeErrors[id]);
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
   const displayName = data.label || getOpenAIModelDisplayName(data.model);
-  const canRetry = status === 'error' && workflowStatus !== 'running';
+  const canRetry =
+    status === 'error' &&
+    workflowStatus !== 'running' &&
+    workflowStatus !== 'paused';
   const isSelected = useWorkflowStore((state) => state.selectedNodeId === id);
 
   return (

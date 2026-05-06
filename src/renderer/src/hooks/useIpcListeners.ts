@@ -7,6 +7,7 @@ import {
   TerminalExitPayload,
   WorkflowCompletedPayload,
   WorkflowNodeOutputPayload,
+  WorkflowReviewRequiredPayload,
   WorkflowNodeStatusPayload,
   WorkspaceFileChangedPayload
 } from '@shared';
@@ -16,10 +17,14 @@ export function useIpcListeners(): void {
   const {
     appendLogs,
     setCompiledContext,
+    setActiveRunId,
+    addReviewNode,
+    clearReviewNodes,
     setNodeError,
     setNodeExitCode,
     setNodeOutputPath,
     setNodeStatus,
+    removeReviewNode,
     setWorkflowError,
     setWorkflowStatus
   } = useExecutionStore()
@@ -62,6 +67,12 @@ export function useIpcListeners(): void {
 
     const unsubStatus = window.api.onWorkflowNodeStatus((payload: WorkflowNodeStatusPayload) => {
       setNodeStatus(payload.nodeId, payload.status)
+      if (payload.status === 'running') {
+        setWorkflowStatus('running')
+      }
+      if (payload.status !== 'paused') {
+        removeReviewNode(payload.nodeId)
+      }
       if (payload.error) {
         setNodeError(payload.nodeId, payload.error)
       }
@@ -74,11 +85,23 @@ export function useIpcListeners(): void {
       setNodeOutputPath(payload.nodeId, payload.outputFilePath)
     })
 
+    const unsubReviewRequired = window.api.onWorkflowReviewRequired(
+      (payload: WorkflowReviewRequiredPayload) => {
+        setActiveRunId(payload.runId)
+        addReviewNode(payload.nodeId)
+        setNodeStatus(payload.nodeId, 'paused')
+        setNodeOutputPath(payload.nodeId, payload.outputFilePath)
+        setWorkflowStatus('paused')
+      }
+    )
+
     const unsubMemory = window.api.onMemoryContextReady((payload: MemoryContextReadyPayload) => {
       setCompiledContext(payload.nodeId, payload.compiledContext)
     })
 
     const unsubCompleted = window.api.onWorkflowCompleted((payload: WorkflowCompletedPayload) => {
+      clearReviewNodes()
+      setActiveRunId(undefined)
       if (payload.aborted) {
         setWorkflowStatus('aborted')
       } else {
@@ -96,13 +119,18 @@ export function useIpcListeners(): void {
       unsubTerminalExit()
       unsubStatus()
       unsubOutput()
+      unsubReviewRequired()
       unsubMemory()
       unsubCompleted()
     }
   }, [
     appendLogs,
+    addReviewNode,
+    clearReviewNodes,
     recordWorkspaceChange,
+    removeReviewNode,
     setCompiledContext,
+    setActiveRunId,
     setNodeError,
     setNodeExitCode,
     setNodeOutputPath,

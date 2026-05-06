@@ -82,7 +82,7 @@ function getChangeTokenColor(changeType: 'add' | 'change' | 'unlink'): string {
 }
 
 function getPulseState(
-  workflowStatus: 'idle' | 'running' | 'aborted' | 'completed' | 'error',
+  workflowStatus: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error',
   isSaving: boolean
 ): {
   label: string;
@@ -109,6 +109,14 @@ function getPulseState(
     return {
       label: 'Completed',
       color: 'var(--color-timeline-grep)',
+      animate: false,
+    };
+  }
+
+  if (workflowStatus === 'paused') {
+    return {
+      label: 'Awaiting Review',
+      color: 'var(--color-timeline-edit)',
       animate: false,
     };
   }
@@ -249,9 +257,11 @@ export const Topbar: React.FC = () => {
     : 'Workspace';
 
   const isRunning = workflowStatus === 'running';
-  const canRun = Boolean(workspacePath) && nodes.length > 0 && !isRunning;
+  const isPaused = workflowStatus === 'paused';
+  const isBusy = isRunning || isPaused;
+  const canRun = Boolean(workspacePath) && nodes.length > 0 && !isBusy;
   const canSave = Boolean(workspacePath) && isDirty && !isSaving;
-  const editingDimmed = isRunning;
+  const editingDimmed = isBusy;
   const pulseState = getPulseState(workflowStatus, isSaving);
   const dirtyDotState = getDirtyDotState(isDirty, isSaving);
   const changeCount = recentWorkspaceChanges.length;
@@ -362,7 +372,7 @@ export const Topbar: React.FC = () => {
   };
 
   const handleOpenCreateWorkflowDialog = (): void => {
-    if (!workspacePath || isRunning) {
+    if (!workspacePath || isBusy) {
       return;
     }
 
@@ -604,7 +614,7 @@ export const Topbar: React.FC = () => {
                           variant="secondary"
                           size="sm"
                           onClick={handleReload}
-                          disabled={isRunning}
+                          disabled={isBusy}
                         >
                           <AlertTriangle size={13} />
                           Reload
@@ -639,7 +649,7 @@ export const Topbar: React.FC = () => {
             <div className="relative" ref={projectMenuRef}>
               <ActionTextButton
                 onClick={() => setIsProjectMenuOpen((current) => !current)}
-                disabled={isRunning}
+                disabled={isBusy}
                 dimmed={editingDimmed}
               >
                 <span>Project</span>
@@ -664,11 +674,11 @@ export const Topbar: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleOpenCreateWorkflowDialog}
-                    disabled={!workspacePath || isRunning}
+                    disabled={!workspacePath || isBusy}
                     className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
                     style={{
                       color:
-                        !workspacePath || isRunning
+                        !workspacePath || isBusy
                           ? 'var(--color-muted-soft)'
                           : 'var(--color-ink)',
                     }}
@@ -707,7 +717,7 @@ export const Topbar: React.FC = () => {
             <Tooltip content="Global Settings">
               <ActionIconButton
                 onClick={() => setIsSettingsOpen(true)}
-                disabled={isRunning}
+                disabled={isBusy}
                 dimmed={editingDimmed}
               >
                 <Settings size={16} />
@@ -721,14 +731,16 @@ export const Topbar: React.FC = () => {
             </Tooltip>
           </div>
 
-          {!isRunning ? (
+          {!isBusy ? (
             <Tooltip
               content={
                 !workspacePath
                   ? 'Open a workspace first'
                   : nodes.length === 0
                     ? 'Add at least one node'
-                    : 'Run workflow'
+                    : isPaused
+                      ? 'Resolve review checkpoint first'
+                      : 'Run workflow'
               }
             >
               <Button

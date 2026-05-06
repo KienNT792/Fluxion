@@ -7,6 +7,8 @@ export type RunStatus =
   | 'aborted'
   | 'rejected';
 
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
 export interface NodeRunState {
   nodeId: string;
   runner: 'codex' | 'custom' | string;
@@ -19,6 +21,11 @@ export interface NodeRunState {
   runnerSessionId?: string;
   model?: string;
   outputArtifactPaths: string[];
+  humanReview?: boolean;
+  reviewStatus?: ReviewStatus;
+  reviewRequestedAt?: string;
+  reviewResolvedAt?: string;
+  reviewComment?: string;
 }
 
 export interface WorkflowRunState {
@@ -30,5 +37,6 @@ export interface WorkflowRunState {
   updatedAt: string;
   completedAt?: string;
   currentNodeIds: string[];
+  awaitingReviewNodeIds: string[];
   nodes: Record<string, NodeRunState>;
 }

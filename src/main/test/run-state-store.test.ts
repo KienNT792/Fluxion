@@ -72,8 +72,10 @@ describe('RunStateStore', () => {
       attempts: 0,
       runner: 'codex',
       model: 'gpt-5.5',
+      humanReview: false,
       outputArtifactPaths: [],
     });
+    expect(state.awaitingReviewNodeIds).toEqual([]);
   });
 
   it('preserves concurrent updates for parallel nodes', async () => {
@@ -130,5 +132,61 @@ describe('RunStateStore', () => {
 
     const persisted = (await readRunJson(workspacePath)) as { status: string };
     expect(persisted.status).toBe('running');
+  });
+
+  it('transitions nodes through awaiting review, approval, rejection, and rerun reset', async () => {
+    const store = new RunStateStore();
+    const workflow = createWorkflow();
+    workflow.nodes[0]!.data.humanReview = true;
+
+    await store.initializeRun({
+      workspacePath,
+      workflow,
+      executionNodeIds: new Set(['node-a']),
+      runId: 'run-4',
+    });
+
+    await store.markNodeRunning(workspacePath, 'run-4', 'node-a');
+    let state = await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a', {
+      outputArtifactPaths: ['docs/review.md'],
+    });
+    expect(state.status).toBe('awaiting_review');
+    expect(state.awaitingReviewNodeIds).toEqual(['node-a']);
+    expect(state.nodes['node-a']).toMatchObject({
+      status: 'awaiting_review',
+      humanReview: true,
+      reviewStatus: 'pending',
+      outputArtifactPaths: ['docs/review.md'],
+    });
+
+    state = await store.markReviewApproved(workspacePath, 'run-4', 'node-a', {
+      comment: 'looks good',
+    });
+    expect(state.status).toBe('running');
+    expect(state.awaitingReviewNodeIds).toEqual([]);
+    expect(state.nodes['node-a']).toMatchObject({
+      status: 'completed',
+      reviewStatus: 'approved',
+      reviewComment: 'looks good',
+    });
+
+    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a');
+    state = await store.resetNodeForRerun(workspacePath, 'run-4', 'node-a');
+    expect(state.nodes['node-a']).toMatchObject({
+      status: 'pending',
+      reviewStatus: undefined,
+      outputArtifactPaths: [],
+    });
+
+    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a');
+    state = await store.markReviewRejected(workspacePath, 'run-4', 'node-a', {
+      comment: 'needs changes',
+    });
+    expect(state.status).toBe('rejected');
+    expect(state.nodes['node-a']).toMatchObject({
+      status: 'rejected',
+      reviewStatus: 'rejected',
+      reviewComment: 'needs changes',
+    });
   });
 });

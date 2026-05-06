@@ -29,6 +29,11 @@ export interface NodeFailureUpdate {
   completedAt?: string;
 }
 
+export interface ReviewResolutionUpdate {
+  comment?: string;
+  resolvedAt?: string;
+}
+
 type RunMutation<T> = (state: WorkflowRunState) => T | Promise<T>;
 
 function nowIso(): string {
@@ -45,6 +50,10 @@ function sortNodeIds(nodeIds: string[]): string[] {
 
 function removeNodeId(nodeIds: string[], nodeId: string): string[] {
   return sortNodeIds(nodeIds.filter((id) => id !== nodeId));
+}
+
+function isWorkflowPendingReview(state: WorkflowRunState): boolean {
+  return state.awaitingReviewNodeIds.length > 0;
 }
 
 export class RunStateStore {
@@ -67,6 +76,7 @@ export class RunStateStore {
         attempts: 0,
         model: node.data.model,
         outputArtifactPaths: [],
+        humanReview: node.data.humanReview ?? false,
       };
     }
 
@@ -77,7 +87,9 @@ export class RunStateStore {
       status: 'running',
       startedAt,
       updatedAt: startedAt,
+      completedAt: undefined,
       currentNodeIds: [],
+      awaitingReviewNodeIds: [],
       nodes,
     });
 
@@ -109,9 +121,17 @@ export class RunStateStore {
       node.status = 'running';
       node.startedAt = node.startedAt ?? startedAt;
       node.completedAt = undefined;
+      node.exitCode = undefined;
       node.error = undefined;
+      node.runnerSessionId = undefined;
+      node.outputArtifactPaths = [];
+      node.reviewStatus = undefined;
+      node.reviewRequestedAt = undefined;
+      node.reviewResolvedAt = undefined;
+      node.reviewComment = undefined;
       node.attempts += 1;
       state.status = 'running';
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
       state.currentNodeIds = sortNodeIds([...state.currentNodeIds, nodeId]);
       return state;
     });
@@ -132,6 +152,97 @@ export class RunStateStore {
       node.runnerSessionId = update.runnerSessionId;
       node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? []);
       state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
+      if (!isWorkflowPendingReview(state)) {
+        state.status = 'running';
+      }
+      return state;
+    });
+  }
+
+  public async markNodeAwaitingReview(
+    workspacePath: string,
+    runId: string,
+    nodeId: NodeId,
+    update: NodeCompletionUpdate = {}
+  ): Promise<WorkflowRunState> {
+    return this.updateRun(workspacePath, runId, (state) => {
+      const node = this.requireNode(state, nodeId);
+      node.status = 'awaiting_review';
+      node.completedAt = update.completedAt ?? nowIso();
+      node.exitCode = update.exitCode;
+      node.error = undefined;
+      node.runnerSessionId = update.runnerSessionId;
+      node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? []);
+      node.humanReview = true;
+      node.reviewStatus = 'pending';
+      node.reviewRequestedAt = node.completedAt;
+      node.reviewResolvedAt = undefined;
+      node.reviewComment = undefined;
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      state.awaitingReviewNodeIds = sortNodeIds([...state.awaitingReviewNodeIds, nodeId]);
+      state.status = 'awaiting_review';
+      return state;
+    });
+  }
+
+  public async markReviewApproved(
+    workspacePath: string,
+    runId: string,
+    nodeId: NodeId,
+    update: ReviewResolutionUpdate = {}
+  ): Promise<WorkflowRunState> {
+    return this.updateRun(workspacePath, runId, (state) => {
+      const node = this.requireNode(state, nodeId);
+      node.status = 'completed';
+      node.reviewStatus = 'approved';
+      node.reviewResolvedAt = update.resolvedAt ?? nowIso();
+      node.reviewComment = update.comment;
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
+      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running';
+      return state;
+    });
+  }
+
+  public async markReviewRejected(
+    workspacePath: string,
+    runId: string,
+    nodeId: NodeId,
+    update: ReviewResolutionUpdate = {}
+  ): Promise<WorkflowRunState> {
+    return this.updateRun(workspacePath, runId, (state) => {
+      const node = this.requireNode(state, nodeId);
+      node.status = 'rejected';
+      node.reviewStatus = 'rejected';
+      node.reviewResolvedAt = update.resolvedAt ?? nowIso();
+      node.reviewComment = update.comment;
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
+      state.status = 'rejected';
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      return state;
+    });
+  }
+
+  public async resetNodeForRerun(
+    workspacePath: string,
+    runId: string,
+    nodeId: NodeId
+  ): Promise<WorkflowRunState> {
+    return this.updateRun(workspacePath, runId, (state) => {
+      const node = this.requireNode(state, nodeId);
+      node.status = 'pending';
+      node.completedAt = undefined;
+      node.exitCode = undefined;
+      node.error = undefined;
+      node.runnerSessionId = undefined;
+      node.outputArtifactPaths = [];
+      node.reviewStatus = undefined;
+      node.reviewRequestedAt = undefined;
+      node.reviewResolvedAt = undefined;
+      node.reviewComment = undefined;
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running';
       return state;
     });
   }
@@ -150,6 +261,7 @@ export class RunStateStore {
       node.error = update.error;
       state.status = 'failed';
       state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
       return state;
     });
   }
@@ -169,6 +281,7 @@ export class RunStateStore {
       node.error = error;
       state.status = 'aborted';
       state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
       return state;
     });
   }
@@ -197,6 +310,7 @@ export class RunStateStore {
       const state = this.states.get(mapKey) ?? (await this.readRun(workspacePath, runId));
       const updated = await mutation(structuredClone(state));
       updated.currentNodeIds = sortNodeIds(updated.currentNodeIds);
+      updated.awaitingReviewNodeIds = sortNodeIds(updated.awaitingReviewNodeIds);
       updated.updatedAt = nowIso();
       const parsed = WorkflowRunStateSchema.parse(updated);
       this.states.set(mapKey, parsed);

@@ -134,7 +134,8 @@ export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
   if (
     !workflowStore.workspacePath ||
     workflowStore.nodes.length === 0 ||
-    executionStore.workflowStatus === 'running'
+    executionStore.workflowStatus === 'running' ||
+    executionStore.workflowStatus === 'paused'
   ) {
     return;
   }
@@ -161,6 +162,48 @@ export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
 
 export function retryWorkflowFromNode(nodeId: NodeId): void {
   runCurrentWorkflow(nodeId);
+}
+
+export function approveReviewNode(nodeId: NodeId): void {
+  const workflowStore = useWorkflowStore.getState();
+  const executionStore = useExecutionStore.getState();
+  if (!executionStore.activeRunId) {
+    return;
+  }
+
+  window.api.approveWorkflowNode({
+    workflowId: workflowStore.workflowId,
+    runId: executionStore.activeRunId,
+    nodeId,
+  });
+}
+
+export function rejectReviewNode(nodeId: NodeId): void {
+  const workflowStore = useWorkflowStore.getState();
+  const executionStore = useExecutionStore.getState();
+  if (!executionStore.activeRunId) {
+    return;
+  }
+
+  window.api.rejectWorkflowNode({
+    workflowId: workflowStore.workflowId,
+    runId: executionStore.activeRunId,
+    nodeId,
+  });
+}
+
+export function rerunReviewNode(nodeId: NodeId): void {
+  const workflowStore = useWorkflowStore.getState();
+  const executionStore = useExecutionStore.getState();
+  if (!executionStore.activeRunId) {
+    return;
+  }
+
+  window.api.rerunWorkflowNode({
+    workflowId: workflowStore.workflowId,
+    runId: executionStore.activeRunId,
+    nodeId,
+  });
 }
 
 // Multi-workflow helpers

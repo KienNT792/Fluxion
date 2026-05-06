@@ -89,6 +89,13 @@ export interface WorkflowAbortPayload {
   reason: AbortReason;
 }
 
+export interface WorkflowReviewActionPayload {
+  workflowId: string;
+  runId: string;
+  nodeId: NodeId;
+  comment?: string;
+}
+
 export interface WorkflowNodeStatusPayload {
   nodeId: NodeId;
   status: NodeStatus;
@@ -101,6 +108,14 @@ export interface WorkflowNodeOutputPayload {
   status: NodeStatus;
   /** Absolute path to the generated .md file in .fluxion/memory/short-term/ */
   outputFilePath?: string;
+}
+
+export interface WorkflowReviewRequiredPayload {
+  workflowId: string;
+  runId: string;
+  nodeId: NodeId;
+  outputFilePath: string;
+  status: 'awaiting_review';
 }
 
 export interface WorkflowCompletedPayload {

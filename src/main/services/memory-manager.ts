@@ -100,7 +100,7 @@ export class MemoryManager {
     workflowId: string,
     params: SaveNodeOutputParams
   ): Promise<string> {
-    const memoryDir = path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId);
+    const memoryDir = this.getWorkflowShortTermDir(workspacePath, workflowId);
 
     // Ensure directory exists
     await fs.mkdir(memoryDir, { recursive: true });
@@ -133,6 +133,18 @@ export class MemoryManager {
     return outputPath;
   }
 
+  public getNodeOutputPath(workspacePath: string, workflowId: string, nodeId: NodeId): string {
+    return path.join(this.getWorkflowShortTermDir(workspacePath, workflowId), `${nodeId}.md`);
+  }
+
+  public async deleteNodeOutput(
+    workspacePath: string,
+    workflowId: string,
+    nodeId: NodeId
+  ): Promise<void> {
+    await fs.rm(this.getNodeOutputPath(workspacePath, workflowId, nodeId), { force: true });
+  }
+
   private getNodeSourceLabel(frontmatter: Record<string, unknown>): string {
     const runner = typeof frontmatter.runner === 'string' ? frontmatter.runner : '';
     const provider = typeof frontmatter.provider === 'string' ? frontmatter.provider : '';
@@ -140,6 +152,10 @@ export class MemoryManager {
     const owner = runner || provider || 'Unknown';
 
     return model ? `${owner} / ${model}` : owner;
+  }
+
+  private getWorkflowShortTermDir(workspacePath: string, workflowId: string): string {
+    return path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId);
   }
 }
 

@@ -10,6 +10,8 @@ export const RunStatusSchema = z.enum([
   'rejected',
 ]);
 
+export const ReviewStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+
 export const NodeRunStateSchema = z.object({
   nodeId: z.string().min(1),
   runner: z.string().min(1),
@@ -22,6 +24,11 @@ export const NodeRunStateSchema = z.object({
   runnerSessionId: z.string().optional(),
   model: z.string().optional(),
   outputArtifactPaths: z.array(z.string()).default([]),
+  humanReview: z.boolean().optional(),
+  reviewStatus: ReviewStatusSchema.optional(),
+  reviewRequestedAt: z.string().optional(),
+  reviewResolvedAt: z.string().optional(),
+  reviewComment: z.string().optional(),
 });
 
 export const WorkflowRunStateSchema = z.object({
@@ -33,5 +40,6 @@ export const WorkflowRunStateSchema = z.object({
   updatedAt: z.string().min(1),
   completedAt: z.string().optional(),
   currentNodeIds: z.array(z.string().min(1)).default([]),
+  awaitingReviewNodeIds: z.array(z.string().min(1)).default([]),
   nodes: z.record(z.string(), NodeRunStateSchema),
 });

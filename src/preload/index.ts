@@ -12,6 +12,8 @@ import {
   TerminalExitPayload,
   UpdateOpenAIApiKeyPayload,
   Workflow,
+  WorkflowReviewActionPayload,
+  WorkflowReviewRequiredPayload,
   WorkflowCompletedPayload,
   WorkflowEdge,
   WorkflowNode,
@@ -84,6 +86,15 @@ const api = {
   abortWorkflow: (nodeId?: NodeId, reason: AbortReason = AbortReason.USER_REQUESTED): void => {
     ipcRenderer.send(IpcChannels.WORKFLOW_ABORT, { nodeId, reason });
   },
+  approveWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
+    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_APPROVE, payload);
+  },
+  rejectWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
+    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_REJECT, payload);
+  },
+  rerunWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
+    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_RERUN, payload);
+  },
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) =>
     bindListener(IpcChannels.WORKSPACE_FILE_CHANGED, callback),
@@ -97,6 +108,8 @@ const api = {
     bindListener(IpcChannels.WORKFLOW_NODE_STATUS, callback),
   onWorkflowNodeOutput: (callback: (payload: WorkflowNodeOutputPayload) => void) =>
     bindListener(IpcChannels.WORKFLOW_NODE_OUTPUT, callback),
+  onWorkflowReviewRequired: (callback: (payload: WorkflowReviewRequiredPayload) => void) =>
+    bindListener(IpcChannels.WORKFLOW_REVIEW_REQUIRED, callback),
   onMemoryContextReady: (callback: (payload: MemoryContextReadyPayload) => void) =>
     bindListener(IpcChannels.MEMORY_CONTEXT_READY, callback),
   onWorkflowCompleted: (callback: (payload: WorkflowCompletedPayload) => void) =>

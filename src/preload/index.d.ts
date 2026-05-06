@@ -9,6 +9,8 @@ import {
   TerminalErrorPayload,
   TerminalExitPayload,
   Workflow,
+  WorkflowReviewActionPayload,
+  WorkflowReviewRequiredPayload,
   WorkflowCompletedPayload,
   WorkflowEdge,
   WorkflowNode,
@@ -45,6 +47,9 @@ export interface FluxionAPI {
     resumeFromNodeId?: NodeId
   ) => void;
   abortWorkflow: (nodeId?: NodeId, reason?: AbortReason) => void;
+  approveWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
+  rejectWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
+  rerunWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) => () => void;
   onTerminalDataBatch: (callback: (payload: TerminalDataBatchPayload) => void) => () => void;
@@ -52,6 +57,9 @@ export interface FluxionAPI {
   onTerminalExit: (callback: (payload: TerminalExitPayload) => void) => () => void;
   onWorkflowNodeStatus: (callback: (payload: WorkflowNodeStatusPayload) => void) => () => void;
   onWorkflowNodeOutput: (callback: (payload: WorkflowNodeOutputPayload) => void) => () => void;
+  onWorkflowReviewRequired: (
+    callback: (payload: WorkflowReviewRequiredPayload) => void
+  ) => () => void;
   onMemoryContextReady: (callback: (payload: MemoryContextReadyPayload) => void) => () => void;
   onWorkflowCompleted: (callback: (payload: WorkflowCompletedPayload) => void) => () => void;
 }

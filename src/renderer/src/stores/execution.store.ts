@@ -11,16 +11,22 @@ interface LogSlice {
 }
 
 interface StatusSlice {
-  workflowStatus: 'idle' | 'running' | 'aborted' | 'completed' | 'error';
+  workflowStatus: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error';
   workflowError: string | null;
+  activeRunId?: string;
+  reviewNodeIds: NodeId[];
   nodeStatuses: Record<NodeId, NodeStatus>;
   nodeErrors: Record<NodeId, string | undefined>;
   nodeExitCodes: Record<NodeId, number | null | undefined>;
   nodeOutputPaths: Record<NodeId, string | undefined>;
   compiledContexts: Record<NodeId, string>;
   
-  setWorkflowStatus: (status: 'idle' | 'running' | 'aborted' | 'completed' | 'error') => void;
+  setWorkflowStatus: (status: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error') => void;
   setWorkflowError: (error: string | null) => void;
+  setActiveRunId: (runId?: string) => void;
+  addReviewNode: (nodeId: NodeId) => void;
+  removeReviewNode: (nodeId: NodeId) => void;
+  clearReviewNodes: () => void;
   setNodeStatus: (nodeId: NodeId, status: NodeStatus) => void;
   setNodeError: (nodeId: NodeId, error?: string) => void;
   setNodeExitCode: (nodeId: NodeId, exitCode?: number | null) => void;
@@ -69,6 +75,8 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
   // --- Status Slice ---
   workflowStatus: 'idle',
   workflowError: null,
+  activeRunId: undefined,
+  reviewNodeIds: [],
   nodeStatuses: {},
   nodeErrors: {},
   nodeExitCodes: {},
@@ -77,6 +85,18 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
 
   setWorkflowStatus: (status) => set({ workflowStatus: status }),
   setWorkflowError: (error) => set({ workflowError: error }),
+  setActiveRunId: (runId) => set({ activeRunId: runId }),
+  addReviewNode: (nodeId) =>
+    set((state) => ({
+      reviewNodeIds: state.reviewNodeIds.includes(nodeId)
+        ? state.reviewNodeIds
+        : [...state.reviewNodeIds, nodeId]
+    })),
+  removeReviewNode: (nodeId) =>
+    set((state) => ({
+      reviewNodeIds: state.reviewNodeIds.filter((id) => id !== nodeId)
+    })),
+  clearReviewNodes: () => set({ reviewNodeIds: [] }),
 
   setNodeStatus: (nodeId, status) => {
     set((state) => ({
@@ -142,6 +162,7 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
       });
 
       return {
+        reviewNodeIds: state.reviewNodeIds.filter((id) => !nodeIds.includes(id)),
         nodeStatuses: nextNodeStatuses,
         nodeErrors: nextNodeErrors,
         nodeExitCodes: nextNodeExitCodes,
@@ -172,6 +193,8 @@ export const useExecutionStore = create<ExecutionState>((set) => ({
     set({
       workflowStatus: 'idle',
       workflowError: null,
+      activeRunId: undefined,
+      reviewNodeIds: [],
       nodeStatuses: newNodeStatuses,
       nodeErrors: newNodeErrors,
       nodeExitCodes: newNodeExitCodes,
