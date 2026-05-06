@@ -66,7 +66,7 @@ export const WelcomeScreen: React.FC = () => {
           >
             Open a project folder to begin orchestrating your AI workflow.
             <br />
-            Configure your OpenAI key in Global Settings before running real workflows.
+            Fluxion runs real workflows through your local Codex CLI.
           </p>
 
           <div className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">

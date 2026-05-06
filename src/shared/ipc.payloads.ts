@@ -85,6 +85,10 @@ export interface WorkflowRunPayload {
   resumeFromNodeId?: NodeId;
 }
 
+export interface GetProviderCapabilitiesPayload {
+  forceRefresh?: boolean;
+}
+
 export interface WorkflowAbortPayload {
   /** If provided, abort only this node. If omitted, abort the entire workflow. */
   nodeId?: NodeId;

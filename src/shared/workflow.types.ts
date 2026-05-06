@@ -55,12 +55,30 @@ export type ProviderAuthStatus =
   | 'not-required'
   | 'unknown';
 
+export type ProviderReadinessCode =
+  | 'ready'
+  | 'cli_missing'
+  | 'auth_missing'
+  | 'auth_unknown'
+  | 'catalog_failed';
+
+export type ProviderCatalogSource = 'live' | 'bundled' | 'none';
+
 export interface ProviderAuthState {
   type: ProviderAuthType;
   status: ProviderAuthStatus;
   envVar?: string;
   loginCommand?: string;
   message?: string;
+}
+
+export interface ProviderReadinessState {
+  code: ProviderReadinessCode;
+  blocking: boolean;
+  title: string;
+  message: string;
+  actionCommand?: string;
+  catalogSource?: ProviderCatalogSource;
 }
 
 export interface ProviderModel {
@@ -103,6 +121,7 @@ export interface ProviderCapabilities {
   available: boolean;
   version?: string;
   auth: ProviderAuthState;
+  readiness?: ProviderReadinessState;
   error?: string;
   models: ProviderModel[];
   defaultModel?: string;

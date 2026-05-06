@@ -2,6 +2,7 @@ import { app, dialog, ipcMain, IpcMainEvent } from 'electron';
 import {
   IpcChannels,
   ProviderSettingsSummaryPayload,
+  GetProviderCapabilitiesPayload,
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowAbortPayload,
@@ -125,9 +126,12 @@ export function registerWorkflowHandlers(): void {
     }
   );
 
-  ipcMain.handle(IpcChannels.PROVIDERS_GET_CAPABILITIES, async () => {
-    return providerRegistryService.fetchCapabilities();
-  });
+  ipcMain.handle(
+    IpcChannels.PROVIDERS_GET_CAPABILITIES,
+    async (_event, payload?: GetProviderCapabilitiesPayload) => {
+      return providerRegistryService.fetchCapabilities(Boolean(payload?.forceRefresh));
+    }
+  );
 
   ipcMain.handle(
     IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY,

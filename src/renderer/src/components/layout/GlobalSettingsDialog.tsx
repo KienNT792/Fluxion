@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { KeyRound } from 'lucide-react';
 import { ProviderSettingsSummaryPayload } from '@shared';
+import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -45,6 +46,10 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const isProviderCapabilitiesLoading = useWorkflowStore(
+    (state) => state.isProviderCapabilitiesLoading
+  );
 
   const [summary, setSummary] = useState<ProviderSettingsSummaryPayload | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -142,7 +147,18 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
   }
 
   const statusCopy = getStatusCopy(summary);
+  const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, []);
+  const codexTone =
+    codexReadiness.tone === 'ready'
+      ? 'var(--color-semantic-success)'
+      : codexReadiness.tone === 'blocked'
+        ? 'var(--color-semantic-error)'
+        : 'var(--color-timeline-edit)';
   const canClearStoredKey = summary?.openaiApiKeySource === 'stored';
+
+  const handleRefreshCodex = async (): Promise<void> => {
+    await fetchProviderCapabilities(true);
+  };
 
   const handleSave = async (): Promise<void> => {
     if (!window.api?.setOpenAIApiKey) {
@@ -233,13 +249,61 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({
               Global Settings
             </h3>
             <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-              Configure the OpenAI API key used by Fluxion. The key is stored outside the
-              workspace and never written into `workflow.json`.
+              Check the local Codex CLI runtime and configure optional OpenAI API credentials.
+              Settings are stored outside the workspace and never written into `workflow.json`.
             </p>
           </div>
         </div>
 
         <div className="space-y-4 px-5 py-4">
+          <div
+            className="rounded-lg px-3 py-3"
+            style={{
+              background: 'var(--color-canvas)',
+              border: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span
+                className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Codex CLI
+              </span>
+              <span
+                className="rounded-md px-2 py-1 text-[11px] font-semibold"
+                style={{
+                  color: codexTone,
+                  background: 'var(--color-surface-card)',
+                  border: '1px solid var(--color-hairline)',
+                }}
+              >
+                {isProviderCapabilitiesLoading ? 'Checking...' : codexReadiness.label}
+              </span>
+            </div>
+            <p className="mt-2 text-xs font-semibold" style={{ color: 'var(--color-ink)' }}>
+              {codexReadiness.summary}
+            </p>
+            <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+              {codexReadiness.detail}
+            </p>
+            <div className="mt-3 grid gap-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>Install: npm i -g @openai/codex</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>Login: codex login</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>Check: codex login status</span>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRefreshCodex}
+                disabled={isProviderCapabilitiesLoading || isSaving}
+              >
+                {isProviderCapabilitiesLoading ? 'Refreshing...' : 'Refresh Codex'}
+              </Button>
+            </div>
+          </div>
+
           <div
             className="rounded-lg px-3 py-3"
             style={{

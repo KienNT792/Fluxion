@@ -6,6 +6,7 @@ import {
   IpcChannels,
   MemoryContextReadyPayload,
   NodeId,
+  GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
   TerminalDataBatchPayload,
@@ -61,8 +62,13 @@ const api = {
     context: Record<string, string>
   ): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT, { workspacePath, context }) as Promise<void>,
-  getProviderCapabilities: (): Promise<ProviderCapabilitiesPayload> =>
-    ipcRenderer.invoke(IpcChannels.PROVIDERS_GET_CAPABILITIES) as Promise<ProviderCapabilitiesPayload>,
+  getProviderCapabilities: (
+    payload?: GetProviderCapabilitiesPayload
+  ): Promise<ProviderCapabilitiesPayload> =>
+    ipcRenderer.invoke(
+      IpcChannels.PROVIDERS_GET_CAPABILITIES,
+      payload
+    ) as Promise<ProviderCapabilitiesPayload>,
   getProviderSettingsSummary: (): Promise<ProviderSettingsSummaryPayload> =>
     ipcRenderer.invoke(IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY) as Promise<ProviderSettingsSummaryPayload>,
   setOpenAIApiKey: (apiKey: string | null): Promise<ProviderSettingsSummaryPayload> =>

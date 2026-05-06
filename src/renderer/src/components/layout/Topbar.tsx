@@ -14,6 +14,7 @@ import {
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
+import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
 import {
   createNewWorkflow,
   openWorkspaceFromDialog,
@@ -227,11 +228,13 @@ export const Topbar: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
   const [isActivityPopoverOpen, setIsActivityPopoverOpen] = useState(false);
+  const [isReadinessPopoverOpen, setIsReadinessPopoverOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
 
   const runStartedAtRef = useRef<number | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const activityPopoverRef = useRef<HTMLDivElement | null>(null);
+  const readinessPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
   const workflowError = useExecutionStore((state) => state.workflowError);
@@ -239,6 +242,11 @@ export const Topbar: React.FC = () => {
   const setWorkflowStatus = useExecutionStore((state) => state.setWorkflowStatus);
 
   const nodes = useWorkflowStore((state) => state.nodes);
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const isProviderCapabilitiesLoading = useWorkflowStore(
+    (state) => state.isProviderCapabilitiesLoading
+  );
+  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const executionMode = useWorkflowStore((state) => state.executionMode);
   const workspacePath = useWorkflowStore((state) => state.workspacePath);
   const workflowName = useWorkflowStore((state) => state.workflowName);
@@ -275,6 +283,25 @@ export const Topbar: React.FC = () => {
         : 'Workspace steady';
 
   const statusSubtext = workflowError ?? saveError;
+  const codexReadiness = getCodexReadinessBadgeState(
+    providerCapabilities,
+    nodes.map((node) => String(node.data.model ?? ''))
+  );
+  const readinessToneColor =
+    codexReadiness.tone === 'ready'
+      ? 'var(--color-semantic-success)'
+      : codexReadiness.tone === 'blocked'
+        ? 'var(--color-semantic-error)'
+        : 'var(--color-timeline-edit)';
+  const runTooltip = !workspacePath
+    ? 'Open a workspace first'
+    : nodes.length === 0
+      ? 'Add at least one node'
+      : isPaused
+        ? 'Resolve review checkpoint first'
+        : codexReadiness.blocking
+          ? codexReadiness.summary
+          : 'Run workflow';
   const saveStateLabel = isSaving
     ? 'Saving...'
     : saveError
@@ -305,7 +332,7 @@ export const Topbar: React.FC = () => {
   }, [workflowStatus]);
 
   useEffect(() => {
-    if (!isProjectMenuOpen && !isActivityPopoverOpen) {
+    if (!isProjectMenuOpen && !isActivityPopoverOpen && !isReadinessPopoverOpen) {
       return;
     }
 
@@ -328,12 +355,22 @@ export const Topbar: React.FC = () => {
       ) {
         setIsActivityPopoverOpen(false);
       }
+
+      if (
+        isReadinessPopoverOpen
+        && readinessPopoverRef.current
+        && target
+        && !readinessPopoverRef.current.contains(target)
+      ) {
+        setIsReadinessPopoverOpen(false);
+      }
     };
 
     const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setIsProjectMenuOpen(false);
         setIsActivityPopoverOpen(false);
+        setIsReadinessPopoverOpen(false);
       }
     };
 
@@ -344,10 +381,14 @@ export const Topbar: React.FC = () => {
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isActivityPopoverOpen, isProjectMenuOpen]);
+  }, [isActivityPopoverOpen, isProjectMenuOpen, isReadinessPopoverOpen]);
 
   const handleRun = (): void => {
-    runCurrentWorkflow();
+    void runCurrentWorkflow();
+  };
+
+  const handleRefreshReadiness = async (): Promise<void> => {
+    await fetchProviderCapabilities(true);
   };
 
   const handleOpenWorkspace = async (): Promise<void> => {
@@ -550,6 +591,92 @@ export const Topbar: React.FC = () => {
             </div>
 
             <span style={{ color: 'var(--color-muted-soft)' }}>•</span>
+
+            <div className="relative" ref={readinessPopoverRef}>
+              <button
+                type="button"
+                onClick={() => setIsReadinessPopoverOpen((current) => !current)}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-[var(--color-surface-card)]"
+                style={{
+                  color: readinessToneColor,
+                  fontFamily: 'var(--font-mono)',
+                }}
+                title={codexReadiness.detail}
+              >
+                Codex: {isProviderCapabilitiesLoading ? 'Checking...' : codexReadiness.label}
+                <ChevronDown size={12} />
+              </button>
+
+              {isReadinessPopoverOpen && (
+                <div
+                  className="absolute left-0 top-[calc(100%+10px)] z-50 w-[360px] p-3"
+                  style={POPOVER_SURFACE_STYLE}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span
+                        className="text-[11px] uppercase tracking-[0.08em]"
+                        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                      >
+                        Codex Runtime
+                      </span>
+                      <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                        {codexReadiness.summary}
+                      </p>
+                      <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+                        {codexReadiness.detail}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold"
+                      style={{
+                        color: readinessToneColor,
+                        background: 'var(--color-canvas)',
+                        border: '1px solid var(--color-hairline)',
+                      }}
+                    >
+                      {codexReadiness.label}
+                    </span>
+                  </div>
+
+                  <div
+                    className="mt-3 rounded-md px-3 py-2 text-[11px] leading-5"
+                    style={{
+                      color: 'var(--color-muted)',
+                      background: 'var(--color-canvas)',
+                      border: '1px solid var(--color-hairline)',
+                    }}
+                  >
+                    Windows native Fluxion only sees Codex installed in the Windows PATH. A Codex
+                    binary installed only inside WSL is not available to this runner yet.
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-[11px]" style={{ color: 'var(--color-body)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)' }}>Install: npm i -g @openai/codex</div>
+                    <div style={{ fontFamily: 'var(--font-mono)' }}>Login: codex login</div>
+                    <div style={{ fontFamily: 'var(--font-mono)' }}>Check: codex login status</div>
+                    {codexReadiness.catalogSource && (
+                      <div style={{ fontFamily: 'var(--font-mono)' }}>
+                        Catalog: {codexReadiness.catalogSource}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleRefreshReadiness}
+                      disabled={isProviderCapabilitiesLoading || isBusy}
+                    >
+                      {isProviderCapabilitiesLoading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <span style={{ color: 'var(--color-muted-soft)' }}>|</span>
 
             {changeCount > 0 || hasExternalWorkflowChange ? (
               <div className="relative" ref={activityPopoverRef}>
@@ -771,17 +898,7 @@ export const Topbar: React.FC = () => {
           </div>
 
           {!isBusy ? (
-            <Tooltip
-              content={
-                !workspacePath
-                  ? 'Open a workspace first'
-                  : nodes.length === 0
-                    ? 'Add at least one node'
-                    : isPaused
-                      ? 'Resolve review checkpoint first'
-                      : 'Run workflow'
-              }
-            >
+            <Tooltip content={runTooltip}>
               <Button
                 variant="primary"
                 size="md"

@@ -18,6 +18,7 @@ import {
   getCodexCapabilities,
   getCodexModelById,
   getCodexModelDisplayName,
+  getCodexReadinessBadgeState,
   getDefaultCodexModel,
   modelSupportsReasoning,
 } from '../../lib/provider-capabilities';
@@ -265,15 +266,17 @@ export const PropertiesPanel: React.FC = () => {
   );
   const isReasoningModel = modelSupportsReasoning(currentModelCapabilities);
   const authState = codexCapabilities?.auth;
+  const readiness = getCodexReadinessBadgeState(providerCapabilities, [currentModel]);
   const modelDescription =
     currentModelCapabilities?.description
     ?? modelOptions.find((option) => option.id === currentModel)?.description;
   const providerNote = [
-    codexCapabilities?.available === false ? 'Codex CLI unavailable.' : 'Codex workflow node.',
+    readiness.summary,
     modelDescription,
     authState
       ? `Auth: ${authState.status}${authState.envVar ? ` via ${authState.envVar}` : ''}.`
       : undefined,
+    readiness.detail,
     codexCapabilities?.error ?? authState?.message,
   ]
     .filter(Boolean)

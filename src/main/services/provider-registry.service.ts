@@ -10,6 +10,7 @@ import {
   ProviderCapabilitiesMap,
   ProviderModel,
   ProviderParameterSpec,
+  ProviderReadinessState,
   ReasoningLevel,
 } from '@shared';
 import { settingsService } from './settings.service';
@@ -113,6 +114,16 @@ interface CodexCapabilitiesDependencies {
   ) => Promise<ExecFileResult>;
 }
 
+interface CodexCommandAttemptResult {
+  result?: ExecFileResult;
+  error?: unknown;
+}
+
+interface CodexDiscoveryContext {
+  cliCandidates: ResolvedCodexCli[];
+  runCommand: (command: string, args: string[]) => Promise<ExecFileResult>;
+}
+
 function normalizeResolvedCliCandidates(
   candidateOrCandidates: ResolvedCodexCli | ResolvedCodexCli[]
 ): ResolvedCodexCli[] {
@@ -166,6 +177,60 @@ function getErrorCode(error: unknown): string | undefined {
 function shouldTryNextCandidate(error: unknown): boolean {
   const code = getErrorCode(error);
   return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOENT';
+}
+
+function buildCodexReadiness(
+  code: ProviderReadinessState['code'],
+  overrides: Partial<Omit<ProviderReadinessState, 'code'>> = {}
+): ProviderReadinessState {
+  const defaults: Record<ProviderReadinessState['code'], ProviderReadinessState> = {
+    ready: {
+      code: 'ready',
+      blocking: false,
+      title: 'Codex CLI ready.',
+      message: 'Fluxion can run workflows through the local Codex CLI.',
+      catalogSource: 'live',
+    },
+    cli_missing: {
+      code: 'cli_missing',
+      blocking: true,
+      title: 'Codex CLI not found.',
+      message:
+        'Install @openai/codex in Windows and make sure the codex command is visible to this app.',
+      actionCommand: 'npm i -g @openai/codex',
+      catalogSource: 'none',
+    },
+    auth_missing: {
+      code: 'auth_missing',
+      blocking: true,
+      title: 'Codex CLI is not logged in.',
+      message: 'Run codex login, then refresh Codex readiness in Fluxion.',
+      actionCommand: 'codex login',
+      catalogSource: 'none',
+    },
+    auth_unknown: {
+      code: 'auth_unknown',
+      blocking: false,
+      title: 'Codex auth status could not be confirmed.',
+      message: 'Fluxion will still try to use Codex, but run codex login status if execution fails.',
+      actionCommand: 'codex login status',
+      catalogSource: 'none',
+    },
+    catalog_failed: {
+      code: 'catalog_failed',
+      blocking: false,
+      title: 'Codex model catalog could not be loaded.',
+      message: 'Fluxion will preserve custom model slugs, but the model picker cannot show live Codex models.',
+      actionCommand: 'codex debug models',
+      catalogSource: 'none',
+    },
+  };
+
+  return {
+    ...defaults[code],
+    ...overrides,
+    code,
+  };
 }
 
 export function isCodexAuthMissingMessage(message: string): boolean {
@@ -368,17 +433,30 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
   }
 }
 
-async function runCodexDebugModelsCommand(
+async function createCodexDiscoveryContext(
   dependencies: CodexCapabilitiesDependencies = {}
-): Promise<ExecFileResult> {
+): Promise<CodexDiscoveryContext> {
   const resolveCli = dependencies.resolveCli ?? resolveCodexCliCandidates;
   const runCommand = dependencies.runCommand ?? createExecFileRunner();
   const cliCandidates = normalizeResolvedCliCandidates(await resolveCli());
+
+  return {
+    cliCandidates,
+    runCommand,
+  };
+}
+
+async function runCodexCommandAcrossCandidates(
+  context: CodexDiscoveryContext,
+  args: string[]
+): Promise<CodexCommandAttemptResult> {
   let lastError: unknown;
 
-  for (const cliCandidate of cliCandidates) {
+  for (const cliCandidate of context.cliCandidates) {
     try {
-      return await runCommand(cliCandidate.command, [...cliCandidate.argsPrefix, 'debug', 'models']);
+      return {
+        result: await context.runCommand(cliCandidate.command, [...cliCandidate.argsPrefix, ...args]),
+      };
     } catch (error) {
       lastError = error;
       if (!shouldTryNextCandidate(error)) {
@@ -387,19 +465,129 @@ async function runCodexDebugModelsCommand(
     }
   }
 
-  throw lastError ?? new Error(CODEX_CLI_NOT_FOUND_MESSAGE);
+  return {
+    error: lastError ?? new Error(CODEX_CLI_NOT_FOUND_MESSAGE),
+  };
 }
 
 export async function getCodexCapabilities(
   dependencies: CodexCapabilitiesDependencies = {}
 ): Promise<ProviderCapabilities> {
   try {
-    const { stdout, stderr } = await runCodexDebugModelsCommand(dependencies);
-    const models = parseCodexDebugModelsOutput(stdout);
+    const discoveryContext = await createCodexDiscoveryContext(dependencies);
+    const loginStatus = await runCodexCommandAcrossCandidates(discoveryContext, [
+      'login',
+      'status',
+    ]);
+
+    let authStatus: ProviderCapabilities['auth']['status'] = 'authenticated';
+    let authWarning: string | undefined;
+
+    if (loginStatus.error) {
+      const { stdout, stderr } = getErrorOutput(loginStatus.error);
+      const combinedOutput = `${stderr}\n${stdout}`.trim()
+        || (loginStatus.error instanceof Error ? loginStatus.error.message : '');
+
+      if (isCodexAuthMissingMessage(combinedOutput)) {
+        const readiness = buildCodexReadiness('auth_missing');
+        return {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'missing',
+            loginCommand: 'codex login',
+            message: readiness.message,
+          },
+          readiness,
+          error: combinedOutput || readiness.message,
+          models: [],
+          parameters: CODEX_PARAMETERS,
+          refreshHint: 'Run `codex login`, then refresh Codex readiness.',
+        };
+      }
+
+      authStatus = 'unknown';
+      authWarning = combinedOutput || 'Codex auth status could not be confirmed.';
+    }
+
+    const liveCatalog = await runCodexCommandAcrossCandidates(discoveryContext, [
+      'debug',
+      'models',
+    ]);
+    let catalogResult = liveCatalog.result;
+    let catalogSource: ProviderReadinessState['catalogSource'] = 'live';
+    let catalogError = liveCatalog.error;
+
+    if (!catalogResult) {
+      const bundledCatalog = await runCodexCommandAcrossCandidates(discoveryContext, [
+        'debug',
+        'models',
+        '--bundled',
+      ]);
+      catalogResult = bundledCatalog.result;
+      catalogError = bundledCatalog.error ?? catalogError;
+      catalogSource = catalogResult ? 'bundled' : 'none';
+    }
+
+    if (!catalogResult) {
+      const { stdout, stderr } = getErrorOutput(catalogError);
+      const combinedOutput = `${stderr}\n${stdout}`.trim();
+      const errorMessage =
+        combinedOutput
+        || (catalogError instanceof Error ? catalogError.message : 'Codex model discovery failed.');
+      const readiness = buildCodexReadiness(
+        authStatus === 'unknown' ? 'auth_unknown' : 'catalog_failed',
+        {
+          message:
+            authStatus === 'unknown'
+              ? `${authWarning} Catalog discovery also failed: ${errorMessage}`
+              : errorMessage,
+          catalogSource: 'none',
+        }
+      );
+
+      return {
+        provider: 'codex',
+        displayName: 'Codex',
+        available: true,
+        auth: {
+          type: 'cli-login',
+          status: authStatus,
+          loginCommand: 'codex login',
+          message: authWarning,
+        },
+        readiness,
+        error: errorMessage,
+        models: [],
+        parameters: CODEX_PARAMETERS,
+        refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
+      };
+    }
+
+    const models = parseCodexDebugModelsOutput(catalogResult.stdout);
     const defaultModel =
       models.find((model) => model.id === CODEX_DEFAULT_MODEL)?.id
       ?? models.find((model) => model.visibility !== 'hide')?.id
       ?? models[0]?.id;
+    const catalogMessage =
+      catalogSource === 'bundled'
+        ? 'Live model discovery failed, so Fluxion is using the bundled Codex catalog.'
+        : 'Fluxion can run workflows through the local Codex CLI.';
+    const readiness =
+      authStatus === 'unknown'
+        ? buildCodexReadiness('auth_unknown', {
+            message: authWarning ?? 'Codex auth status could not be confirmed.',
+            catalogSource,
+          })
+        : buildCodexReadiness('ready', {
+            message: catalogMessage,
+            catalogSource,
+            ...(catalogSource === 'bundled'
+              ? { title: 'Codex bundled catalog loaded.' }
+              : {}),
+          });
 
     return {
       provider: 'codex',
@@ -407,14 +595,17 @@ export async function getCodexCapabilities(
       available: true,
       auth: {
         type: 'cli-login',
-        status: 'authenticated',
+        status: authStatus,
         loginCommand: 'codex login',
-        message: stderr.trim().length > 0 ? stderr.trim() : undefined,
+        message:
+          authWarning
+          ?? (catalogResult.stderr.trim().length > 0 ? catalogResult.stderr.trim() : undefined),
       },
+      readiness,
       models,
       defaultModel,
       parameters: CODEX_PARAMETERS,
-      refreshHint: 'Uses `codex debug models` for live model discovery.',
+      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
     };
   } catch (error) {
     const { stdout, stderr } = getErrorOutput(error);
@@ -424,6 +615,7 @@ export async function getCodexCapabilities(
       error instanceof Error &&
       (error.message.includes(CODEX_CLI_NOT_FOUND_MESSAGE) || getErrorCode(error) === 'ENOENT')
     ) {
+      const readiness = buildCodexReadiness('cli_missing');
       return {
         provider: 'codex',
         displayName: 'Codex',
@@ -432,16 +624,18 @@ export async function getCodexCapabilities(
           type: 'cli-login',
           status: 'missing',
           loginCommand: 'codex login',
-          message: CODEX_CLI_NOT_FOUND_MESSAGE,
+          message: readiness.message,
         },
+        readiness,
         error: CODEX_CLI_NOT_FOUND_MESSAGE,
         models: [],
         parameters: CODEX_PARAMETERS,
-        refreshHint: 'Install @openai/codex and run `codex login`.',
+        refreshHint: 'Install @openai/codex in Windows, then refresh Codex readiness.',
       };
     }
 
     if (combinedOutput && isCodexAuthMissingMessage(combinedOutput)) {
+      const readiness = buildCodexReadiness('auth_missing');
       return {
         provider: 'codex',
         displayName: 'Codex',
@@ -450,14 +644,19 @@ export async function getCodexCapabilities(
           type: 'cli-login',
           status: 'missing',
           loginCommand: 'codex login',
-          message: 'Codex CLI is not authenticated. Run `codex login` and retry.',
+          message: readiness.message,
         },
+        readiness,
         error: combinedOutput,
         models: [],
         parameters: CODEX_PARAMETERS,
-        refreshHint: 'Uses `codex debug models` for live model discovery.',
+        refreshHint: 'Run `codex login`, then refresh Codex readiness.',
       };
     }
+
+    const readiness = buildCodexReadiness('catalog_failed', {
+      message: combinedOutput || (error instanceof Error ? error.message : 'Codex model discovery failed.'),
+    });
 
     return {
       provider: 'codex',
@@ -469,12 +668,13 @@ export async function getCodexCapabilities(
         loginCommand: 'codex login',
         message: combinedOutput || 'Codex model discovery failed.',
       },
+      readiness,
       error:
         combinedOutput
         || (error instanceof Error ? error.message : 'Codex model discovery failed.'),
       models: [],
       parameters: CODEX_PARAMETERS,
-      refreshHint: 'Uses `codex debug models` for live model discovery.',
+      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
     };
   }
 }

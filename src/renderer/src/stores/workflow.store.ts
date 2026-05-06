@@ -58,7 +58,7 @@ interface WorkflowState {
   setWorkspacePath: (path: string | null) => void;
   setWorkflowName: (name: string) => void;
   setExecutionMode: (mode: ExecutionMode) => void;
-  fetchProviderCapabilities: () => Promise<ProviderCapabilitiesMap>;
+  fetchProviderCapabilities: (forceRefresh?: boolean) => Promise<ProviderCapabilitiesMap>;
   hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void;
   setNodes: (nodes: Node<WorkflowNode['data']>[]) => void;
   setEdges: (edges: Edge[]) => void;
@@ -171,7 +171,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       };
     }),
 
-  fetchProviderCapabilities: async () => {
+  fetchProviderCapabilities: async (forceRefresh = false) => {
     if (!window.api?.getProviderCapabilities) {
       set({
         providerCapabilities: EMPTY_PROVIDER_CAPABILITIES,
@@ -185,7 +185,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ isProviderCapabilitiesLoading: true });
 
     try {
-      const capabilities = await window.api.getProviderCapabilities();
+      const capabilities = await window.api.getProviderCapabilities({ forceRefresh });
       set({
         providerCapabilities: capabilities,
         isProviderCapabilitiesLoading: false,

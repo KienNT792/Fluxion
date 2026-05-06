@@ -1,6 +1,10 @@
 import { NodeId, Workflow, WorkflowEdge, WorkflowNode, WorkspaceOpenedPayload } from '@shared';
 import { useExecutionStore } from '../stores/execution.store';
 import { useWorkflowStore } from '../stores/workflow.store';
+import {
+  getCodexReadinessBadgeState,
+  getCodexReadinessBlockMessage,
+} from './provider-capabilities';
 
 function mapCanvasNodesToWorkflowNodes(): WorkflowNode[] {
   return useWorkflowStore.getState().nodes.map((node) => ({
@@ -128,7 +132,7 @@ export async function saveCurrentWorkflow(): Promise<void> {
   }
 }
 
-export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
+export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<void> {
   const workflowStore = useWorkflowStore.getState();
   const executionStore = useExecutionStore.getState();
 
@@ -138,6 +142,25 @@ export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
     executionStore.workflowStatus === 'running' ||
     executionStore.workflowStatus === 'paused'
   ) {
+    return;
+  }
+
+  const currentReadiness = getCodexReadinessBadgeState(
+    workflowStore.providerCapabilities,
+    workflowStore.nodes.map((node) => String(node.data.model ?? ''))
+  );
+  const providerCapabilities =
+    !workflowStore.hasFetchedProviderCapabilities || currentReadiness.blocking
+      ? await workflowStore.fetchProviderCapabilities(true)
+      : workflowStore.providerCapabilities;
+  const readiness = getCodexReadinessBadgeState(
+    providerCapabilities,
+    workflowStore.nodes.map((node) => String(node.data.model ?? ''))
+  );
+
+  if (readiness.blocking) {
+    executionStore.setWorkflowStatus('error');
+    executionStore.setWorkflowError(getCodexReadinessBlockMessage(readiness));
     return;
   }
 
@@ -163,7 +186,7 @@ export function runCurrentWorkflow(resumeFromNodeId?: NodeId): void {
 }
 
 export function retryWorkflowFromNode(nodeId: NodeId): void {
-  runCurrentWorkflow(nodeId);
+  void runCurrentWorkflow(nodeId);
 }
 
 export function approveReviewNode(nodeId: NodeId): void {

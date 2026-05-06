@@ -5,6 +5,7 @@ import { Tooltip } from '../ui/Tooltip';
 import {
   getCodexCapabilities,
   getCodexModelDisplayName,
+  getCodexReadinessBadgeState,
   getDefaultCodexModel,
 } from '../../lib/provider-capabilities';
 
@@ -39,12 +40,11 @@ export const AgentPalette: React.FC = () => {
 
   const codexCapabilities = getCodexCapabilities(providerCapabilities);
   const paletteModel = getDefaultCodexModel(providerCapabilities);
+  const readiness = getCodexReadinessBadgeState(providerCapabilities, [paletteModel]);
   const paletteHint =
-    codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated'
+    codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated' && !readiness.blocking
       ? getCodexModelDisplayName(providerCapabilities, paletteModel)
-      : codexCapabilities?.error
-        ?? codexCapabilities?.auth.message
-        ?? 'Codex CLI unavailable';
+      : readiness.summary;
 
   const handleDragStart = (event: React.DragEvent): void => {
     event.dataTransfer.setData(
@@ -137,6 +137,7 @@ export const AgentPalette: React.FC = () => {
                   style={{
                     color:
                       codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated'
+                      && !readiness.blocking
                         ? 'var(--color-muted)'
                         : 'var(--color-semantic-error)',
                     fontFamily: 'var(--font-mono)',

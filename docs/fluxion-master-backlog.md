@@ -2,7 +2,7 @@
 
 Date: 2026-05-06
 Workspace: `D:\codex-workflow\Fluxion`
-Source baseline: `README.md`, `docs/fluxion-project-assessment-2026-05-03.md`, repo verification on `2026-05-06`
+Source baseline: `README.md`, `docs/fluxion-project-assessment-2026-05-06.md`, repo verification on `2026-05-06`
 
 ## Purpose
 
@@ -29,13 +29,14 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Current Snapshot
 
-- `git status`: clean on `main...origin/main`
+- `git status`: working tree contains local implementation changes for `FX-018`, `FX-025`, `FX-027`, docs, and supporting tests.
 - `npm run typecheck`: pass
-- `npm test`: pass (`12` files, `55` tests)
+- `npm test`: pass (`13` files, `65` tests)
+- `npm run smoke:win`: pass
 - P0/P0.1/P1 runtime foundation cho Codex CLI tren Windows da xong.
 - Run-state persistence, artifact gates, va V2 memory frontmatter da co trong code va test.
-- Human review checkpoints da co theo tung node, nhung workflow-level mode UX van chua khop acceptance ban dau.
-- Gap con lai lon nhat hien nay la Electron smoke validation, `build:win`, dynamic Codex capability discovery, va product hardening.
+- Workflow-level `Auto` / `Manual` execution mode, dynamic Codex capability discovery, va local Windows unpacked smoke baseline da duoc wire xong.
+- Gap con lai co tac dong lon nhat hien nay la `Explain with AI`, retry attempt lineage, provider config validation, CI baseline, va product hardening.
 
 ## Release Gates
 
@@ -56,9 +57,9 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 ### MVP Gate [PARTIAL]
 
 - [ ] Co it nhat 2 adapter that tren main execution path. Current state: Codex CLI runtime da co; adapter khac chua duoc wire vao execution path hien tai.
-- [ ] Ho tro Auto Accept va Manual Accept o cap workflow. Current state: per-node `humanReview` da co, nhung chua co run mode selector ro rang.
+- [x] Ho tro Auto Accept va Manual Accept o cap workflow.
 - [x] Data piping `.md` + frontmatter on dinh.
-- [ ] Build Windows co the dong goi va smoke test duoc.
+- [x] Build Windows co the dong goi va smoke test duoc. Current state: local `smoke:win` da verify unpacked Electron build; CI baseline van chua co.
 
 ## Definition of Done
 
@@ -176,15 +177,15 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - [x] Co the chay mot node Codex that tu UI/runtime path hien tai.
 - [x] Chunk stream, completion, abort deu thong suot.
 
-### FX-018 Implement Auto Accept and Manual Accept modes [PARTIAL]
+### FX-018 Implement Auto Accept and Manual Accept modes [DONE]
 
 - Priority: `P1`
-- Outcome: Human review gate da co theo node, nhung UX/workflow-level mode van chua hoan tat.
+- Outcome: Workflow-level execution mode da duoc persist trong workflow, hien tren topbar, va duoc engine/run-state ton trong trong moi run.
 - Deliverable: Run mode selector va execution gate giua cac node.
 - Acceptance:
 - [x] Auto Accept: node sau tu chay khi upstream xong neu khong co review gate.
-- [x] Manual Accept: node co `humanReview` dung lai o `paused` / `awaiting_review`.
-- [ ] UI the hien mode dang dung ro rang o cap workflow.
+- [x] Manual Accept: moi node completed dung lai o `paused` / `awaiting_review` va chi unlock downstream sau approve.
+- [x] UI the hien mode dang dung ro rang o cap workflow.
 
 ### FX-019 Add Retry node and rerun subtree [PARTIAL]
 
@@ -196,20 +197,20 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - [x] Review node co the rerun trong cung workflow run.
 - [ ] Logs va output cu duoc danh dau ro rang giua cac attempt.
 
-### FX-027 Align Codex capability discovery with current CLI [CURRENT]
+### FX-027 Align Codex capability discovery with current CLI [DONE]
 
 - Priority: `P1`
-- Outcome: UI va runtime Codex khop voi `codex debug models` thay vi tiep tuc dua vao metadata cu/hardcode.
+- Outcome: UI va runtime Codex da khop voi `codex debug models`, reuse channel capability hien co, va degrade ro rang khi CLI/auth khong san sang.
 - Deliverable: Codex capability discovery service, IPC exposure, va capability-driven renderer.
 - Acceptance:
-- [ ] Parse JSON tu `codex debug models` hoac machine-readable source tuong duong.
-- [ ] Renderer dung danh sach model/capability dong cho Codex.
-- [ ] Fluxion hien trang thai unavailable ro rang neu Codex CLI khong co trong PATH.
-- [ ] Legacy/custom model slug van load/save duoc.
+- [x] Parse JSON tu `codex debug models` hoac machine-readable source tuong duong.
+- [x] Renderer dung danh sach model/capability dong cho Codex.
+- [x] Fluxion hien trang thai unavailable ro rang neu Codex CLI khong co trong PATH.
+- [x] Legacy/custom model slug van load/save duoc.
 
 ## Phase E - Error Handling and Operator UX
 
-### FX-020 Add node-level error surface with actions [PARTIAL]
+### FX-020 Add node-level error surface with actions [CURRENT]
 
 - Priority: `P1`
 - Outcome: Node-level status/error surface va `Retry` action da co; `Explain with AI` van chua co.
@@ -262,12 +263,12 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 ### FX-025 Establish test matrix and CI baseline [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Unit tests cho engine/runtime core da co, nhung build smoke va CI baseline van chua khop DoD.
+- Outcome: Unit tests cho engine/runtime core va local Windows smoke baseline da co, nhung CI baseline va lint gate van chua khop DoD.
 - Deliverable: Unit test, integration test, build smoke, lint/typecheck pipeline.
 - Acceptance:
 - [x] Co test cho engine success/error/abort.
 - [x] Co test cho memory frontmatter parsing.
-- [ ] Co build smoke tren Windows.
+- [x] Co build smoke tren Windows.
 - [ ] Co CI baseline cho lint/typecheck/test.
 
 ### FX-026 Clean lint baseline and align product metadata [PARTIAL]
@@ -282,24 +283,23 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Suggested Implementation Order
 
-1. `FX-018`, `FX-020`, `FX-027`
-2. `FX-025`, `FX-026`
+1. `FX-020`, `FX-023`, `FX-025`
+2. `FX-024`, `FX-026`, `FX-016`
 3. `FX-013`, `FX-014`, `FX-012`
-4. `FX-016`, `FX-021`, `FX-022`
-5. `FX-024`, `FX-023`
+4. `FX-021`, `FX-022`
 
 ## Suggested Next Sprint
 
 Sprint tiep theo nen tap trung vao 6 item:
 
-- `FX-018` Hoan tat workflow-level Auto Accept / Manual Accept UX.
-- `FX-020` Them `Explain with AI`.
-- `FX-027` Chuyen Codex model picker sang dynamic capability discovery.
-- `FX-025` Them `build:win` smoke validation va CI baseline.
-- `FX-026` Don dep metadata san pham va lint baseline.
-- `FX-013` Bat dau instruction file generation co frontmatter.
+- `FX-020` Hoan tat `Explain with AI` tren error surface da co.
+- `FX-023` Chan metadata/frontmatter khong hop le truoc khi dua vao downstream context.
+- `FX-025` Dua local `smoke:win` thanh CI baseline cho `typecheck` / `test` / smoke build.
+- `FX-024` Validate auth/config truoc khi run cho tat ca runtime lien quan.
+- `FX-026` Don dep lint baseline va metadata san pham.
+- `FX-016` Bat dau adapter that thu hai de dong MVP gap "2 real adapters".
 
-Neu xong 6 item nay, Fluxion se chuyen tu "runtime foundation da co" sang "beta candidate co the smoke-test nghiem tuc tren desktop".
+Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co smoke baseline" sang "beta candidate co verification lap lai duoc va operator UX tot hon".
 
 ## Deferred for Later
 

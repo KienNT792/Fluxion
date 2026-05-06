@@ -49,6 +49,10 @@ describe('provider-registry.service', () => {
 
     expect(capabilities.available).toBe(false);
     expect(capabilities.auth.status).toBe('missing');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'cli_missing',
+      blocking: true,
+    });
     expect(capabilities.models).toEqual([]);
   });
 
@@ -72,6 +76,10 @@ describe('provider-registry.service', () => {
 
     expect(capabilities.available).toBe(true);
     expect(capabilities.auth.status).toBe('missing');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'auth_missing',
+      blocking: true,
+    });
     expect(capabilities.models).toEqual([]);
   });
 
@@ -85,31 +93,149 @@ describe('provider-registry.service', () => {
           source: 'direct',
         },
       ],
-      runCommand: async () => ({
-        stdout: JSON.stringify({
-          models: [
-            {
-              slug: 'gpt-5.4-mini',
-              display_name: 'GPT-5.4-Mini',
-              visibility: 'list',
-              supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }],
-            },
-            {
-              slug: 'gpt-5.5',
-              display_name: 'GPT-5.5',
-              visibility: 'list',
-              default_reasoning_level: 'medium',
-              supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }],
-            },
-          ],
-        }),
-        stderr: '',
-      }),
+      runCommand: async (_command, args) => {
+        if (args.join(' ') === 'login status') {
+          return { stdout: 'Logged in', stderr: '' };
+        }
+
+        return {
+          stdout: JSON.stringify({
+            models: [
+              {
+                slug: 'gpt-5.4-mini',
+                display_name: 'GPT-5.4-Mini',
+                visibility: 'list',
+                supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }],
+              },
+              {
+                slug: 'gpt-5.5',
+                display_name: 'GPT-5.5',
+                visibility: 'list',
+                default_reasoning_level: 'medium',
+                supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }],
+              },
+            ],
+          }),
+          stderr: '',
+        };
+      },
     });
 
     expect(capabilities.available).toBe(true);
     expect(capabilities.auth.status).toBe('authenticated');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'ready',
+      blocking: false,
+      catalogSource: 'live',
+    });
     expect(capabilities.defaultModel).toBe('gpt-5.5');
     expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini', 'gpt-5.5']);
+  });
+
+  it('keeps running non-blocking when auth status is unknown but catalog loads', async () => {
+    const capabilities = await getCodexCapabilities({
+      resolveCli: async () => [
+        {
+          command: 'codex',
+          argsPrefix: [],
+          displayCommand: 'codex',
+          source: 'direct',
+        },
+      ],
+      runCommand: async (_command, args) => {
+        if (args.join(' ') === 'login status') {
+          throw Object.assign(new Error('status failed'), {
+            stderr: 'Unexpected auth status failure.',
+            stdout: '',
+          });
+        }
+
+        return {
+          stdout: JSON.stringify({
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }],
+          }),
+          stderr: '',
+        };
+      },
+    });
+
+    expect(capabilities.auth.status).toBe('unknown');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'auth_unknown',
+      blocking: false,
+      catalogSource: 'live',
+    });
+    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.5']);
+  });
+
+  it('falls back to the bundled catalog when live model discovery fails', async () => {
+    const capabilities = await getCodexCapabilities({
+      resolveCli: async () => [
+        {
+          command: 'codex',
+          argsPrefix: [],
+          displayCommand: 'codex',
+          source: 'direct',
+        },
+      ],
+      runCommand: async (_command, args) => {
+        const commandLine = args.join(' ');
+        if (commandLine === 'login status') {
+          return { stdout: 'Logged in', stderr: '' };
+        }
+
+        if (commandLine === 'debug models') {
+          throw Object.assign(new Error('network failed'), {
+            stderr: 'Could not refresh model catalog.',
+            stdout: '',
+          });
+        }
+
+        return {
+          stdout: JSON.stringify({
+            models: [{ slug: 'gpt-5.4-mini', display_name: 'GPT-5.4-Mini', visibility: 'list' }],
+          }),
+          stderr: '',
+        };
+      },
+    });
+
+    expect(capabilities.readiness).toMatchObject({
+      code: 'ready',
+      blocking: false,
+      catalogSource: 'bundled',
+    });
+    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini']);
+  });
+
+  it('returns a non-blocking catalog failure when auth is valid but discovery fails', async () => {
+    const capabilities = await getCodexCapabilities({
+      resolveCli: async () => [
+        {
+          command: 'codex',
+          argsPrefix: [],
+          displayCommand: 'codex',
+          source: 'direct',
+        },
+      ],
+      runCommand: async (_command, args) => {
+        if (args.join(' ') === 'login status') {
+          return { stdout: 'Logged in', stderr: '' };
+        }
+
+        throw Object.assign(new Error('catalog failed'), {
+          stderr: 'Catalog unavailable.',
+          stdout: '',
+        });
+      },
+    });
+
+    expect(capabilities.auth.status).toBe('authenticated');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'catalog_failed',
+      blocking: false,
+      catalogSource: 'none',
+    });
+    expect(capabilities.models).toEqual([]);
   });
 });
