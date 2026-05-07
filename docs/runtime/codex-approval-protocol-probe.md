@@ -112,6 +112,9 @@ Fluxion should continue to fail before spawn for interactive approval policies
 unless a later Codex CLI version exposes a stable structured approval request and
 programmatic reply protocol.
 
+The blocked implementation design is tracked in
+`docs/runtime/codex-approval-phase-2b-plan.md`.
+
 ## Follow-Up Runtime UX Polish
 
 Return focus to existing runtime actions instead of approval host work:

@@ -74,7 +74,7 @@ Fluxion now treats Codex approval policy as product runtime behavior, not just c
 
 Implemented behavior:
 
-- Uses official enum values:
+- Uses the flat Codex approval values currently exposed by Fluxion:
   - `approval_policy = never | on-request | untrusted`
   - `sandbox_mode = read-only | workspace-write | danger-full-access`
   - `windows.sandbox = unelevated | elevated`
@@ -85,6 +85,10 @@ Implemented behavior:
 - Renderer blocks before `resetExecution`, so existing logs/state are not erased by a config-only guardrail failure.
 - Main process performs the same guardrail check before `workflowEngine.start`, so renderer bypass cannot spawn an unsupported interactive policy.
 - `PropertiesPanel` now has a separate `Codex Permissions` section.
+
+OpenAI docs checked on 2026-05-07 also list a newer granular approval-policy
+object form. Fluxion should explicitly block or design support for that shape
+before any Phase 2B approval-host implementation.
 
 This closes the immediate risk where a non-interactive Fluxion workflow could hang waiting for a Codex approval prompt.
 
@@ -112,7 +116,7 @@ Implemented artifacts:
 
 Probe evidence is recorded in:
 
-- `docs/codex-approval-protocol-probe.md`
+- `docs/runtime/codex-approval-protocol-probe.md`
 
 Observed result:
 
@@ -188,9 +192,35 @@ Remote-machine caveat:
 
 4. Keep Phase 2B approval host blocked.
    - Re-run probe only after Codex CLI version changes or docs expose a stable reply protocol.
+   - Use the blocked design note in `docs/runtime/codex-approval-phase-2b-plan.md` as the next-session starting point.
 
 5. Re-evaluate `Explain with AI` after runtime actions are smooth.
    - The feature will be more useful once terminal, output, review, retry, and abort states are reliable.
+
+## Next Session References
+
+Use these files as the starting context for the next implementation session:
+
+- `docs/runtime/codex-approval-protocol-probe.md`
+  - Phase 2A evidence and current `unsupported` result.
+- `docs/runtime/codex-approval-phase-2b-plan.md`
+  - Blocked Phase 2B design and entry criteria if the protocol becomes supported.
+- `docs/backlog/fluxion-master-backlog.md`
+  - Broader runtime/product backlog.
+- `docs/assessments/fluxion-project-assessment-2026-05-06.md`
+  - Previous baseline before the 2026-05-07 runtime and approval work.
+
+Official docs to re-check before implementing anything approval-related:
+
+- `https://developers.openai.com/codex/config-reference#configtoml`
+- `https://developers.openai.com/codex/concepts/sandboxing#configure-defaults`
+- `https://developers.openai.com/codex/agent-approvals-security#sandbox-and-approvals`
+
+Session warning:
+
+- Current validation and Codex CLI path evidence came from the remote machine.
+- Before local implementation, rerun `where.exe codex`, `npm prefix -g`, `codex --version`, and the probe on the local machine.
+- Phase 2B is documented only as a blocked design. It is not approved for implementation until probe status becomes `supported`.
 
 ## Final Verdict
 

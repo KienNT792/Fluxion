@@ -2,7 +2,7 @@
 
 Date: 2026-05-06
 Workspace: `D:\codex-workflow\Fluxion`
-Source baseline: `README.md`, `docs/fluxion-project-assessment-2026-05-06.md`, repo verification on `2026-05-06`
+Source baseline: `README.md`, `docs/assessments/fluxion-project-assessment-2026-05-06.md`, repo verification on `2026-05-06`
 
 ## Purpose
 
