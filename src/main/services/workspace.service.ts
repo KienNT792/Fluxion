@@ -12,7 +12,7 @@ import {
   formatProjectContextMarkdown,
   normalizeProjectContextDraft,
   PROJECT_CONTEXT_VERSION,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   resolveProjectContextStatus,
   Workflow, 
   WorkflowNode, 
@@ -87,13 +87,92 @@ const projectContextFieldEnum = z.enum([
   'focusAreas',
   'nonGoals',
   'openQuestions',
+  'languages',
+  'frameworks',
+  'packageManagers',
+  'buildSystems',
+  'testFrameworks',
+  'entrypoints',
+  'moduleBoundaries',
+  'generatedOrIgnoredPaths',
+  'riskFlags',
+  'recommendedFirstActions',
+  'workspaceTrust',
+  'components',
+  'commandCatalog',
+  'agentInstructionSources',
+  'securityPolicy',
+  'readiness',
 ]);
 
 const contextSourceEvidenceSchema = z.object({
+  id: z.string().optional(),
   field: projectContextFieldEnum,
   sourcePath: z.string().min(1),
   confidence: z.enum(['high', 'medium', 'low']),
   note: z.string().optional(),
+  detectorId: z.string().optional(),
+  matchedSignals: z.array(z.string()).optional(),
+  rawValue: z.string().optional(),
+  confidenceReason: z.string().optional(),
+});
+
+const projectContextComponentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum([
+    'frontend',
+    'backend',
+    'desktop',
+    'mobile',
+    'worker',
+    'library',
+    'cli',
+    'infra',
+    'unknown',
+  ]),
+  rootPath: z.string(),
+  languages: z.array(z.string()),
+  frameworks: z.array(z.string()),
+  entrypoints: z.array(z.string()),
+  verificationCommands: z.array(z.string()),
+  evidenceIds: z.array(z.string()),
+});
+
+const projectContextCommandSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  command: z.string(),
+  cwd: z.string(),
+  category: z.enum(['setup', 'dev', 'typecheck', 'lint', 'test', 'build', 'e2e', 'db', 'other']),
+  risk: z.enum(['safe', 'needs-approval', 'destructive']),
+  confidence: z.enum(['high', 'medium', 'low']),
+  evidenceIds: z.array(z.string()),
+});
+
+const agentInstructionSourceSchema = z.object({
+  target: z.enum(['codex', 'claude', 'gemini', 'cursor', 'cline', 'windsurf', 'copilot', 'generic']),
+  sourcePath: z.string(),
+  scope: z.string(),
+  activation: z.enum(['always', 'path', 'manual', 'agent-requested', 'unknown']),
+  priority: z.number(),
+  trusted: z.boolean(),
+});
+
+const projectSecurityPolicySchema = z.object({
+  sensitivePaths: z.array(z.string()),
+  generatedOrIgnoredPaths: z.array(z.string()),
+  writableRoots: z.array(z.string()),
+  approvalRequiredFor: z.array(z.string()),
+  destructiveCommands: z.array(z.string()),
+  networkPolicy: z.enum(['unknown', 'disabled', 'limited', 'full']),
+});
+
+const projectContextReadinessSchema = z.object({
+  status: z.enum(['incomplete', 'ready']),
+  missingItems: z.array(z.string()),
+  riskFlags: z.array(z.string()),
+  recommendedFirstActions: z.array(z.string()),
 });
 
 const projectContextDraftSchema = z.object({
@@ -112,6 +191,22 @@ const projectContextDraftSchema = z.object({
   focusAreas: z.array(z.string()),
   nonGoals: z.array(z.string()),
   openQuestions: z.array(z.string()),
+  languages: z.array(z.string()).optional(),
+  frameworks: z.array(z.string()).optional(),
+  packageManagers: z.array(z.string()).optional(),
+  buildSystems: z.array(z.string()).optional(),
+  testFrameworks: z.array(z.string()).optional(),
+  entrypoints: z.array(z.string()).optional(),
+  moduleBoundaries: z.array(z.string()).optional(),
+  generatedOrIgnoredPaths: z.array(z.string()).optional(),
+  riskFlags: z.array(z.string()).optional(),
+  recommendedFirstActions: z.array(z.string()).optional(),
+  workspaceTrust: z.enum(['unknown', 'trusted', 'untrusted']).optional(),
+  components: z.array(projectContextComponentSchema).optional(),
+  commandCatalog: z.array(projectContextCommandSchema).optional(),
+  agentInstructionSources: z.array(agentInstructionSourceSchema).optional(),
+  securityPolicy: projectSecurityPolicySchema.optional(),
+  readiness: projectContextReadinessSchema.optional(),
   sourceEvidence: z.array(contextSourceEvidenceSchema),
   lastReviewedAt: z.string(),
   contextStatus: z.enum(['missing', 'incomplete', 'ready', 'legacy']),
@@ -142,7 +237,7 @@ function splitLegacyList(value: string | undefined): string[] {
 function mapLegacyContextToDraft(
   value: z.infer<typeof legacyContextSchema>,
   workspacePath: string
-): ProjectContextDraftV2 {
+): ProjectContextDraft {
   const projectName = path.basename(workspacePath) || 'Workspace';
 
   return normalizeProjectContextDraft({
@@ -160,7 +255,7 @@ function mapLegacyContextToDraft(
   });
 }
 
-function getContextValidationError(draft: ProjectContextDraftV2): string | null {
+function getContextValidationError(draft: ProjectContextDraft): string | null {
   if (!draft.projectName.trim()) {
     return 'Project name is required before saving project context.';
   }
@@ -169,8 +264,12 @@ function getContextValidationError(draft: ProjectContextDraftV2): string | null 
     return 'Project goal is required before saving project context.';
   }
 
-  if (draft.workspaceType === 'blank' && !draft.firstMilestone.trim()) {
-    return 'First milestone is required before saving a blank-project context.';
+  if (draft.workspaceType === 'blank') {
+    const hasTargetStack =
+      draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0;
+    if (!draft.firstMilestone.trim() || !draft.kickoffIntent || !hasTargetStack) {
+      return 'First milestone, kickoff intent, and target stack are required before saving a blank-project context.';
+    }
   }
 
   return null;
@@ -355,7 +454,7 @@ export class WorkspaceService {
     await memoryManager.initWorkspace(resolvedWorkspacePath);
 
     let isNewWorkspace = false;
-    let { workflows, legacyWorkflowDetected } = await this.scanWorkflows(resolvedWorkspacePath);
+    const { workflows, legacyWorkflowDetected } = await this.scanWorkflows(resolvedWorkspacePath);
 
     let activeWorkflowFilePath: string;
     let workflow: Workflow;
@@ -455,7 +554,7 @@ export class WorkspaceService {
     await fs.mkdir(workflowsDir, { recursive: true });
     
     // Generate a safe unique filename
-    let slug = slugify(name);
+    const slug = slugify(name);
     let filePath = path.join(workflowsDir, `${slug}.fluxion.json`);
     
     // Anti-collision loop
@@ -503,16 +602,16 @@ export class WorkspaceService {
     this.activeWorkflowFilePath = null;
   }
 
-  public async getContext(workspacePath: string): Promise<ProjectContextDraftV2 | null> {
+  public async getContext(workspacePath: string): Promise<ProjectContextDraft | null> {
     const resolvedWorkspacePath = path.resolve(workspacePath);
     const contextFilePath = this.getContextFilePath(resolvedWorkspacePath);
     try {
       const raw = await fs.readFile(contextFilePath, 'utf-8');
       const parsed = JSON.parse(raw) as unknown;
 
-      const v2Context = projectContextDraftSchema.safeParse(parsed);
-      if (v2Context.success) {
-        return normalizeProjectContextDraft(v2Context.data);
+      const projectContext = projectContextDraftSchema.safeParse(parsed);
+      if (projectContext.success) {
+        return normalizeProjectContextDraft(projectContext.data);
       }
 
       const legacyContext = legacyContextSchema.safeParse(parsed);
@@ -526,9 +625,9 @@ export class WorkspaceService {
     }
   }
 
-  public async saveContextV2(
+  public async saveProjectContext(
     workspacePath: string,
-    draft: ProjectContextDraftV2,
+    draft: ProjectContextDraft,
     mode: ContextSaveMode = 'final'
   ): Promise<WorkspaceContextSavedPayload> {
     const resolvedWorkspacePath = path.resolve(workspacePath);
@@ -588,7 +687,7 @@ export class WorkspaceService {
       path.resolve(workspacePath)
     );
 
-    await this.saveContextV2(workspacePath, legacyDraft, 'draft');
+    await this.saveProjectContext(workspacePath, legacyDraft, 'draft');
   }
 
   private createDefaultWorkflow(workspacePath: string): Workflow {

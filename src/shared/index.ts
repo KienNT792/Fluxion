@@ -13,6 +13,7 @@ export * from './codex-approval-guardrail';
 export * from './codex.models';
 export * from './openai.models';
 export * from './agent.types';
+export * from './agent-config.types';
 export * from './context.types';
 export * from './context.utils';
 export * from './memory.types';

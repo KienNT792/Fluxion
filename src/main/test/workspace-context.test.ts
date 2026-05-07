@@ -16,7 +16,7 @@ describe('workspaceService project context', () => {
     }
   });
 
-  it('saves v2 context.json and global-context.md together', async () => {
+  it('saves project context.json and global-context.md together', async () => {
     workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-context-save-'));
     const draft = normalizeProjectContextDraft({
       ...createEmptyProjectContextDraft('existing', 'Fluxion'),
@@ -32,7 +32,7 @@ describe('workspaceService project context', () => {
       openQuestions: ['How should retries be surfaced?'],
     });
 
-    const result = await workspaceService.saveContextV2(workspacePath, draft, 'final');
+    const result = await workspaceService.saveProjectContext(workspacePath, draft, 'final');
     const contextJson = JSON.parse(
       await readFile(join(workspacePath, '.fluxion', 'context.json'), 'utf8')
     );

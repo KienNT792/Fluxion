@@ -1,6 +1,11 @@
 import { ElectronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  AgentConfigApplyPreviewRequest,
+  AgentConfigApplyPreviewResult,
+  AgentConfigExporterSummary,
+  AgentConfigPreviewRequest,
+  AgentConfigExportPreview,
   ContextSaveMode,
   ContextScanResult,
   ExecutionMode,
@@ -9,7 +14,7 @@ import {
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -42,12 +47,19 @@ export interface FluxionAPI {
     payload: WorkspaceReadTextFilePayload
   ) => Promise<WorkspaceReadTextFileResult>;
   scanWorkspaceContext: (workspacePath: string) => Promise<ContextScanResult>;
-  getContext: (workspacePath: string) => Promise<ProjectContextDraftV2 | null>;
-  saveContextV2: (
+  getContext: (workspacePath: string) => Promise<ProjectContextDraft | null>;
+  saveProjectContext: (
     workspacePath: string,
-    draft: ProjectContextDraftV2,
+    draft: ProjectContextDraft,
     mode?: ContextSaveMode
   ) => Promise<WorkspaceContextSavedPayload>;
+  listAgentConfigExporters: () => Promise<AgentConfigExporterSummary[]>;
+  createAgentConfigPreview: (
+    payload: AgentConfigPreviewRequest
+  ) => Promise<AgentConfigExportPreview>;
+  applyAgentConfigPreview: (
+    payload: AgentConfigApplyPreviewRequest
+  ) => Promise<AgentConfigApplyPreviewResult>;
   getProviderCapabilities: (
     payload?: GetProviderCapabilitiesPayload
   ) => Promise<ProviderCapabilitiesPayload>;

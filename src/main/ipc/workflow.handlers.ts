@@ -3,12 +3,14 @@ import { open, realpath, stat } from 'fs/promises';
 import { isAbsolute, relative, resolve } from 'path';
 import {
   ContextSaveMode,
+  AgentConfigApplyPreviewPayload,
+  AgentConfigCreatePreviewPayload,
   getProviderCodexApprovalProtocolStatus,
   getWorkflowCodexApprovalGuardrail,
   IpcChannels,
   ProviderSettingsSummaryPayload,
   GetProviderCapabilitiesPayload,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowAbortPayload,
@@ -28,6 +30,7 @@ import { providerRegistryService } from '../services/provider-registry.service';
 import { processManager } from '../services/process-manager';
 import { settingsService } from '../services/settings.service';
 import { openShellPath, revealShellPath } from '../services/shell-path.service';
+import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service';
 import { workspaceService } from '../services/workspace.service';
 
 const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
@@ -217,16 +220,53 @@ export function registerWorkflowHandlers(): void {
   });
 
   ipcMain.handle(
-    IpcChannels.WORKSPACE_SAVE_CONTEXT_V2,
+    IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT,
     async (
       _event,
-      payload: { workspacePath: string; draft: ProjectContextDraftV2; mode?: ContextSaveMode }
+      payload: { workspacePath: string; draft: ProjectContextDraft; mode?: ContextSaveMode }
     ) => {
-      return workspaceService.saveContextV2(
+      return workspaceService.saveProjectContext(
         payload.workspacePath,
         payload.draft,
         payload.mode
       );
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY,
+    async (
+      _event,
+      payload: { workspacePath: string; draft: ProjectContextDraft; mode?: ContextSaveMode }
+    ) => {
+      return workspaceService.saveProjectContext(
+        payload.workspacePath,
+        payload.draft,
+        payload.mode
+      );
+    }
+  );
+
+  ipcMain.handle(IpcChannels.AGENT_CONFIG_LIST_EXPORTERS, async () => {
+    return agentConfigPreviewService.listExporters();
+  });
+
+  ipcMain.handle(
+    IpcChannels.AGENT_CONFIG_CREATE_PREVIEW,
+    async (_event, payload: AgentConfigCreatePreviewPayload) => {
+      return agentConfigPreviewService.createPreview(
+        payload.workspacePath,
+        payload.exporterId,
+        payload.context,
+        payload.options
+      );
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.AGENT_CONFIG_APPLY_PREVIEW,
+    async (_event, payload: AgentConfigApplyPreviewPayload) => {
+      return agentConfigPreviewService.applyPreview(payload.preview);
     }
   );
 

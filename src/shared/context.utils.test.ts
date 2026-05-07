@@ -13,6 +13,7 @@ describe('context.utils', () => {
     const blankDraft = normalizeProjectContextDraft({
       ...createEmptyProjectContextDraft('blank', 'Fluxion'),
       projectGoal: 'Build a workflow desktop app',
+      primaryStack: ['Electron'],
     });
 
     expect(isProjectContextReadyForFinalSave(blankDraft)).toBe(false);
@@ -23,8 +24,10 @@ describe('context.utils', () => {
     const readyDraft = normalizeProjectContextDraft({
       ...createEmptyProjectContextDraft('existing', 'Fluxion'),
       projectGoal: 'Build a workflow desktop app',
+      primaryStack: ['Electron', 'React', 'TypeScript'],
       architectureSummary: 'Electron main and renderer split',
       firstMilestone: 'Ship workspace context setup',
+      verificationCommands: ['npm run typecheck'],
     });
 
     expect(isProjectContextReadyForFinalSave(readyDraft)).toBe(true);
@@ -58,6 +61,7 @@ describe('context.utils', () => {
 
     expect(markdown).toContain('# Project Brief');
     expect(markdown).toContain('# Stable Rules');
+    expect(markdown).toContain('# Verification');
     expect(markdown).toContain('Prefer Windows-safe commands');
     expect(markdown).toContain('Verify with `npm run typecheck`');
     expect(markdown).toContain('# Open Questions');

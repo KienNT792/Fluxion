@@ -13,7 +13,7 @@ import {
   AgentNodeData,
   CODEX_DEFAULT_MODEL,
   CODEX_DEFAULT_REASONING_LEVEL,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   ExecutionMode,
   ProviderCapabilitiesMap,
   ReasoningLevel,
@@ -56,7 +56,7 @@ interface WorkflowState {
   hasExternalWorkflowChange: boolean;
   recentWorkspaceChanges: WorkspaceChangeRecord[];
   contextStatus: WorkspaceContextStatus;
-  contextSummary: ProjectContextDraftV2 | null;
+  contextSummary: ProjectContextDraft | null;
   isContextSetupOpen: boolean;
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
@@ -89,7 +89,7 @@ interface WorkflowState {
   setContextSetupOpen: (isOpen: boolean) => void;
   setContextState: (
     status: WorkspaceContextStatus,
-    contextSummary: ProjectContextDraftV2 | null
+    contextSummary: ProjectContextDraft | null
   ) => void;
 }
 

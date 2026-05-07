@@ -11,7 +11,13 @@ export const IpcChannels = {
   WORKSPACE_SAVE_CONTEXT: 'workspace:save-context',
   WORKSPACE_SCAN_CONTEXT: 'workspace:scan-context',
   WORKSPACE_GET_CONTEXT: 'workspace:get-context',
-  WORKSPACE_SAVE_CONTEXT_V2: 'workspace:save-context-v2',
+  WORKSPACE_SAVE_PROJECT_CONTEXT: 'workspace:save-project-context',
+  WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY: 'workspace:save-context-v2',
+
+  // Agent Config Export
+  AGENT_CONFIG_LIST_EXPORTERS: 'agent-config:list-exporters',
+  AGENT_CONFIG_CREATE_PREVIEW: 'agent-config:create-preview',
+  AGENT_CONFIG_APPLY_PREVIEW: 'agent-config:apply-preview',
 
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   WORKSPACE_WORKFLOW_CREATE: 'workspace:workflow-create',

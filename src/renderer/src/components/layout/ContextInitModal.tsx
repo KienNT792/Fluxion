@@ -8,6 +8,9 @@ import {
   Sparkles,
 } from 'lucide-react';
 import {
+  AgentConfigExportPreview,
+  AgentConfigExporterId,
+  AgentConfigExporterSummary,
   buildSkippedProjectContextDraft,
   ContextSaveMode,
   ContextScanResult,
@@ -16,7 +19,7 @@ import {
   isProjectContextReadyForFinalSave,
   kickoffIntentLabel,
   normalizeProjectContextDraft,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   ProjectContextField,
   WorkspaceContextSavedPayload,
   WorkspaceContextStatus,
@@ -32,7 +35,7 @@ type PreviewTab = 'readable' | 'markdown' | 'json';
 
 interface ContextInitModalProps {
   workspacePath: string;
-  initialContext: ProjectContextDraftV2 | null;
+  initialContext: ProjectContextDraft | null;
   initialStatus: WorkspaceContextStatus;
   onSaved: (payload: WorkspaceContextSavedPayload) => void;
   onClose: () => void;
@@ -67,7 +70,7 @@ const STEPS: { id: ContextStepId; label: string; description: string }[] = [
 ] as const;
 
 const KICKOFF_INTENTS: Array<{
-  value: NonNullable<ProjectContextDraftV2['kickoffIntent']>;
+  value: NonNullable<ProjectContextDraft['kickoffIntent']>;
   description: string;
 }> = [
   {
@@ -103,9 +106,9 @@ function mergeDetectedList(existing: string[], detected: string[] | undefined): 
 function mergeScanIntoDraft(
   workspacePath: string,
   scan: ContextScanResult | null,
-  existingContext: ProjectContextDraftV2 | null,
+  existingContext: ProjectContextDraft | null,
   initialStatus: WorkspaceContextStatus
-): ProjectContextDraftV2 {
+): ProjectContextDraft {
   const workspaceName = getWorkspaceName(workspacePath);
   const scanFields = scan?.detectedFields ?? {};
   const merged = normalizeProjectContextDraft(
@@ -129,6 +132,38 @@ function mergeScanIntoDraft(
       focusAreas: existingContext?.focusAreas ?? [],
       nonGoals: existingContext?.nonGoals ?? [],
       openQuestions: existingContext?.openQuestions ?? [],
+      languages: mergeDetectedList(existingContext?.languages ?? [], scanFields.languages),
+      frameworks: mergeDetectedList(existingContext?.frameworks ?? [], scanFields.frameworks),
+      packageManagers: mergeDetectedList(
+        existingContext?.packageManagers ?? [],
+        scanFields.packageManagers
+      ),
+      buildSystems: mergeDetectedList(existingContext?.buildSystems ?? [], scanFields.buildSystems),
+      testFrameworks: mergeDetectedList(
+        existingContext?.testFrameworks ?? [],
+        scanFields.testFrameworks
+      ),
+      entrypoints: mergeDetectedList(existingContext?.entrypoints ?? [], scanFields.entrypoints),
+      moduleBoundaries: mergeDetectedList(
+        existingContext?.moduleBoundaries ?? [],
+        scanFields.moduleBoundaries
+      ),
+      generatedOrIgnoredPaths: mergeDetectedList(
+        existingContext?.generatedOrIgnoredPaths ?? [],
+        scanFields.generatedOrIgnoredPaths
+      ),
+      riskFlags: mergeDetectedList(existingContext?.riskFlags ?? [], scanFields.riskFlags),
+      recommendedFirstActions: mergeDetectedList(
+        existingContext?.recommendedFirstActions ?? [],
+        scanFields.recommendedFirstActions
+      ),
+      workspaceTrust: existingContext?.workspaceTrust ?? scanFields.workspaceTrust ?? 'unknown',
+      components: existingContext?.components ?? scanFields.components ?? [],
+      commandCatalog: existingContext?.commandCatalog ?? scanFields.commandCatalog ?? [],
+      agentInstructionSources:
+        existingContext?.agentInstructionSources ?? scanFields.agentInstructionSources ?? [],
+      securityPolicy: existingContext?.securityPolicy ?? scanFields.securityPolicy,
+      readiness: existingContext?.readiness ?? scanFields.readiness,
       sourceEvidence: scan?.sourceEvidence ?? existingContext?.sourceEvidence ?? [],
       lastReviewedAt: existingContext?.lastReviewedAt,
       contextStatus: existingContext?.contextStatus ?? initialStatus,
@@ -182,10 +217,42 @@ function fieldLabel(field: ProjectContextField): string {
       return 'Non-goals';
     case 'openQuestions':
       return 'Open questions';
+    case 'languages':
+      return 'Languages';
+    case 'frameworks':
+      return 'Frameworks';
+    case 'packageManagers':
+      return 'Package managers';
+    case 'buildSystems':
+      return 'Build systems';
+    case 'testFrameworks':
+      return 'Test frameworks';
+    case 'entrypoints':
+      return 'Entrypoints';
+    case 'moduleBoundaries':
+      return 'Module boundaries';
+    case 'generatedOrIgnoredPaths':
+      return 'Generated or ignored paths';
+    case 'riskFlags':
+      return 'Risk flags';
+    case 'recommendedFirstActions':
+      return 'Recommended first actions';
     case 'kickoffIntent':
       return 'Kickoff intent';
     case 'workspaceType':
       return 'Workspace type';
+    case 'workspaceTrust':
+      return 'Workspace trust';
+    case 'components':
+      return 'Components';
+    case 'commandCatalog':
+      return 'Command catalog';
+    case 'agentInstructionSources':
+      return 'Agent instruction sources';
+    case 'securityPolicy':
+      return 'Security policy';
+    case 'readiness':
+      return 'Readiness';
     default:
       return field;
   }
@@ -224,7 +291,7 @@ function getContextStatusState(contextStatus: WorkspaceContextStatus): {
   }
 }
 
-function getWorkspaceTypeLabel(workspaceType: ProjectContextDraftV2['workspaceType']): string {
+function getWorkspaceTypeLabel(workspaceType: ProjectContextDraft['workspaceType']): string {
   switch (workspaceType) {
     case 'existing_with_instructions':
       return 'Repo With Instructions';
@@ -235,7 +302,7 @@ function getWorkspaceTypeLabel(workspaceType: ProjectContextDraftV2['workspaceTy
   }
 }
 
-function getWorkspaceTypeDescription(workspaceType: ProjectContextDraftV2['workspaceType']): string {
+function getWorkspaceTypeDescription(workspaceType: ProjectContextDraft['workspaceType']): string {
   switch (workspaceType) {
     case 'existing_with_instructions':
       return 'Fluxion found repository signals plus an existing instructions layer.';
@@ -246,15 +313,42 @@ function getWorkspaceTypeDescription(workspaceType: ProjectContextDraftV2['works
   }
 }
 
-function getMissingRequirements(draft: ProjectContextDraftV2): string[] {
+function getMissingRequirements(draft: ProjectContextDraft): string[] {
   const missing: string[] = [];
 
   if (!draft.projectGoal.trim()) {
     missing.push('Project goal');
   }
 
-  if (draft.workspaceType === 'blank' && !draft.firstMilestone.trim()) {
-    missing.push('First milestone');
+  if (draft.workspaceType === 'blank') {
+    const hasTargetStack =
+      draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0;
+    if (!draft.firstMilestone.trim()) {
+      missing.push('First milestone');
+    }
+    if (!draft.kickoffIntent) {
+      missing.push('Kickoff intent');
+    }
+    if (!hasTargetStack) {
+      missing.push('Target stack');
+    }
+  } else {
+    const hasStackSignal =
+      draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0;
+    const hasStructureSignal =
+      draft.architectureSummary.trim().length > 0 || draft.importantPaths.length > 0;
+    const hasVerificationSignal =
+      draft.verificationCommands.length > 0
+      || draft.riskFlags.some((flag) => flag.toLowerCase().includes('verification'));
+    if (!hasStackSignal) {
+      missing.push('Stack or language');
+    }
+    if (!hasStructureSignal) {
+      missing.push('Architecture or important paths');
+    }
+    if (!hasVerificationSignal) {
+      missing.push('Verification command or risk flag');
+    }
   }
 
   return missing;
@@ -496,13 +590,18 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
   const [currentStep, setCurrentStep] = useState<ContextStepId>('detect');
   const [previewTab, setPreviewTab] = useState<PreviewTab>('readable');
   const [scanResult, setScanResult] = useState<ContextScanResult | null>(null);
-  const [draft, setDraft] = useState<ProjectContextDraftV2>(() =>
+  const [draft, setDraft] = useState<ProjectContextDraft>(() =>
     mergeScanIntoDraft(workspacePath, null, initialContext, initialStatus)
   );
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [agentConfigExporters, setAgentConfigExporters] = useState<AgentConfigExporterSummary[]>([]);
+  const [agentConfigPreview, setAgentConfigPreview] = useState<AgentConfigExportPreview | null>(null);
+  const [agentConfigError, setAgentConfigError] = useState<string | null>(null);
+  const [isCreatingAgentConfigPreview, setIsCreatingAgentConfigPreview] = useState(false);
+  const [isApplyingAgentConfigPreview, setIsApplyingAgentConfigPreview] = useState(false);
 
   useModalFocusTrap(true, dialogRef);
 
@@ -561,6 +660,29 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     };
   }, [initialContext, initialStatus, workspacePath]);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadExporters = async (): Promise<void> => {
+      try {
+        const exporters = await window.api.listAgentConfigExporters();
+        if (!isCancelled) {
+          setAgentConfigExporters(exporters);
+        }
+      } catch {
+        if (!isCancelled) {
+          setAgentConfigExporters([]);
+        }
+      }
+    };
+
+    void loadExporters();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
   const statusState = useMemo(() => getContextStatusState(draft.contextStatus), [draft.contextStatus]);
   const currentStepIndex = useMemo(
     () => STEPS.findIndex((step) => step.id === currentStep),
@@ -571,7 +693,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
   const workspaceName = useMemo(() => getWorkspaceName(workspacePath), [workspacePath]);
 
   const updateDraft = useCallback(
-    (patch: Partial<ProjectContextDraftV2>) => {
+    (patch: Partial<ProjectContextDraft>) => {
       setDraft((current) => normalizeProjectContextDraft({ ...current, ...patch }));
     },
     []
@@ -587,7 +709,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
           mode === 'skip'
             ? buildSkippedProjectContextDraft(draft, draft.workspaceType, draft.projectName)
             : draft;
-        const result = await window.api.saveContextV2(workspacePath, payloadDraft, mode);
+        const result = await window.api.saveProjectContext(workspacePath, payloadDraft, mode);
         setDraft(result.context);
         onSaved(result);
       } catch (error) {
@@ -601,12 +723,57 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     [draft, onSaved, workspacePath]
   );
 
+  const handleCreateAgentConfigPreview = useCallback(
+    async (exporterId: AgentConfigExporterId, includeAdvancedConfig = false) => {
+      setIsCreatingAgentConfigPreview(true);
+      setAgentConfigError(null);
+
+      try {
+        const preview = await window.api.createAgentConfigPreview({
+          workspacePath,
+          exporterId,
+          context: draft,
+          options: { includeAdvancedConfig },
+        });
+        setAgentConfigPreview(preview);
+      } catch (error) {
+        setAgentConfigError(
+          error instanceof Error ? error.message : 'Failed to create agent config preview.'
+        );
+      } finally {
+        setIsCreatingAgentConfigPreview(false);
+      }
+    },
+    [draft, workspacePath]
+  );
+
+  const handleApplyAgentConfigPreview = useCallback(async () => {
+    if (!agentConfigPreview) {
+      return;
+    }
+
+    setIsApplyingAgentConfigPreview(true);
+    setAgentConfigError(null);
+
+    try {
+      await window.api.applyAgentConfigPreview({ preview: agentConfigPreview });
+      setAgentConfigPreview(null);
+    } catch (error) {
+      setAgentConfigError(
+        error instanceof Error ? error.message : 'Failed to apply agent config preview.'
+      );
+    } finally {
+      setIsApplyingAgentConfigPreview(false);
+    }
+  }, [agentConfigPreview]);
+
   const previewMarkdown = useMemo(() => formatProjectContextMarkdown(draft), [draft]);
   const previewReadable = useMemo(() => formatReadableProjectContext(draft), [draft]);
   const previewJson = useMemo(() => JSON.stringify(draft, null, 2), [draft]);
   const showCloseAction = initialStatus !== 'missing' && initialStatus !== 'legacy';
+  const canExportAgentConfig = draft.contextStatus === 'ready';
 
-  const renderDetectStep = () => (
+  const renderDetectStep = (): React.ReactNode => (
     <div className="space-y-5">
       <div
         className="rounded-lg px-4 py-4"
@@ -819,7 +986,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     </div>
   );
 
-  const renderRulesStep = () => (
+  const renderRulesStep = (): React.ReactNode => (
     <div className="space-y-5">
       <ListEditor
         label="Primary stack"
@@ -827,6 +994,30 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
         placeholder="TypeScript"
         suggestions={scanResult?.detectedFields.primaryStack}
         onChange={(values) => updateDraft({ primaryStack: values })}
+      />
+
+      <ListEditor
+        label="Languages"
+        values={draft.languages}
+        placeholder="Java"
+        suggestions={scanResult?.detectedFields.languages}
+        onChange={(values) => updateDraft({ languages: values })}
+      />
+
+      <ListEditor
+        label="Frameworks"
+        values={draft.frameworks}
+        placeholder="Spring Boot"
+        suggestions={scanResult?.detectedFields.frameworks}
+        onChange={(values) => updateDraft({ frameworks: values })}
+      />
+
+      <ListEditor
+        label="Package managers"
+        values={draft.packageManagers}
+        placeholder="Maven"
+        suggestions={scanResult?.detectedFields.packageManagers}
+        onChange={(values) => updateDraft({ packageManagers: values })}
       />
 
       <ListEditor
@@ -850,7 +1041,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     </div>
   );
 
-  const renderBriefStep = () => (
+  const renderBriefStep = (): React.ReactNode => (
     <div className="space-y-5">
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold" style={{ color: 'var(--color-body-strong)' }}>
@@ -914,7 +1105,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     </div>
   );
 
-  const renderFocusStep = () => (
+  const renderFocusStep = (): React.ReactNode => (
     <div className="space-y-5">
       <ListEditor
         label="Important paths"
@@ -926,10 +1117,35 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
       />
 
       <ListEditor
+        label="Entrypoints"
+        values={draft.entrypoints}
+        placeholder="src/main/java/com/example/Application.java"
+        suggestions={scanResult?.detectedFields.entrypoints}
+        monospace
+        onChange={(values) => updateDraft({ entrypoints: values })}
+      />
+
+      <ListEditor
         label="Current focus areas"
         values={draft.focusAreas}
         placeholder="workflow execution"
         onChange={(values) => updateDraft({ focusAreas: values })}
+      />
+
+      <LineListTextarea
+        label="Risk flags"
+        values={draft.riskFlags}
+        placeholder={'One risk per line.\nMultiple app entrypoints were detected.'}
+        rows={4}
+        onChange={(values) => updateDraft({ riskFlags: values })}
+      />
+
+      <LineListTextarea
+        label="Recommended first actions"
+        values={draft.recommendedFirstActions}
+        placeholder={'One action per line.\nReview duplicate bootstraps before feature work.'}
+        rows={4}
+        onChange={(values) => updateDraft({ recommendedFirstActions: values })}
       />
 
       <LineListTextarea
@@ -942,7 +1158,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     </div>
   );
 
-  const renderReviewStep = () => (
+  const renderReviewStep = (): React.ReactNode => (
     <div className="space-y-5">
       <div
         className="rounded-lg px-4 py-4"
@@ -1024,10 +1240,156 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
           </div>
         </div>
       )}
+
+      <div
+        className="rounded-lg px-4 py-4"
+        style={{
+          background: 'var(--color-canvas-soft)',
+          border: '1px solid var(--color-hairline)',
+        }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+              Agent config export
+            </p>
+            <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+              Export Fluxion context into agent-specific workspace files after the canonical
+              context is saved.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => void handleCreateAgentConfigPreview('codex', false)}
+              disabled={!canExportAgentConfig || isCreatingAgentConfigPreview}
+            >
+              Codex AGENTS.md
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void handleCreateAgentConfigPreview('codex', true)}
+              disabled={!canExportAgentConfig || isCreatingAgentConfigPreview}
+            >
+              Codex Advanced
+            </Button>
+          </div>
+        </div>
+
+        {!canExportAgentConfig ? (
+          <p className="mt-3 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+            Save a ready Fluxion context before exporting agent configuration.
+          </p>
+        ) : null}
+
+        {agentConfigExporters.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {agentConfigExporters
+              .filter((exporter) => exporter.id !== 'codex')
+              .map((exporter) => (
+                <Button
+                  key={exporter.id}
+                  variant="ghost"
+                  onClick={() => void handleCreateAgentConfigPreview(exporter.id)}
+                  disabled={!canExportAgentConfig || isCreatingAgentConfigPreview}
+                >
+                  {exporter.label}
+                  {' '}
+                  {exporter.status === 'notImplemented' ? '(scaffold)' : ''}
+                </Button>
+              ))}
+          </div>
+        ) : null}
+
+        {agentConfigError ? (
+          <p className="mt-3 text-xs" style={{ color: 'var(--color-semantic-error)' }}>
+            {agentConfigError}
+          </p>
+        ) : null}
+
+        {agentConfigPreview ? (
+          <div className="mt-4 space-y-3">
+            {agentConfigPreview.warnings.length > 0 ? (
+              <div className="rounded-md px-3 py-3" style={{ background: '#fff8f2' }}>
+                {agentConfigPreview.warnings.map((warning) => (
+                  <p
+                    key={warning}
+                    className="text-xs leading-5"
+                    style={{ color: 'var(--color-body)' }}
+                  >
+                    {warning}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
+            {agentConfigPreview.operations.length > 0 ? (
+              <div className="space-y-3">
+                {agentConfigPreview.operations.map((operation) => (
+                  <div
+                    key={`${operation.action}:${operation.relativePath}`}
+                    className="rounded-md px-3 py-3"
+                    style={{
+                      background: 'var(--color-surface-card)',
+                      border: '1px solid var(--color-hairline)',
+                    }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span
+                        className="text-xs font-semibold"
+                        style={{ color: 'var(--color-ink)' }}
+                      >
+                        {operation.action} {operation.relativePath}
+                      </span>
+                      <StatusChip tone="idle" label={operation.action} />
+                    </div>
+                    <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                      {operation.description}
+                    </p>
+                    <pre
+                      className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md px-3 py-3 text-[11px] leading-5"
+                      style={{
+                        background: 'var(--color-canvas-soft)',
+                        color: 'var(--color-ink)',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {operation.content}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                No file operations are available for this exporter yet.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setAgentConfigPreview(null)}
+                disabled={isApplyingAgentConfigPreview}
+              >
+                Clear Preview
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => void handleApplyAgentConfigPreview()}
+                disabled={
+                  isApplyingAgentConfigPreview || agentConfigPreview.operations.length === 0
+                }
+              >
+                {isApplyingAgentConfigPreview ? 'Applying...' : 'Apply Export'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 
-  const renderStepContent = () => {
+  const renderStepContent = (): React.ReactNode => {
     switch (currentStep) {
       case 'rules':
         return renderRulesStep();
@@ -1168,8 +1530,8 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                     Reading workspace signals
                   </p>
                   <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                    Fluxion is checking README.md, package.json, tsconfig*, AGENTS.md, and docs/*
-                    before it drafts agent context.
+                    Fluxion is checking project manifests, source roots, workspace files, and
+                    instructions before it drafts agent context.
                   </p>
                 </div>
               </div>

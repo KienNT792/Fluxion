@@ -1,7 +1,14 @@
 import { AbortReason } from './agent.types';
 import {
+  AgentConfigApplyPreviewRequest,
+  AgentConfigApplyPreviewResult,
+  AgentConfigExporterSummary,
+  AgentConfigPreviewRequest,
+  AgentConfigExportPreview,
+} from './agent-config.types';
+import {
   ContextScanResult,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   WorkspaceContextSavedPayload,
   WorkspaceContextStatus,
 } from './context.types';
@@ -32,7 +39,7 @@ export interface WorkspaceOpenedPayload {
   /** Current project-context state for this workspace. */
   contextStatus: WorkspaceContextStatus;
   /** Parsed project-context draft when available. */
-  contextSummary?: ProjectContextDraftV2 | null;
+  contextSummary?: ProjectContextDraft | null;
   /** True if a legacy `.fluxion/workflow.json` was detected. */
   legacyWorkflowDetected: boolean;
 }
@@ -67,8 +74,14 @@ export interface WorkflowSavedPayload {
 }
 
 export type WorkspaceContextScanPayload = ContextScanResult;
-export type WorkspaceContextPayload = ProjectContextDraftV2 | null;
+export type WorkspaceContextPayload = ProjectContextDraft | null;
 export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload;
+
+export type AgentConfigListExportersResult = AgentConfigExporterSummary[];
+export type AgentConfigCreatePreviewPayload = AgentConfigPreviewRequest;
+export type AgentConfigCreatePreviewResult = AgentConfigExportPreview;
+export type AgentConfigApplyPreviewPayload = AgentConfigApplyPreviewRequest;
+export type AgentConfigApplyPreviewResultPayload = AgentConfigApplyPreviewResult;
 
 // ─── Multi-Workflow Payloads ──────────────────────────────────────────────────
 

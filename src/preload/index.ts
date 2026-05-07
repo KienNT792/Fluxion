@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  AgentConfigApplyPreviewRequest,
+  AgentConfigApplyPreviewResult,
+  AgentConfigExporterSummary,
+  AgentConfigPreviewRequest,
+  AgentConfigExportPreview,
   ContextSaveMode,
   ContextScanResult,
   ExecutionMode,
@@ -11,7 +16,7 @@ import {
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
-  ProjectContextDraftV2,
+  ProjectContextDraft,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -69,18 +74,36 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_DELETE, { workspacePath, workflowId }) as Promise<void>,
   scanWorkspaceContext: (workspacePath: string): Promise<ContextScanResult> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SCAN_CONTEXT, workspacePath) as Promise<ContextScanResult>,
-  getContext: (workspacePath: string): Promise<ProjectContextDraftV2 | null> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_GET_CONTEXT, workspacePath) as Promise<ProjectContextDraftV2 | null>,
-  saveContextV2: (
+  getContext: (workspacePath: string): Promise<ProjectContextDraft | null> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_GET_CONTEXT, workspacePath) as Promise<ProjectContextDraft | null>,
+  saveProjectContext: (
     workspacePath: string,
-    draft: ProjectContextDraftV2,
+    draft: ProjectContextDraft,
     mode?: ContextSaveMode
   ): Promise<WorkspaceContextSavedPayload> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT_V2, {
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT, {
       workspacePath,
       draft,
       mode,
     }) as Promise<WorkspaceContextSavedPayload>,
+  listAgentConfigExporters: (): Promise<AgentConfigExporterSummary[]> =>
+    ipcRenderer.invoke(
+      IpcChannels.AGENT_CONFIG_LIST_EXPORTERS
+    ) as Promise<AgentConfigExporterSummary[]>,
+  createAgentConfigPreview: (
+    payload: AgentConfigPreviewRequest
+  ): Promise<AgentConfigExportPreview> =>
+    ipcRenderer.invoke(
+      IpcChannels.AGENT_CONFIG_CREATE_PREVIEW,
+      payload
+    ) as Promise<AgentConfigExportPreview>,
+  applyAgentConfigPreview: (
+    payload: AgentConfigApplyPreviewRequest
+  ): Promise<AgentConfigApplyPreviewResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.AGENT_CONFIG_APPLY_PREVIEW,
+      payload
+    ) as Promise<AgentConfigApplyPreviewResult>,
   getProviderCapabilities: (
     payload?: GetProviderCapabilitiesPayload
   ): Promise<ProviderCapabilitiesPayload> =>
