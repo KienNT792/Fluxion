@@ -23,6 +23,22 @@ export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never';
 
 export type CodexWindowsSandbox = 'unelevated' | 'elevated';
 
+export type CodexApprovalProtocolStatus = 'supported' | 'unsupported' | 'unknown';
+
+export interface CodexApprovalProtocolProbeResult {
+  status: CodexApprovalProtocolStatus;
+  message: string;
+  checkedAt?: string;
+  cliDisplayCommand?: string;
+  observedEventTypes?: string[];
+  hasStructuredApprovalRequest?: boolean;
+  hasCorrelationId?: boolean;
+  hasProgrammaticReplyChannel?: boolean;
+  approveDeterministic?: boolean;
+  rejectDeterministic?: boolean;
+  rawEventPreview?: unknown[];
+}
+
 export interface CodexExecutionOptions {
   json?: boolean;
   sandboxMode?: CodexSandboxMode;
@@ -126,6 +142,7 @@ export interface ProviderCapabilities {
   models: ProviderModel[];
   defaultModel?: string;
   parameters: ProviderParameterSpec[];
+  approvalProtocol?: CodexApprovalProtocolProbeResult;
   refreshHint?: string;
 }
 

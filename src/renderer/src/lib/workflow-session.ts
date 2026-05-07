@@ -1,4 +1,12 @@
-import { NodeId, Workflow, WorkflowEdge, WorkflowNode, WorkspaceOpenedPayload } from '@shared';
+import {
+  getProviderCodexApprovalProtocolStatus,
+  getWorkflowCodexApprovalGuardrail,
+  NodeId,
+  Workflow,
+  WorkflowEdge,
+  WorkflowNode,
+  WorkspaceOpenedPayload,
+} from '@shared';
 import { useExecutionStore } from '../stores/execution.store';
 import { useWorkflowStore } from '../stores/workflow.store';
 import {
@@ -149,6 +157,19 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     return;
   }
 
+  const workflow = buildWorkflowDocument();
+  const approvalGuardrail = getWorkflowCodexApprovalGuardrail(workflow.nodes, {
+    approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
+      workflowStore.providerCapabilities
+    ),
+  });
+
+  if (approvalGuardrail.severity === 'blocked') {
+    executionStore.setWorkflowStatus('error');
+    executionStore.setWorkflowError(approvalGuardrail.message);
+    return;
+  }
+
   const currentReadiness = getCodexReadinessBadgeState(
     workflowStore.providerCapabilities,
     workflowStore.nodes.map((node) => String(node.data.model ?? ''))
@@ -167,8 +188,6 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     executionStore.setWorkflowError(getCodexReadinessBlockMessage(readiness));
     return;
   }
-
-  const workflow = buildWorkflowDocument();
 
   if (resumeFromNodeId) {
     const retryNodeIds = collectRetryNodeIds(resumeFromNodeId, workflow.edges);

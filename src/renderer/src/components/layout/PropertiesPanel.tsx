@@ -1,12 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRightFromLine, RotateCcw, TerminalSquare, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRightFromLine,
+  RotateCcw,
+  TerminalSquare,
+  Trash2,
+} from 'lucide-react';
 import { z } from 'zod';
 import {
   AgentNodeData,
   CODEX_DEFAULT_REASONING_LEVEL,
+  CodexApprovalPolicy,
+  CodexExecutionOptions,
+  CodexSandboxMode,
+  CodexWindowsSandbox,
+  getNodeCodexApprovalGuardrail,
+  getProviderCodexApprovalProtocolStatus,
   ModelId,
   NodeStatus,
+  ProviderCapabilitiesMap,
   ReasoningLevel,
+  WorkflowNode,
 } from '@shared';
 import {
   approveReviewNode,
@@ -57,6 +71,17 @@ function coerceOptionalPositiveInteger(value: unknown): number | undefined {
   return Math.floor(parsed);
 }
 
+const codexExecutionOptionsSchema = z
+  .object({
+    json: z.boolean().optional(),
+    sandboxMode: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
+    approvalPolicy: z.enum(['never', 'on-request', 'untrusted']).optional(),
+    windowsSandbox: z.enum(['unelevated', 'elevated']).optional(),
+    profile: z.string().optional(),
+    config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  })
+  .optional();
+
 const nodeDataSchema = z
   .object({
     provider: z.literal('codex'),
@@ -71,6 +96,7 @@ const nodeDataSchema = z
       z.number().min(0).max(2).optional()
     ),
     reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    codex: codexExecutionOptionsSchema,
   })
   .passthrough();
 
@@ -122,6 +148,14 @@ interface ModelOption {
   description?: string;
 }
 
+interface PropertiesPanelContentProps {
+  selectedNodeId: string;
+  selectedNode: {
+    id: string;
+    data: WorkflowNode['data'];
+  };
+}
+
 function buildModelOptions(models: AgentNodeData['model'], options: ModelOption[]): ModelOption[] {
   if (!models || options.some((option) => option.id === models)) {
     return options;
@@ -149,6 +183,33 @@ function summarizeLongText(value: string | undefined, emptyLabel: string): TextS
     lineCount: trimmed ? lines.length : 0,
     characterCount: text.length,
     isEmpty: !trimmed,
+  };
+}
+
+function buildEditableNodeData(
+  selectedNode: PropertiesPanelContentProps['selectedNode'],
+  providerCapabilities: ProviderCapabilitiesMap
+): Partial<AgentNodeData> {
+  return {
+    provider: 'codex',
+    model:
+      typeof selectedNode.data.model === 'string' && selectedNode.data.model.trim()
+        ? selectedNode.data.model
+        : getDefaultCodexModel(providerCapabilities),
+    label: selectedNode.data.label,
+    prompt: typeof selectedNode.data.prompt === 'string' ? selectedNode.data.prompt : '',
+    systemInstruction:
+      typeof selectedNode.data.systemInstruction === 'string'
+        ? selectedNode.data.systemInstruction
+        : '',
+    humanReview: Boolean(selectedNode.data.humanReview),
+    maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens),
+    temperature:
+      typeof selectedNode.data.temperature === 'number'
+        ? selectedNode.data.temperature
+        : undefined,
+    reasoningLevel: selectedNode.data.reasoningLevel,
+    codex: selectedNode.data.codex,
   };
 }
 
@@ -195,8 +256,30 @@ const PreviewCard: React.FC<{
 
 export const PropertiesPanel: React.FC = () => {
   const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
-  const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode);
   const nodes = useWorkflowStore((state) => state.nodes);
+  const selectedNode = useMemo(
+    () => nodes.find((node) => node.id === selectedNodeId),
+    [nodes, selectedNodeId]
+  );
+
+  if (!selectedNodeId || !selectedNode) {
+    return null;
+  }
+
+  return (
+    <PropertiesPanelContent
+      key={selectedNodeId}
+      selectedNodeId={selectedNodeId}
+      selectedNode={selectedNode}
+    />
+  );
+};
+
+const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
+  selectedNodeId,
+  selectedNode,
+}) => {
+  const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const deleteNode = useWorkflowStore((state) => state.deleteNode);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
@@ -228,16 +311,13 @@ export const PropertiesPanel: React.FC = () => {
   const setWorkflowError = useExecutionStore((state) => state.setWorkflowError);
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId),
-    [nodes, selectedNodeId]
+  const [localData, setLocalData] = useState<Partial<AgentNodeData>>(() =>
+    buildEditableNodeData(selectedNode, providerCapabilities)
   );
-
-  const [localData, setLocalData] = useState<Partial<AgentNodeData>>({});
   const [activeTextEditor, setActiveTextEditor] = useState<
     'prompt' | 'systemInstruction' | null
   >(null);
-  const skipNextSyncRef = useRef(false);
+  const skipNextSyncRef = useRef(true);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -247,40 +327,6 @@ export const PropertiesPanel: React.FC = () => {
   }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
 
   useEffect(() => {
-    if (!selectedNode) {
-      setLocalData({});
-      setActiveTextEditor(null);
-      return;
-    }
-
-    skipNextSyncRef.current = true;
-    setLocalData({
-      provider: 'codex',
-      model:
-        typeof selectedNode.data.model === 'string' && selectedNode.data.model.trim()
-          ? selectedNode.data.model
-          : getDefaultCodexModel(providerCapabilities),
-      label: selectedNode.data.label,
-      prompt: typeof selectedNode.data.prompt === 'string' ? selectedNode.data.prompt : '',
-      systemInstruction:
-        typeof selectedNode.data.systemInstruction === 'string'
-          ? selectedNode.data.systemInstruction
-          : '',
-      humanReview: Boolean(selectedNode.data.humanReview),
-      maxTokens: coerceOptionalPositiveInteger(selectedNode.data.maxTokens),
-      temperature:
-        typeof selectedNode.data.temperature === 'number'
-          ? selectedNode.data.temperature
-          : undefined,
-      reasoningLevel: selectedNode.data.reasoningLevel,
-    });
-  }, [providerCapabilities, selectedNode]);
-
-  useEffect(() => {
-    if (!selectedNodeId || !selectedNode) {
-      return;
-    }
-
     if (skipNextSyncRef.current) {
       skipNextSyncRef.current = false;
       return;
@@ -325,10 +371,6 @@ export const PropertiesPanel: React.FC = () => {
     });
   }, [reviewFocusRequest, selectedNodeId]);
 
-  if (!selectedNodeId || !selectedNode) {
-    return null;
-  }
-
   const codexCapabilities = getCodexCapabilities(providerCapabilities);
   const currentModel = String(
     localData.model ?? selectedNode.data.model ?? getDefaultCodexModel(providerCapabilities)
@@ -343,6 +385,60 @@ export const PropertiesPanel: React.FC = () => {
   const modelOptions = buildModelOptions(currentModel, visibleModels);
   const currentModelCapabilities = getCodexModelById(providerCapabilities, currentModel);
   const currentModelDisplayName = getCodexModelDisplayName(providerCapabilities, currentModel);
+  const currentCodexOptions: CodexExecutionOptions = {
+    ...(selectedNode.data.codex ?? {}),
+    ...(localData.codex ?? {}),
+  };
+  const currentSandboxMode: CodexSandboxMode =
+    currentCodexOptions.sandboxMode ?? 'workspace-write';
+  const currentApprovalPolicy: CodexApprovalPolicy =
+    currentCodexOptions.approvalPolicy ?? 'never';
+  const currentWindowsSandbox = currentCodexOptions.windowsSandbox ?? '';
+  const nodeApprovalGuardrail = getNodeCodexApprovalGuardrail(
+    {
+      id: selectedNodeId,
+      label: String(localData.label ?? selectedNode.data.label ?? currentModelDisplayName),
+      data: {
+        label:
+          typeof localData.label === 'string'
+            ? localData.label
+            : selectedNode.data.label,
+        codex: currentCodexOptions,
+      },
+    },
+    {
+      approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(providerCapabilities),
+    }
+  );
+  const updateCodexOptions = (nextOptions: Partial<CodexExecutionOptions>): void => {
+    setLocalData((prev) => ({
+      ...prev,
+      codex: {
+        ...(selectedNode.data.codex ?? {}),
+        ...(prev.codex ?? {}),
+        ...nextOptions,
+      },
+    }));
+  };
+  const updateWindowsSandbox = (value: string): void => {
+    setLocalData((prev) => {
+      const nextCodex: CodexExecutionOptions = {
+        ...(selectedNode.data.codex ?? {}),
+        ...(prev.codex ?? {}),
+      };
+
+      if (value) {
+        nextCodex.windowsSandbox = value as CodexWindowsSandbox;
+      } else {
+        delete nextCodex.windowsSandbox;
+      }
+
+      return {
+        ...prev,
+        codex: nextCodex,
+      };
+    });
+  };
   const reasoningOptions = (currentModelCapabilities?.supportedReasoningLevels ?? []).filter(
     (level): level is ReasoningLevel =>
       level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh'
@@ -637,6 +733,95 @@ export const PropertiesPanel: React.FC = () => {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          )}
+        </Section>
+
+        <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
+
+        <Section title="Codex Permissions">
+          <div>
+            <label style={LABEL_STYLE}>Sandbox Mode</label>
+            <Select
+              value={currentSandboxMode}
+              onChange={(event) =>
+                updateCodexOptions({
+                  sandboxMode: event.target.value as CodexSandboxMode,
+                })
+              }
+            >
+              <option value="read-only">read-only</option>
+              <option value="workspace-write">workspace-write</option>
+              <option value="danger-full-access">danger-full-access</option>
+            </Select>
+          </div>
+
+          <div>
+            <label style={LABEL_STYLE}>Approval Policy</label>
+            <Select
+              value={currentApprovalPolicy}
+              onChange={(event) =>
+                updateCodexOptions({
+                  approvalPolicy: event.target.value as CodexApprovalPolicy,
+                })
+              }
+              invalid={nodeApprovalGuardrail.severity === 'blocked'}
+            >
+              <option value="never">never</option>
+              <option value="on-request">on-request</option>
+              <option value="untrusted">untrusted</option>
+            </Select>
+          </div>
+
+          <div>
+            <label style={LABEL_STYLE}>Windows Sandbox</label>
+            <Select
+              value={currentWindowsSandbox}
+              onChange={(event) => updateWindowsSandbox(event.target.value)}
+            >
+              <option value="">Default</option>
+              <option value="unelevated">unelevated</option>
+              <option value="elevated">elevated</option>
+            </Select>
+          </div>
+
+          {nodeApprovalGuardrail.severity !== 'ok' && (
+            <div
+              className="rounded-md px-3 py-2"
+              style={{
+                background: 'var(--color-surface-card)',
+                border:
+                  nodeApprovalGuardrail.severity === 'blocked'
+                    ? '1px solid var(--color-semantic-error)'
+                    : '1px solid var(--color-timeline-done)',
+              }}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle
+                  size={15}
+                  className="mt-0.5 shrink-0"
+                  style={{
+                    color:
+                      nodeApprovalGuardrail.severity === 'blocked'
+                        ? 'var(--color-semantic-error)'
+                        : 'var(--color-timeline-done)',
+                  }}
+                />
+                <div className="min-w-0">
+                  {nodeApprovalGuardrail.severity === 'blocked' && (
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-ink)' }}>
+                      Interactive Codex approval requires a supported Phase 2A protocol probe.
+                      Set approval policy to never to run this workflow.
+                    </p>
+                  )}
+                  <p
+                    className={`${nodeApprovalGuardrail.severity === 'blocked' ? 'mt-2' : ''} text-xs leading-5`}
+                    style={{ color: 'var(--color-body)' }}
+                  >
+                    {nodeApprovalGuardrail.message}
+                  </p>
+                </div>
               </div>
             </div>
           )}

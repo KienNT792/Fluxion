@@ -3,6 +3,8 @@ import { open, realpath, stat } from 'fs/promises';
 import { isAbsolute, relative, resolve } from 'path';
 import {
   ContextSaveMode,
+  getProviderCodexApprovalProtocolStatus,
+  getWorkflowCodexApprovalGuardrail,
   IpcChannels,
   ProviderSettingsSummaryPayload,
   GetProviderCapabilitiesPayload,
@@ -272,6 +274,23 @@ export function registerWorkflowHandlers(): void {
           event.sender.send(
             IpcChannels.WORKFLOW_COMPLETED,
             createWorkflowFailurePayload(payload.workflowId, validationError)
+          );
+          return;
+        }
+
+        const approvalGuardrail = getWorkflowCodexApprovalGuardrail(payload.nodes, {
+          approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
+            providerRegistryService.getCachedCapabilities()
+          ),
+        });
+        if (approvalGuardrail.severity === 'blocked') {
+          event.sender.send(IpcChannels.TERMINAL_ERROR, {
+            nodeId: 'system',
+            error: approvalGuardrail.message,
+          });
+          event.sender.send(
+            IpcChannels.WORKFLOW_COMPLETED,
+            createWorkflowFailurePayload(payload.workflowId, approvalGuardrail.message)
           );
           return;
         }

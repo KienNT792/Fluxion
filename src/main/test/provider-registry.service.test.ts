@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   getCodexCapabilities,
   parseCodexDebugModelsOutput,
 } from '../services/provider-registry.service';
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => 'C:\\FluxionTest',
+  },
+  safeStorage: {
+    decryptString: () => '',
+    encryptString: () => Buffer.from(''),
+    isEncryptionAvailable: () => false,
+  },
+}));
 
 describe('provider-registry.service', () => {
   it('parses codex debug model output into provider models', () => {
@@ -130,6 +141,9 @@ describe('provider-registry.service', () => {
     });
     expect(capabilities.defaultModel).toBe('gpt-5.5');
     expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini', 'gpt-5.5']);
+    expect(capabilities.approvalProtocol).toMatchObject({
+      status: 'unknown',
+    });
   });
 
   it('reuses the first working Codex CLI candidate across discovery commands', async () => {

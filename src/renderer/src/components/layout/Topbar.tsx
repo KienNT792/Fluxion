@@ -15,6 +15,10 @@ import {
   Square,
   Sun,
 } from 'lucide-react';
+import {
+  getProviderCodexApprovalProtocolStatus,
+  getWorkflowCodexApprovalGuardrail,
+} from '@shared';
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
@@ -291,6 +295,7 @@ export const Topbar: React.FC = () => {
   );
   const recentWorkspaceChanges = useWorkflowStore((state) => state.recentWorkspaceChanges);
   const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
+  const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode);
   const contextStatus = useWorkflowStore((state) => state.contextStatus);
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
   const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
@@ -306,7 +311,25 @@ export const Topbar: React.FC = () => {
   const isStopping = workflowStatus === 'stopping';
   const isPaused = workflowStatus === 'paused';
   const isBusy = isRunning || isStopping || isPaused;
-  const canRun = Boolean(workspacePath) && nodes.length > 0 && !isBusy;
+  const approvalGuardrail = useMemo(
+    () =>
+      getWorkflowCodexApprovalGuardrail(
+        nodes.map((node) => ({
+          id: node.id,
+          label: node.data.label ?? node.data.model,
+          data: node.data,
+        })),
+        {
+          approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(providerCapabilities),
+        }
+      ),
+    [nodes, providerCapabilities]
+  );
+  const canRun =
+    Boolean(workspacePath)
+    && nodes.length > 0
+    && !isBusy
+    && approvalGuardrail.severity !== 'blocked';
   const canSave = Boolean(workspacePath) && isDirty && !isSaving;
   const editingDimmed = isBusy;
   const workflowChipState = getWorkflowChipState(workflowStatus);
@@ -337,6 +360,8 @@ export const Topbar: React.FC = () => {
         ? 'Wait for the workflow to finish stopping'
       : isPaused
         ? 'Resolve review checkpoint first'
+        : approvalGuardrail.severity === 'blocked'
+          ? approvalGuardrail.summary
         : codexReadiness.blocking
           ? codexReadiness.summary
           : 'Run workflow';
@@ -430,6 +455,14 @@ export const Topbar: React.FC = () => {
 
   const handleRun = (): void => {
     void runCurrentWorkflow();
+  };
+
+  const handleFixPermissions = (): void => {
+    if (!approvalGuardrail.nodeId) {
+      return;
+    }
+
+    setSelectedNode(approvalGuardrail.nodeId);
   };
 
   const handleRefreshReadiness = async (): Promise<void> => {
@@ -669,6 +702,18 @@ export const Topbar: React.FC = () => {
               onClick={() => requestReviewFocus(reviewNodeIds[0]!)}
             >
               {reviewButtonLabel}
+            </Button>
+          )}
+
+          {approvalGuardrail.severity === 'blocked' && approvalGuardrail.nodeId && (
+            <Button
+              variant="secondary"
+              size="toolbar"
+              className="min-w-[132px]"
+              title={approvalGuardrail.message}
+              onClick={handleFixPermissions}
+            >
+              Fix Permissions
             </Button>
           )}
         </div>

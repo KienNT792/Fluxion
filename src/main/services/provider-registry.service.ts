@@ -3,6 +3,7 @@ import {
   CODEX_DEFAULT_MODEL,
   CODEX_DEFAULT_REASONING_LEVEL,
   CODEX_REASONING_LEVELS,
+  CodexApprovalProtocolProbeResult,
   OPENAI_DEFAULT_MODEL,
   OPENAI_DEFAULT_REASONING_LEVEL,
   OPENAI_MVP_MODELS,
@@ -23,6 +24,23 @@ import {
 const OPENAI_MODELS_TIMEOUT_MS = 10_000;
 const CODEX_MODELS_TIMEOUT_MS = 10_000;
 const EXEC_FILE_MAX_BUFFER = 1024 * 1024;
+
+function createUnknownCodexApprovalProtocol(): CodexApprovalProtocolProbeResult {
+  return {
+    status: 'unknown',
+    message:
+      'Codex approval protocol probe has not been run. Fluxion keeps on-request and untrusted approval policies blocked until support is verified.',
+  };
+}
+
+function withCodexApprovalProtocol(
+  capabilities: ProviderCapabilities
+): ProviderCapabilities {
+  return {
+    ...capabilities,
+    approvalProtocol: capabilities.approvalProtocol ?? createUnknownCodexApprovalProtocol(),
+  };
+}
 
 const OPENAI_PARAMETERS: ProviderParameterSpec[] = [
   {
@@ -513,7 +531,7 @@ export async function getCodexCapabilities(
 
       if (isCodexAuthMissingMessage(combinedOutput)) {
         const readiness = buildCodexReadiness('auth_missing');
-        return {
+        return withCodexApprovalProtocol({
           provider: 'codex',
           displayName: 'Codex',
           available: true,
@@ -528,7 +546,7 @@ export async function getCodexCapabilities(
           models: [],
           parameters: CODEX_PARAMETERS,
           refreshHint: 'Run `codex login`, then refresh Codex readiness.',
-        };
+        });
       }
 
       authStatus = 'unknown';
@@ -571,7 +589,7 @@ export async function getCodexCapabilities(
         }
       );
 
-      return {
+      return withCodexApprovalProtocol({
         provider: 'codex',
         displayName: 'Codex',
         available: true,
@@ -586,7 +604,7 @@ export async function getCodexCapabilities(
         models: [],
         parameters: CODEX_PARAMETERS,
         refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-      };
+      });
     }
 
     const models = parseCodexDebugModelsOutput(catalogResult.stdout);
@@ -612,7 +630,7 @@ export async function getCodexCapabilities(
               : {}),
           });
 
-    return {
+    return withCodexApprovalProtocol({
       provider: 'codex',
       displayName: 'Codex',
       available: true,
@@ -629,7 +647,7 @@ export async function getCodexCapabilities(
       defaultModel,
       parameters: CODEX_PARAMETERS,
       refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-    };
+    });
   } catch (error) {
     const { stdout, stderr } = getErrorOutput(error);
     const combinedOutput = `${stderr}\n${stdout}`.trim();
@@ -639,7 +657,7 @@ export async function getCodexCapabilities(
       (error.message.includes(CODEX_CLI_NOT_FOUND_MESSAGE) || getErrorCode(error) === 'ENOENT')
     ) {
       const readiness = buildCodexReadiness('cli_missing');
-      return {
+      return withCodexApprovalProtocol({
         provider: 'codex',
         displayName: 'Codex',
         available: false,
@@ -654,12 +672,12 @@ export async function getCodexCapabilities(
         models: [],
         parameters: CODEX_PARAMETERS,
         refreshHint: 'Install @openai/codex in Windows, then refresh Codex readiness.',
-      };
+      });
     }
 
     if (combinedOutput && isCodexAuthMissingMessage(combinedOutput)) {
       const readiness = buildCodexReadiness('auth_missing');
-      return {
+      return withCodexApprovalProtocol({
         provider: 'codex',
         displayName: 'Codex',
         available: true,
@@ -674,14 +692,14 @@ export async function getCodexCapabilities(
         models: [],
         parameters: CODEX_PARAMETERS,
         refreshHint: 'Run `codex login`, then refresh Codex readiness.',
-      };
+      });
     }
 
     const readiness = buildCodexReadiness('catalog_failed', {
       message: combinedOutput || (error instanceof Error ? error.message : 'Codex model discovery failed.'),
     });
 
-    return {
+    return withCodexApprovalProtocol({
       provider: 'codex',
       displayName: 'Codex',
       available: true,
@@ -698,7 +716,7 @@ export async function getCodexCapabilities(
       models: [],
       parameters: CODEX_PARAMETERS,
       refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-    };
+    });
   }
 }
 
@@ -763,6 +781,10 @@ export class ProviderRegistryService {
         this.pendingCapabilities = null;
       }
     }
+  }
+
+  public getCachedCapabilities(): ProviderCapabilitiesMap | null {
+    return this.cachedCapabilities;
   }
 
   public invalidateCache(): void {
