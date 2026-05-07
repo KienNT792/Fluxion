@@ -32,6 +32,11 @@ interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
   receivedAt: number;
 }
 
+interface ReviewFocusRequest {
+  nodeId: string;
+  requestId: number;
+}
+
 interface WorkflowState {
   workflowId: string;
   workflowName: string;
@@ -43,6 +48,7 @@ interface WorkflowState {
   workspacePath: string | null;
   selectedNodeId: string | null;
   terminalNodeId: string | null;
+  reviewFocusRequest: ReviewFocusRequest | null;
   lastSavedAt: string | null;
   isDirty: boolean;
   isSaving: boolean;
@@ -72,6 +78,7 @@ interface WorkflowState {
   addNode: (preset: Partial<AgentNodeData>, position: { x: number; y: number }) => void;
   setSelectedNode: (id: string | null) => void;
   setTerminalNodeId: (id: string | null) => void;
+  requestReviewFocus: (id: string) => void;
   updateNodeData: (id: string, newData: Partial<WorkflowNode['data']>) => void;
   deleteNode: (id: string) => void;
   markSaveStarted: () => void;
@@ -141,6 +148,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workspacePath: null,
   selectedNodeId: null,
   terminalNodeId: null,
+  reviewFocusRequest: null,
   lastSavedAt: null,
   isDirty: false,
   isSaving: false,
@@ -238,6 +246,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workspacePath: payload.workspacePath,
       selectedNodeId: null,
       terminalNodeId: null,
+      reviewFocusRequest: null,
       lastSavedAt: payload.workflow.updatedAt ?? new Date().toISOString(),
       isDirty: false,
       isSaving: false,
@@ -364,6 +373,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setTerminalNodeId: (id) => set({ terminalNodeId: id }),
 
+  requestReviewFocus: (id) =>
+    set((state) => ({
+      selectedNodeId: id,
+      nodes: applySelectionState(state.nodes, id),
+      reviewFocusRequest: {
+        nodeId: id,
+        requestId: Date.now(),
+      },
+    })),
+
   updateNodeData: (id, newData) => {
     set((state) => ({
       nodes: applySelectionState(
@@ -397,6 +416,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
       terminalNodeId: state.terminalNodeId === id ? null : state.terminalNodeId,
+      reviewFocusRequest:
+        state.reviewFocusRequest?.nodeId === id ? null : state.reviewFocusRequest,
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
       saveError: null,

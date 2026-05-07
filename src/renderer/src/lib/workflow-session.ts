@@ -143,6 +143,7 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     !workflowStore.workspacePath ||
     workflowStore.nodes.length === 0 ||
     executionStore.workflowStatus === 'running' ||
+    executionStore.workflowStatus === 'stopping' ||
     executionStore.workflowStatus === 'paused'
   ) {
     return;
@@ -172,6 +173,14 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
   if (resumeFromNodeId) {
     const retryNodeIds = collectRetryNodeIds(resumeFromNodeId, workflow.edges);
     executionStore.resetNodeExecution(retryNodeIds);
+    retryNodeIds.forEach((nodeId) => {
+      executionStore.appendAttemptSeparator(
+        nodeId,
+        nodeId === resumeFromNodeId
+          ? 'Retry started from this node.'
+          : `Retry started from upstream node ${resumeFromNodeId}.`
+      );
+    });
   } else {
     executionStore.resetExecution(workflow.nodes.map((node) => node.id));
   }
@@ -192,46 +201,78 @@ export function retryWorkflowFromNode(nodeId: NodeId): void {
   void runCurrentWorkflow(nodeId);
 }
 
-export function approveReviewNode(nodeId: NodeId): void {
-  const workflowStore = useWorkflowStore.getState();
-  const executionStore = useExecutionStore.getState();
-  if (!executionStore.activeRunId) {
-    return;
-  }
-
-  window.api.approveWorkflowNode({
-    workflowId: workflowStore.workflowId,
-    runId: executionStore.activeRunId,
-    nodeId,
-  });
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
-export function rejectReviewNode(nodeId: NodeId): void {
+export async function approveReviewNode(nodeId: NodeId): Promise<void> {
   const workflowStore = useWorkflowStore.getState();
   const executionStore = useExecutionStore.getState();
   if (!executionStore.activeRunId) {
     return;
   }
 
-  window.api.rejectWorkflowNode({
-    workflowId: workflowStore.workflowId,
-    runId: executionStore.activeRunId,
-    nodeId,
-  });
+  executionStore.setReviewActionInFlight(nodeId, 'approve');
+
+  try {
+    await window.api.approveWorkflowNode({
+      workflowId: workflowStore.workflowId,
+      runId: executionStore.activeRunId,
+      nodeId,
+    });
+  } catch (error) {
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore
+      .getState()
+      .setWorkflowError(getErrorMessage(error, 'Failed to approve review node.'));
+  }
 }
 
-export function rerunReviewNode(nodeId: NodeId): void {
+export async function rejectReviewNode(nodeId: NodeId): Promise<void> {
   const workflowStore = useWorkflowStore.getState();
   const executionStore = useExecutionStore.getState();
   if (!executionStore.activeRunId) {
     return;
   }
 
-  window.api.rerunWorkflowNode({
-    workflowId: workflowStore.workflowId,
-    runId: executionStore.activeRunId,
-    nodeId,
-  });
+  executionStore.setReviewActionInFlight(nodeId, 'reject');
+
+  try {
+    await window.api.rejectWorkflowNode({
+      workflowId: workflowStore.workflowId,
+      runId: executionStore.activeRunId,
+      nodeId,
+    });
+  } catch (error) {
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore
+      .getState()
+      .setWorkflowError(getErrorMessage(error, 'Failed to reject review node.'));
+  }
+}
+
+export async function rerunReviewNode(nodeId: NodeId): Promise<void> {
+  const workflowStore = useWorkflowStore.getState();
+  const executionStore = useExecutionStore.getState();
+  if (!executionStore.activeRunId) {
+    return;
+  }
+
+  executionStore.setReviewActionInFlight(nodeId, 'rerun');
+  executionStore.appendAttemptSeparator(nodeId, 'Review rerun started.');
+
+  try {
+    await window.api.rerunWorkflowNode({
+      workflowId: workflowStore.workflowId,
+      runId: executionStore.activeRunId,
+      nodeId,
+    });
+  } catch (error) {
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore
+      .getState()
+      .setWorkflowError(getErrorMessage(error, 'Failed to rerun review node.'));
+  }
 }
 
 // Multi-workflow helpers

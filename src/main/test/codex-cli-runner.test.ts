@@ -253,7 +253,7 @@ describe('CodexCliRunner', () => {
     expect(done.value).toMatchObject({ success: true, output: 'not-json\n' });
   });
 
-  it('captures final assistant output from --output-last-message', async () => {
+  it('captures final assistant output from --output-last-message without echoing it to stdout', async () => {
     const processManager = new FakeProcessManager();
     const runner = createRunner(processManager, outputDirectory);
     const iterator = runner.run(createContext());
@@ -264,12 +264,6 @@ describe('CodexCliRunner', () => {
     await writeFile(outputPath, 'Final assistant answer', 'utf8');
 
     processManager.child.close(0);
-
-    const outputEvent = await iterator.next();
-    expect(outputEvent.value).toMatchObject({
-      type: 'stdout',
-      content: 'Final assistant answer\n',
-    });
 
     const done = await iterator.next();
     expect(done.done).toBe(true);

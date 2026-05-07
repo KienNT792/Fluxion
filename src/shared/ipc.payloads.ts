@@ -43,6 +43,17 @@ export interface WorkspaceFileChangedPayload {
   changeType: 'add' | 'change' | 'unlink';
 }
 
+export interface WorkspaceReadTextFilePayload {
+  workspacePath: string;
+  filePath: string;
+  maxBytes?: number;
+}
+
+export interface WorkspaceReadTextFileResult {
+  content: string;
+  truncated: boolean;
+}
+
 export interface WorkflowSavePayload {
   workspacePath: string;
   workflow: Workflow;

@@ -1,4 +1,6 @@
 import { app, dialog, ipcMain, IpcMainEvent, shell } from 'electron';
+import { open, realpath, stat } from 'fs/promises';
+import { isAbsolute, relative, resolve } from 'path';
 import {
   ContextSaveMode,
   IpcChannels,
@@ -15,6 +17,8 @@ import {
   WorkflowCreatePayload,
   WorkflowLoadPayload,
   WorkflowDeletePayload,
+  WorkspaceReadTextFilePayload,
+  WorkspaceReadTextFileResult,
 } from '@shared';
 import { formatZodError, validateWorkflowGraph, WorkflowSchema } from '@core';
 import { workflowEngine } from '../services/workflow-engine';
@@ -23,6 +27,9 @@ import { processManager } from '../services/process-manager';
 import { settingsService } from '../services/settings.service';
 import { openShellPath, revealShellPath } from '../services/shell-path.service';
 import { workspaceService } from '../services/workspace.service';
+
+const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
+const HARD_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
 
 function createWorkflowFailurePayload(
   workflowId: string,
@@ -63,6 +70,69 @@ function validateWorkflow(payload: WorkflowRunPayload): string | null {
   return result.errors[0]?.message ?? null;
 }
 
+function coercePreviewMaxBytes(maxBytes: number | undefined): number {
+  if (typeof maxBytes !== 'number' || !Number.isFinite(maxBytes)) {
+    return DEFAULT_TEXT_PREVIEW_MAX_BYTES;
+  }
+
+  return Math.min(
+    HARD_TEXT_PREVIEW_MAX_BYTES,
+    Math.max(1, Math.floor(maxBytes))
+  );
+}
+
+async function resolveWorkspaceBoundFile(
+  workspacePath: string,
+  filePath: string
+): Promise<string> {
+  const workspaceRoot = resolve(workspacePath);
+  const requestedPath = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(workspaceRoot, filePath);
+  const [workspaceRealPath, fileRealPath] = await Promise.all([
+    realpath(workspaceRoot),
+    realpath(requestedPath),
+  ]);
+  const relativePath = relative(workspaceRealPath, fileRealPath);
+
+  if (
+    relativePath === ''
+    || relativePath.startsWith('..')
+    || isAbsolute(relativePath)
+  ) {
+    throw new Error('File is outside the active workspace.');
+  }
+
+  return fileRealPath;
+}
+
+async function readWorkspaceTextFile(
+  payload: WorkspaceReadTextFilePayload
+): Promise<WorkspaceReadTextFileResult> {
+  const filePath = await resolveWorkspaceBoundFile(payload.workspacePath, payload.filePath);
+  const maxBytes = coercePreviewMaxBytes(payload.maxBytes);
+  const fileStats = await stat(filePath);
+
+  if (!fileStats.isFile()) {
+    throw new Error('Path is not a file.');
+  }
+
+  const bytesToRead = Math.min(fileStats.size, maxBytes);
+  const fileHandle = await open(filePath, 'r');
+
+  try {
+    const buffer = Buffer.alloc(bytesToRead);
+    const { bytesRead } = await fileHandle.read(buffer, 0, bytesToRead, 0);
+
+    return {
+      content: buffer.subarray(0, bytesRead).toString('utf8'),
+      truncated: fileStats.size > maxBytes,
+    };
+  } finally {
+    await fileHandle.close();
+  }
+}
+
 export function registerWorkflowHandlers(): void {
   ipcMain.handle(IpcChannels.WORKSPACE_OPEN_DIALOG, async () => {
     const result = await dialog.showOpenDialog({
@@ -90,6 +160,13 @@ export function registerWorkflowHandlers(): void {
       payload.activeWorkflowFilePath
     );
   });
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_READ_TEXT_FILE,
+    async (_event, payload: WorkspaceReadTextFilePayload) => {
+      return readWorkspaceTextFile(payload);
+    }
+  );
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_WORKFLOW_CREATE,
@@ -229,50 +306,34 @@ export function registerWorkflowHandlers(): void {
     }
   );
 
-  ipcMain.on(
+  ipcMain.handle(
     IpcChannels.WORKFLOW_ABORT,
-    async (_event: IpcMainEvent, payload: WorkflowAbortPayload) => {
-      try {
-        console.log(
-          `Received abort request for node: ${payload.nodeId || 'ALL'}, reason: ${payload.reason}`
-        );
-        await workflowEngine.abort(payload.nodeId, payload.reason);
-      } catch (error) {
-        console.error('Error aborting workflow:', error);
-      }
+    async (_event, payload: WorkflowAbortPayload) => {
+      console.log(
+        `Received abort request for node: ${payload.nodeId || 'ALL'}, reason: ${payload.reason}`
+      );
+      await workflowEngine.abort(payload.nodeId, payload.reason);
     }
   );
 
-  ipcMain.on(
+  ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_APPROVE,
-    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
-      try {
-        await workflowEngine.approveReview(payload);
-      } catch (error) {
-        console.error('Error approving workflow review:', error);
-      }
+    async (_event, payload: WorkflowReviewActionPayload) => {
+      await workflowEngine.approveReview(payload);
     }
   );
 
-  ipcMain.on(
+  ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_REJECT,
-    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
-      try {
-        await workflowEngine.rejectReview(payload);
-      } catch (error) {
-        console.error('Error rejecting workflow review:', error);
-      }
+    async (_event, payload: WorkflowReviewActionPayload) => {
+      await workflowEngine.rejectReview(payload);
     }
   );
 
-  ipcMain.on(
+  ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_RERUN,
-    async (_event: IpcMainEvent, payload: WorkflowReviewActionPayload) => {
-      try {
-        await workflowEngine.rerunReviewNode(payload);
-      } catch (error) {
-        console.error('Error rerunning review node:', error);
-      }
+    async (_event, payload: WorkflowReviewActionPayload) => {
+      await workflowEngine.rerunReviewNode(payload);
     }
   );
 

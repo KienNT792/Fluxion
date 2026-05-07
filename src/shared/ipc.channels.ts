@@ -7,6 +7,7 @@ export const IpcChannels = {
   WORKSPACE_OPENED: 'workspace:opened',
   WORKSPACE_INIT: 'workspace:init',
   WORKSPACE_FILE_CHANGED: 'workspace:file-changed',
+  WORKSPACE_READ_TEXT_FILE: 'workspace:read-text-file',
   WORKSPACE_SAVE_CONTEXT: 'workspace:save-context',
   WORKSPACE_SCAN_CONTEXT: 'workspace:scan-context',
   WORKSPACE_GET_CONTEXT: 'workspace:get-context',

@@ -90,7 +90,7 @@ function getChangeTokenColor(changeType: 'add' | 'change' | 'unlink'): string {
 }
 
 function getWorkflowChipState(
-  workflowStatus: 'idle' | 'running' | 'paused' | 'aborted' | 'completed' | 'error'
+  workflowStatus: 'idle' | 'running' | 'stopping' | 'paused' | 'aborted' | 'completed' | 'error'
 ): {
   label: string;
   tone: StatusChipTone;
@@ -98,6 +98,10 @@ function getWorkflowChipState(
 } {
   if (workflowStatus === 'running') {
     return { label: 'Executing', tone: 'running', animate: true };
+  }
+
+  if (workflowStatus === 'stopping') {
+    return { label: 'Stopping', tone: 'stopping', animate: true };
   }
 
   if (workflowStatus === 'completed') {
@@ -289,6 +293,8 @@ export const Topbar: React.FC = () => {
   const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
   const contextStatus = useWorkflowStore((state) => state.contextStatus);
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
+  const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
+  const reviewNodeIds = useExecutionStore((state) => state.reviewNodeIds);
 
   const { theme, toggleTheme } = useThemeStore();
 
@@ -297,8 +303,9 @@ export const Topbar: React.FC = () => {
     : 'Workspace';
 
   const isRunning = workflowStatus === 'running';
+  const isStopping = workflowStatus === 'stopping';
   const isPaused = workflowStatus === 'paused';
-  const isBusy = isRunning || isPaused;
+  const isBusy = isRunning || isStopping || isPaused;
   const canRun = Boolean(workspacePath) && nodes.length > 0 && !isBusy;
   const canSave = Boolean(workspacePath) && isDirty && !isSaving;
   const editingDimmed = isBusy;
@@ -326,6 +333,8 @@ export const Topbar: React.FC = () => {
     ? 'Open a workspace first'
     : nodes.length === 0
       ? 'Add at least one node'
+      : isStopping
+        ? 'Wait for the workflow to finish stopping'
       : isPaused
         ? 'Resolve review checkpoint first'
         : codexReadiness.blocking
@@ -336,6 +345,15 @@ export const Topbar: React.FC = () => {
   const contextChipState = getContextChipState(contextStatus);
   const nodeCountLabel = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
   const activityHasAttention = changeCount > 0 || hasExternalWorkflowChange;
+  const reviewNodeLabel =
+    reviewNodeIds.length === 1
+      ? nodes.find((node) => node.id === reviewNodeIds[0])?.data?.label ?? reviewNodeIds[0]
+      : undefined;
+  const reviewButtonLabel = reviewNodeLabel
+    ? `Review: ${String(reviewNodeLabel).slice(0, 24)}${
+        String(reviewNodeLabel).length > 24 ? '...' : ''
+      }`
+    : 'Review Required';
 
   useEffect(() => {
     if (workflowStatus === 'running') {
@@ -485,9 +503,16 @@ export const Topbar: React.FC = () => {
   };
 
   const handleAbort = (): void => {
-    setWorkflowStatus('aborted');
-    setWorkflowError('Workflow aborted by user.');
-    window.api.abortWorkflow();
+    const previousStatus = workflowStatus;
+    setWorkflowStatus('stopping');
+    setWorkflowError('Stopping workflow...');
+    void window.api.abortWorkflow().catch((error) => {
+      const message = error instanceof Error ? error.message : 'Failed to abort workflow.';
+      if (useExecutionStore.getState().workflowStatus === 'stopping') {
+        setWorkflowStatus(previousStatus);
+      }
+      setWorkflowError(message);
+    });
   };
 
   const handleOpenPath = async (filePath: string): Promise<void> => {
@@ -630,6 +655,22 @@ export const Topbar: React.FC = () => {
                 : 'Every completed node pauses for review'
             }
           />
+
+          {isPaused && reviewNodeIds.length > 0 && (
+            <Button
+              variant="secondary"
+              size="toolbar"
+              className="min-w-[132px]"
+              title={
+                reviewNodeLabel
+                  ? `Open review for ${reviewNodeLabel}`
+                  : 'Open review panel'
+              }
+              onClick={() => requestReviewFocus(reviewNodeIds[0]!)}
+            >
+              {reviewButtonLabel}
+            </Button>
+          )}
         </div>
 
         <div className="flex min-w-0 items-center justify-end gap-1.5">
@@ -637,6 +678,8 @@ export const Topbar: React.FC = () => {
             <ActionTextButton
               aria-label={contextChipState.label}
               onClick={() => setContextSetupOpen(true)}
+              disabled={isBusy}
+              dimmed={editingDimmed}
             >
               <Sparkles size={14} />
               <span className="hidden lg:inline">Context</span>
@@ -981,15 +1024,16 @@ export const Topbar: React.FC = () => {
               </Button>
             </Tooltip>
           ) : (
-            <Tooltip content="Abort current workflow">
+            <Tooltip content={isStopping ? 'Workflow is stopping' : 'Abort current workflow'}>
               <Button
                 variant="danger"
                 size="toolbar"
                 className="min-w-[88px] shrink-0"
                 onClick={handleAbort}
+                disabled={isStopping}
               >
                 <Square size={13} fill="currentColor" />
-                Abort
+                {isStopping ? 'Stopping' : 'Abort'}
               </Button>
             </Tooltip>
           )}

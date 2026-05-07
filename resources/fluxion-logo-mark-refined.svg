@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" shape-rendering="geometricPrecision">
+  <rect width="1024" height="1024" fill="#f7f7f4" />
+  <rect
+    x="72"
+    y="72"
+    width="880"
+    height="880"
+    rx="172"
+    fill="none"
+    stroke="#26251e"
+    stroke-width="1.5"
+    opacity="0.055"
+  />
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M324 236H718" stroke="#ebe8df" stroke-width="38" opacity="0.72" />
+    <path d="M324 236V732" stroke="#ebe8df" stroke-width="38" opacity="0.72" />
+    <path d="M324 528H650" stroke="#ebe8df" stroke-width="38" opacity="0.72" />
+    <path d="M324 236H718" stroke="#fffdf8" stroke-width="2" opacity="0.72" transform="translate(-1 -1)" />
+    <path d="M324 236V732" stroke="#fffdf8" stroke-width="2" opacity="0.72" transform="translate(-1 -1)" />
+    <path d="M324 528H650" stroke="#fffdf8" stroke-width="2" opacity="0.72" transform="translate(-1 -1)" />
+    <path d="M324 236H718" stroke="#26251e" stroke-width="17" />
+    <path d="M324 236V732" stroke="#26251e" stroke-width="17" />
+    <path d="M324 528H650" stroke="#26251e" stroke-width="17" />
+    <path d="M324 236V528H650" stroke="#f54e00" stroke-width="17" />
+  </g>
+
+  <g fill="#f7f7f4">
+    <g stroke="#ebe8df" stroke-width="24" opacity="0.76">
+      <circle cx="324" cy="236" r="38" />
+      <circle cx="524" cy="236" r="38" />
+      <circle cx="718" cy="236" r="38" />
+      <circle cx="324" cy="382" r="38" />
+      <circle cx="324" cy="528" r="38" />
+      <circle cx="486" cy="528" r="38" />
+      <circle cx="650" cy="528" r="48" />
+      <circle cx="324" cy="732" r="38" />
+    </g>
+    <circle cx="324" cy="236" r="38" stroke="#f54e00" stroke-width="14" />
+    <circle cx="524" cy="236" r="38" stroke="#26251e" stroke-width="14" />
+    <circle cx="718" cy="236" r="38" stroke="#26251e" stroke-width="14" />
+    <circle cx="324" cy="382" r="38" stroke="#f54e00" stroke-width="14" />
+    <circle cx="324" cy="528" r="38" stroke="#f54e00" stroke-width="14" />
+    <circle cx="486" cy="528" r="38" stroke="#f54e00" stroke-width="14" />
+    <circle cx="650" cy="528" r="48" stroke="#26251e" stroke-width="14" />
+    <circle cx="650" cy="528" r="25" fill="none" stroke="#26251e" stroke-width="3" opacity="0.42" />
+    <circle cx="324" cy="732" r="38" stroke="#26251e" stroke-width="14" />
+    <g fill="none" stroke="#fffdf8" stroke-width="1.5" opacity="0.68" transform="translate(-1 -1)">
+      <circle cx="324" cy="236" r="46" />
+      <circle cx="524" cy="236" r="46" />
+      <circle cx="718" cy="236" r="46" />
+      <circle cx="324" cy="382" r="46" />
+      <circle cx="324" cy="528" r="46" />
+      <circle cx="486" cy="528" r="46" />
+      <circle cx="650" cy="528" r="57" />
+      <circle cx="324" cy="732" r="46" />
+    </g>
+  </g>
+</svg>

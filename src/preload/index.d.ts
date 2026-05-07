@@ -21,6 +21,8 @@ import {
   WorkflowNode,
   WorkflowNodeOutputPayload,
   WorkflowNodeStatusPayload,
+  WorkspaceReadTextFilePayload,
+  WorkspaceReadTextFileResult,
   WorkflowSavedPayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
@@ -36,6 +38,9 @@ export interface FluxionAPI {
     workflow: Workflow, 
     activeWorkflowFilePath: string
   ) => Promise<WorkflowSavedPayload>;
+  readWorkspaceTextFile: (
+    payload: WorkspaceReadTextFilePayload
+  ) => Promise<WorkspaceReadTextFileResult>;
   scanWorkspaceContext: (workspacePath: string) => Promise<ContextScanResult>;
   getContext: (workspacePath: string) => Promise<ProjectContextDraftV2 | null>;
   saveContextV2: (
@@ -63,10 +68,10 @@ export interface FluxionAPI {
     executionMode: ExecutionMode,
     resumeFromNodeId?: NodeId
   ) => void;
-  abortWorkflow: (nodeId?: NodeId, reason?: AbortReason) => void;
-  approveWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
-  rejectWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
-  rerunWorkflowNode: (payload: WorkflowReviewActionPayload) => void;
+  abortWorkflow: (nodeId?: NodeId, reason?: AbortReason) => Promise<void>;
+  approveWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>;
+  rejectWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>;
+  rerunWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>;
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) => () => void;
   onTerminalDataBatch: (callback: (payload: TerminalDataBatchPayload) => void) => () => void;

@@ -391,10 +391,6 @@ export class CodexCliRunner implements FluxionRunner {
         output ?? (fallbackStdout.trim().length > 0 ? fallbackStdout : undefined);
 
       if (code === 0) {
-        if (codexOptions.json && output && output.trim().length > 0) {
-          queue.push(createRunnerEvent('stdout', output.endsWith('\n') ? output : `${output}\n`));
-        }
-
         await finalize({
           success: true,
           output: fallbackOutput,

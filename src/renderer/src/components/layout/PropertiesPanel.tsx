@@ -27,6 +27,7 @@ import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { FilePathCard } from '../ui/FilePathCard';
 import { Input } from '../ui/Input';
+import { OutputPreview } from '../ui/OutputPreview';
 import { Select } from '../ui/Select';
 import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 import { TextEditorDialog } from '../ui/TextEditorDialog';
@@ -200,10 +201,12 @@ export const PropertiesPanel: React.FC = () => {
   const deleteNode = useWorkflowStore((state) => state.deleteNode);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
   const executionMode = useWorkflowStore((state) => state.executionMode);
+  const workspacePath = useWorkflowStore((state) => state.workspacePath);
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
   );
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
+  const reviewFocusRequest = useWorkflowStore((state) => state.reviewFocusRequest);
   const nodeStatus = useExecutionStore(
     (state) => (selectedNodeId ? state.nodeStatuses[selectedNodeId] : undefined) ?? 'idle'
   );
@@ -215,6 +218,12 @@ export const PropertiesPanel: React.FC = () => {
   );
   const nodeOutputPath = useExecutionStore((state) =>
     selectedNodeId ? state.nodeOutputPaths[selectedNodeId] : undefined
+  );
+  const nodeAttemptCount = useExecutionStore((state) =>
+    selectedNodeId ? state.nodeAttemptCounts[selectedNodeId] : undefined
+  );
+  const reviewActionInFlight = useExecutionStore((state) =>
+    selectedNodeId ? state.reviewActionInFlightByNodeId[selectedNodeId] : undefined
   );
   const setWorkflowError = useExecutionStore((state) => state.setWorkflowError);
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
@@ -229,6 +238,7 @@ export const PropertiesPanel: React.FC = () => {
     'prompt' | 'systemInstruction' | null
   >(null);
   const skipNextSyncRef = useRef(false);
+  const reviewSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!hasFetchedProviderCapabilities) {
@@ -301,6 +311,20 @@ export const PropertiesPanel: React.FC = () => {
     return () => clearTimeout(handler);
   }, [localData, selectedNode, selectedNodeId, updateNodeData]);
 
+  useEffect(() => {
+    if (!selectedNodeId || reviewFocusRequest?.nodeId !== selectedNodeId) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      reviewSectionRef.current?.scrollIntoView({
+        block: 'start',
+        behavior: 'smooth',
+      });
+      reviewSectionRef.current?.focus();
+    });
+  }, [reviewFocusRequest, selectedNodeId]);
+
   if (!selectedNodeId || !selectedNode) {
     return null;
   }
@@ -366,6 +390,12 @@ export const PropertiesPanel: React.FC = () => {
     nodeStatus === 'completed'
       ? 'Done'
       : nodeStatus.charAt(0).toUpperCase() + nodeStatus.slice(1);
+  const isReviewActionPending = Boolean(reviewActionInFlight);
+  const reviewActionLabel = {
+    approve: reviewActionInFlight === 'approve' ? 'Approving...' : 'Approve',
+    rerun: reviewActionInFlight === 'rerun' ? 'Rerunning...' : 'Rerun',
+    reject: reviewActionInFlight === 'reject' ? 'Rejecting...' : 'Reject',
+  };
 
   return (
     <>
@@ -614,6 +644,98 @@ export const PropertiesPanel: React.FC = () => {
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
 
+        {nodeStatus === 'paused' && (
+          <>
+            <div ref={reviewSectionRef} tabIndex={-1}>
+              <Section title="Review">
+                <div
+                  className="rounded-md px-3 py-2"
+                  style={{
+                    background: 'var(--color-surface-card)',
+                    border: '1px solid var(--color-hairline)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <StatusChip
+                      tone="paused"
+                      label={
+                        reviewActionInFlight === 'rerun'
+                          ? 'Rerunning'
+                          : 'Awaiting Review'
+                      }
+                      animate={reviewActionInFlight === 'rerun'}
+                    />
+                    <span
+                      className="text-[10px]"
+                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                    >
+                      attempt {nodeAttemptCount ?? 1}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+                    Review the latest output, then approve to continue, rerun this node, or reject
+                    the workflow.
+                  </p>
+                </div>
+
+                <OutputPreview
+                  workspacePath={workspacePath}
+                  path={nodeOutputPath}
+                  attemptCount={nodeAttemptCount}
+                  onError={setWorkflowError}
+                />
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void approveReviewNode(selectedNodeId)}
+                    disabled={isReviewActionPending}
+                    className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed"
+                    style={{
+                      background: 'var(--color-timeline-grep)',
+                      color: 'var(--color-ink)',
+                      border: '1px solid var(--color-hairline)',
+                      opacity: isReviewActionPending && reviewActionInFlight !== 'approve' ? 0.55 : 1,
+                    }}
+                  >
+                    {reviewActionLabel.approve}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void rerunReviewNode(selectedNodeId)}
+                    disabled={isReviewActionPending}
+                    className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed"
+                    style={{
+                      background: 'var(--color-surface-card)',
+                      color: 'var(--color-primary)',
+                      border: '1px solid var(--color-hairline)',
+                      opacity: isReviewActionPending && reviewActionInFlight !== 'rerun' ? 0.55 : 1,
+                    }}
+                  >
+                    {reviewActionLabel.rerun}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void rejectReviewNode(selectedNodeId)}
+                    disabled={isReviewActionPending}
+                    className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed"
+                    style={{
+                      background: 'var(--color-surface-card)',
+                      color: 'var(--color-semantic-error)',
+                      border: '1px solid var(--color-hairline)',
+                      opacity: isReviewActionPending && reviewActionInFlight !== 'reject' ? 0.55 : 1,
+                    }}
+                  >
+                    {reviewActionLabel.reject}
+                  </button>
+                </div>
+              </Section>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />
+          </>
+        )}
+
         <Section title="Runtime">
           <div>
             <label style={LABEL_STYLE}>Status</label>
@@ -637,6 +759,18 @@ export const PropertiesPanel: React.FC = () => {
             />
           </div>
 
+          {nodeStatus !== 'paused' && (
+            <div>
+              <label style={LABEL_STYLE}>Output Preview</label>
+              <OutputPreview
+                workspacePath={workspacePath}
+                path={nodeOutputPath}
+                attemptCount={nodeAttemptCount}
+                onError={setWorkflowError}
+              />
+            </div>
+          )}
+
           <div>
             <label style={LABEL_STYLE}>Last Error</label>
             <div
@@ -658,7 +792,11 @@ export const PropertiesPanel: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => retryWorkflowFromNode(selectedNodeId)}
-              disabled={workflowStatus === 'running' || workflowStatus === 'paused'}
+              disabled={
+                workflowStatus === 'running'
+                || workflowStatus === 'stopping'
+                || workflowStatus === 'paused'
+              }
               className="w-full"
               title={nodeError || 'Retry this node and its downstream subtree'}
             >
@@ -667,46 +805,6 @@ export const PropertiesPanel: React.FC = () => {
             </Button>
           )}
 
-          {nodeStatus === 'paused' && (
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => approveReviewNode(selectedNodeId)}
-                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
-                style={{
-                  background: 'var(--color-timeline-grep)',
-                  color: 'var(--color-ink)',
-                  border: '1px solid var(--color-hairline)',
-                }}
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => rerunReviewNode(selectedNodeId)}
-                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
-                style={{
-                  background: 'var(--color-surface-card)',
-                  color: 'var(--color-primary)',
-                  border: '1px solid var(--color-hairline)',
-                }}
-              >
-                Rerun
-              </button>
-              <button
-                type="button"
-                onClick={() => rejectReviewNode(selectedNodeId)}
-                className="flex items-center justify-center rounded-md py-2 text-xs font-semibold transition-colors"
-                style={{
-                  background: 'var(--color-surface-card)',
-                  color: 'var(--color-semantic-error)',
-                  border: '1px solid var(--color-hairline)',
-                }}
-              >
-                Reject
-              </button>
-            </div>
-          )}
         </Section>
 
         <div style={{ height: '1px', background: 'var(--color-hairline-soft)' }} />

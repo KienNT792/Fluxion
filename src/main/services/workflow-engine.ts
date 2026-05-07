@@ -306,23 +306,38 @@ export class WorkflowEngine {
     reason: AbortReason = AbortReason.USER_REQUESTED
   ): Promise<void> {
     if (!this.currentRuntime) {
-      return;
+      throw new Error('No active workflow runtime is available to abort.');
     }
 
     if (nodeId) {
       this.isHalted = true;
       this.haltReason = 'aborted';
       this.haltError = `Execution stopped for node ${nodeId}.`;
+      this.sendNodeStatus(this.currentRuntime.sender, nodeId, 'stopping', this.haltError);
       await this.abortNode(nodeId, reason);
     } else {
       this.isHalted = true;
       this.haltReason = 'aborted';
       this.haltError = 'Workflow aborted by user.';
+      for (const id of this.activeNodes) {
+        this.sendNodeStatus(this.currentRuntime.sender, id, 'stopping', this.haltError);
+      }
       const promises = Array.from(this.activeNodes).map((id) => this.abortNode(id, reason));
       await Promise.all(promises);
     }
 
     if (this.currentRuntime.awaitingReviewNodeIds.size > 0 && this.activeNodes.size === 0) {
+      const runtime = this.currentRuntime;
+      for (const reviewNodeId of runtime.awaitingReviewNodeIds) {
+        this.sendNodeStatus(runtime.sender, reviewNodeId, 'stopping', this.haltError ?? undefined);
+        await this.runStateStore.markNodeAborted(
+          runtime.workspacePath,
+          runtime.runId,
+          reviewNodeId,
+          this.haltError ?? 'Workflow aborted by user.'
+        );
+      }
+      runtime.awaitingReviewNodeIds.clear();
       await this.finalizeRuntime('aborted', this.haltError ?? 'Workflow aborted by user.');
     }
   }

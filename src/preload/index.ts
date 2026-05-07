@@ -24,6 +24,8 @@ import {
   WorkflowNode,
   WorkflowNodeOutputPayload,
   WorkflowNodeStatusPayload,
+  WorkspaceReadTextFilePayload,
+  WorkspaceReadTextFileResult,
   WorkflowSavedPayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
@@ -54,6 +56,10 @@ const api = {
     activeWorkflowFilePath: string
   ): Promise<WorkflowSavedPayload> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE, { workspacePath, workflow, activeWorkflowFilePath }) as Promise<WorkflowSavedPayload>,
+  readWorkspaceTextFile: (
+    payload: WorkspaceReadTextFilePayload
+  ): Promise<WorkspaceReadTextFileResult> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_READ_TEXT_FILE, payload) as Promise<WorkspaceReadTextFileResult>,
   
   createWorkflow: (workspacePath: string, name: string): Promise<WorkflowCreateResult> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_CREATE, { workspacePath, name }) as Promise<WorkflowCreateResult>,
@@ -109,18 +115,17 @@ const api = {
       resumeFromNodeId,
     });
   },
-  abortWorkflow: (nodeId?: NodeId, reason: AbortReason = AbortReason.USER_REQUESTED): void => {
-    ipcRenderer.send(IpcChannels.WORKFLOW_ABORT, { nodeId, reason });
-  },
-  approveWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
-    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_APPROVE, payload);
-  },
-  rejectWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
-    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_REJECT, payload);
-  },
-  rerunWorkflowNode: (payload: WorkflowReviewActionPayload): void => {
-    ipcRenderer.send(IpcChannels.WORKFLOW_REVIEW_RERUN, payload);
-  },
+  abortWorkflow: (
+    nodeId?: NodeId,
+    reason: AbortReason = AbortReason.USER_REQUESTED
+  ): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKFLOW_ABORT, { nodeId, reason }) as Promise<void>,
+  approveWorkflowNode: (payload: WorkflowReviewActionPayload): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKFLOW_REVIEW_APPROVE, payload) as Promise<void>,
+  rejectWorkflowNode: (payload: WorkflowReviewActionPayload): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKFLOW_REVIEW_REJECT, payload) as Promise<void>,
+  rerunWorkflowNode: (payload: WorkflowReviewActionPayload): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKFLOW_REVIEW_RERUN, payload) as Promise<void>,
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) =>
     bindListener(IpcChannels.WORKSPACE_FILE_CHANGED, callback),

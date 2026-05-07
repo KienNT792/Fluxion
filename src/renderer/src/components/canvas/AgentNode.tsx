@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position, NodeProps, Node } from '@xyflow/react';
-import { RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react';
+import { Eye, RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react';
 import { AgentNodeData } from '@shared';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
@@ -28,8 +28,10 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
   const canRetry =
     status === 'error' &&
     workflowStatus !== 'running' &&
+    workflowStatus !== 'stopping' &&
     workflowStatus !== 'paused';
   const isSelected = useWorkflowStore((state) => state.selectedNodeId === id);
+  const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
 
   return (
     <div
@@ -38,13 +40,19 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
         background: 'var(--color-surface-card)',
         border: isSelected
           ? '1.5px solid #412991'
+          : status === 'paused'
+            ? '1.5px solid var(--color-timeline-edit)'
           : '1px solid var(--color-hairline)',
         borderRadius: 'var(--radius-lg)',
       }}
     >
       <div
         className="h-0.5 w-full flex-shrink-0"
-        style={{ background: '#412991', opacity: 0.8 }}
+        style={{
+          background:
+            status === 'paused' ? 'var(--color-timeline-edit)' : '#412991',
+          opacity: 0.8,
+        }}
       />
 
       <Handle
@@ -173,6 +181,36 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
               <span className="flex items-center justify-center gap-1.5">
                 <RotateCcw size={11} />
                 <span>Retry</span>
+              </span>
+            </button>
+
+            <div className="w-px" style={{ background: 'var(--color-hairline)' }} />
+          </>
+        )}
+
+        {status === 'paused' && (
+          <>
+            <button
+              type="button"
+              className="nodrag nopan flex-1 py-2 text-[11px] transition-colors"
+              style={{
+                color: 'var(--color-timeline-edit)',
+              }}
+              title="Open review panel"
+              onClick={(event) => {
+                event.stopPropagation();
+                requestReviewFocus(id);
+              }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.background = 'var(--color-canvas)';
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Eye size={11} />
+                <span>Review</span>
               </span>
             </button>
 

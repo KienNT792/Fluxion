@@ -19,10 +19,23 @@ const STATUS_DOT: Record<string, { color: string; pulse: boolean }> = {
   idle:      { color: 'var(--color-hairline-strong)',   pulse: false },
 };
 
+function writeLogEntry(term: XTerm, entry: string): void {
+  const normalized = entry.replace(/\r?\n/g, '\r\n');
+  term.write(normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`);
+}
+
+function writeLogHistory(term: XTerm, logs: string[]): void {
+  logs.forEach((entry) => writeLogEntry(term, entry));
+}
+
 export const TerminalViewer: React.FC = () => {
   const terminalNodeId = useWorkflowStore(state => state.terminalNodeId);
   const setTerminalNodeId = useWorkflowStore(state => state.setTerminalNodeId);
   const nodes = useWorkflowStore(state => state.nodes);
+  const clearLogs = useExecutionStore(state => state.clearLogs);
+  const status = useExecutionStore(state =>
+    terminalNodeId ? state.nodeStatuses[terminalNodeId] ?? 'idle' : 'idle'
+  );
   
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<XTerm | null>(null);
@@ -93,27 +106,48 @@ export const TerminalViewer: React.FC = () => {
       fitAddon.fit();
     });
 
-    const historyLogs = useExecutionStore.getState().terminalLogs[terminalNodeId] || [];
+    const executionState = useExecutionStore.getState();
+    const historyLogs = executionState.terminalLogs[terminalNodeId] || [];
+    let lastLogCursor =
+      executionState.terminalLogCursors[terminalNodeId] ?? historyLogs.length;
+
     if (historyLogs.length > 0) {
-      term.write(historyLogs.join('\r\n') + '\r\n');
+      writeLogHistory(term, historyLogs);
     } else {
       term.writeln(`\x1b[2m[system]\x1b[0m Listening to \x1b[1m${displayName}\x1b[0m...`);
     }
 
-    let lastLogIndex = historyLogs.length;
     const unsubscribe = useExecutionStore.subscribe(state => {
-      const newLogs = state.terminalLogs[terminalNodeId];
-      if (!newLogs) return;
+      const newLogs = state.terminalLogs[terminalNodeId] || [];
+      const nextLogCursor = state.terminalLogCursors[terminalNodeId] ?? newLogs.length;
+
       if (newLogs.length === 0) {
-        if (lastLogIndex !== 0) { term.clear(); lastLogIndex = 0; }
+        if (nextLogCursor !== lastLogCursor || lastLogCursor !== 0) {
+          term.clear();
+          lastLogCursor = nextLogCursor;
+        }
         return;
       }
-      if (newLogs.length > lastLogIndex) {
-        for (let i = lastLogIndex; i < newLogs.length; i++) {
-          term.writeln(newLogs[i].replace(/\r?\n/g, '\r\n'));
-        }
-        lastLogIndex = newLogs.length;
+
+      if (nextLogCursor <= lastLogCursor) {
+        term.clear();
+        writeLogHistory(term, newLogs);
+        lastLogCursor = nextLogCursor;
+        return;
       }
+
+      const appendedCount = nextLogCursor - lastLogCursor;
+      const appendedLogs =
+        appendedCount >= newLogs.length
+          ? newLogs
+          : newLogs.slice(newLogs.length - appendedCount);
+
+      if (appendedCount >= newLogs.length) {
+        term.clear();
+      }
+
+      writeLogHistory(term, appendedLogs);
+      lastLogCursor = nextLogCursor;
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -135,13 +169,13 @@ export const TerminalViewer: React.FC = () => {
   if (!terminalNodeId) return null;
 
   const handleClear = (): void => {
+    clearLogs(terminalNodeId);
     if (xtermInstance.current) {
       xtermInstance.current.clear();
       xtermInstance.current.writeln('\x1b[2m[system]\x1b[0m Terminal cleared.');
     }
   };
 
-  const status = useExecutionStore.getState().nodeStatuses[terminalNodeId] ?? 'idle';
   const dot = STATUS_DOT[status] ?? STATUS_DOT.idle;
 
   const iconBtnStyle = (): React.CSSProperties => ({
