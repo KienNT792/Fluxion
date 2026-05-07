@@ -1,6 +1,14 @@
 import React from 'react';
-import { AlertTriangle, Clock3, FolderOpen, Settings, Workflow } from 'lucide-react';
-import { RecentWorkspaceEntry } from '@shared';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
+  FolderOpen,
+  Settings,
+  Trash2,
+  Workflow,
+} from 'lucide-react';
+import type { RecentWorkspaceEntry } from '@shared';
 import {
   getCodexReadinessBadgeState,
   getProviderReadinessSummary,
@@ -14,15 +22,126 @@ import { Tooltip } from '../ui/Tooltip';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
 
-const ONBOARDING_STEPS = [
-  'Open your codebase',
-  'Configure agents',
-  'Run and review outputs',
-] as const;
+const FLOW_STEPS = ['Open workspace', 'Review context', 'Configure agents', 'Run workflow'];
+
+function hasFileDrop(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes('Files');
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function formatRecentTimestamp(value: string): string {
+  const openedAt = new Date(value);
+
+  if (Number.isNaN(openedAt.getTime())) {
+    return 'Opened recently';
+  }
+
+  return `Opened ${openedAt.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
+const RecentActionButton: React.FC<{
+  label: string;
+  disabled: boolean;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+}> = ({ label, disabled, onClick, children }) => (
+  <Tooltip content={label}>
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+      style={{
+        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
+      }}
+    >
+      {children}
+    </button>
+  </Tooltip>
+);
+
+const RecentWorkspaceRow: React.FC<{
+  entry: RecentWorkspaceEntry;
+  disabled: boolean;
+  onOpen: (workspacePath: string) => void;
+  onReveal: (workspacePath: string) => void;
+  onRemove: (workspacePath: string) => void;
+}> = ({ entry, disabled, onOpen, onReveal, onRemove }) => (
+  <div
+    className="flex min-w-0 items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-[var(--color-canvas)]"
+    style={{
+      background: 'var(--color-canvas-soft)',
+      border: '1px solid var(--color-hairline)',
+    }}
+    title={entry.path}
+  >
+    <button
+      type="button"
+      onClick={() => onOpen(entry.path)}
+      disabled={disabled}
+      className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
+      style={{
+        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-ink)',
+      }}
+    >
+      <FolderOpen size={14} className="shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-semibold">{entry.name}</span>
+        <span
+          className="mt-0.5 block truncate text-[10px]"
+          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+        >
+          {entry.path}
+        </span>
+      </span>
+      <span
+        className="hidden shrink-0 text-[10px] md:inline"
+        style={{ color: 'var(--color-muted-soft)' }}
+      >
+        {formatRecentTimestamp(entry.lastOpenedAt)}
+      </span>
+    </button>
+
+    <div className="flex shrink-0 items-center gap-0.5">
+      <RecentActionButton
+        label="Reveal in Explorer"
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onReveal(entry.path);
+        }}
+      >
+        <ExternalLink size={13} />
+      </RecentActionButton>
+      <RecentActionButton
+        label="Remove from Recent"
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove(entry.path);
+        }}
+      >
+        <Trash2 size={13} />
+      </RecentActionButton>
+    </div>
+  </div>
+);
 
 export const WelcomeScreen: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const [recentWorkspaces, setRecentWorkspaces] = React.useState<RecentWorkspaceEntry[]>([]);
+  const [isDragActive, setIsDragActive] = React.useState(false);
+  const [workspaceActionError, setWorkspaceActionError] = React.useState<string | null>(null);
+  const dragDepthRef = React.useRef(0);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
   const workspaceOpenState = useWorkflowStore((state) => state.workspaceOpenState);
   const isProviderCapabilitiesLoading = useWorkflowStore(
@@ -68,7 +187,31 @@ export const WelcomeScreen: React.FC = () => {
     };
   }, []);
 
+  const isWorkspaceOpening =
+    workspaceOpenState.phase === 'selecting'
+    || workspaceOpenState.phase === 'awaitingTrust'
+    || workspaceOpenState.phase === 'opening';
+
+  const readinessChipTone: StatusChipTone = isProviderCapabilitiesLoading
+    ? 'running'
+    : providerReadiness.blockingCount > 0 || codexReadiness.tone === 'blocked'
+      ? 'error'
+      : providerReadiness.warningCount > 0 || codexReadiness.tone !== 'ready'
+        ? 'warning'
+        : 'success';
+  const readinessStatusLabel = isProviderCapabilitiesLoading
+    ? 'Checking runtime...'
+    : codexReadiness.tone === 'ready'
+      ? `Codex ready · ${providerReadiness.availableCount} provider${
+          providerReadiness.availableCount === 1 ? '' : 's'
+        } available`
+      : `${codexReadiness.summary} · ${providerReadiness.availableCount} provider${
+          providerReadiness.availableCount === 1 ? '' : 's'
+        } available`;
+
   const handleOpenWorkspace = async (): Promise<void> => {
+    setWorkspaceActionError(null);
+
     try {
       await openWorkspaceFromDialog({ requestWorkspaceTrust });
     } catch {
@@ -77,6 +220,8 @@ export const WelcomeScreen: React.FC = () => {
   };
 
   const handleOpenRecentWorkspace = async (workspacePath: string): Promise<void> => {
+    setWorkspaceActionError(null);
+
     try {
       await openWorkspacePath(workspacePath, { requestWorkspaceTrust });
     } catch {
@@ -84,283 +229,314 @@ export const WelcomeScreen: React.FC = () => {
     }
   };
 
-  const isWorkspaceOpening =
-    workspaceOpenState.phase === 'selecting'
-    || workspaceOpenState.phase === 'awaitingTrust'
-    || workspaceOpenState.phase === 'opening';
+  const resetDragState = (): void => {
+    dragDepthRef.current = 0;
+    setIsDragActive(false);
+  };
 
-  const readinessTone =
-    codexReadiness.tone === 'ready'
-      ? 'var(--color-semantic-success)'
-      : codexReadiness.tone === 'blocked'
-        ? 'var(--color-semantic-error)'
-        : 'var(--color-timeline-done)';
-  const readinessChipTone: StatusChipTone = isProviderCapabilitiesLoading
-    ? 'running'
-    : providerReadiness.blockingCount > 0
-      ? 'error'
-      : providerReadiness.warningCount > 0 || codexReadiness.tone !== 'ready'
-        ? 'warning'
-        : 'success';
-  const compactReadinessLabel = isProviderCapabilitiesLoading
-    ? 'Checking providers...'
-    : `${providerReadiness.availableCount} provider${
-        providerReadiness.availableCount === 1 ? '' : 's'
-      } ready`;
-  const shouldShowReadinessCard =
-    !isProviderCapabilitiesLoading
-    && (providerReadiness.blockingCount > 0 || providerReadiness.warningCount > 0);
-  const readinessCardTitle = providerReadiness.blockingCount > 0
-    ? 'Provider setup needed'
-    : 'Provider warning';
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>): void => {
+    if (!hasFileDrop(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (isWorkspaceOpening) {
+      return;
+    }
+
+    dragDepthRef.current += 1;
+    setIsDragActive(true);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
+    if (!hasFileDrop(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = isWorkspaceOpening ? 'none' : 'copy';
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>): void => {
+    if (!hasFileDrop(event.dataTransfer)) {
+      return;
+    }
+
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDragActive(false);
+    }
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>): Promise<void> => {
+    if (!hasFileDrop(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    resetDragState();
+
+    if (isWorkspaceOpening) {
+      return;
+    }
+
+    const droppedFile = Array.from(event.dataTransfer.files)[0];
+    if (!droppedFile) {
+      setWorkspaceActionError('Drop a project folder to open it as a workspace.');
+      return;
+    }
+
+    let droppedPath = '';
+    try {
+      droppedPath = window.api?.getPathForFile?.(droppedFile) ?? '';
+    } catch {
+      droppedPath = '';
+    }
+
+    if (!droppedPath) {
+      setWorkspaceActionError('Fluxion could not read the dropped folder path.');
+      return;
+    }
+
+    if (!window.api?.validateWorkspaceDirectory) {
+      setWorkspaceActionError('Workspace validation is not available.');
+      return;
+    }
+
+    try {
+      const validation = await window.api.validateWorkspaceDirectory(droppedPath);
+      if (!validation.ok) {
+        setWorkspaceActionError(validation.message);
+        return;
+      }
+
+      setWorkspaceActionError(null);
+      await openWorkspacePath(validation.path, { requestWorkspaceTrust });
+    } catch (error) {
+      setWorkspaceActionError(getErrorMessage(error, 'Failed to open dropped workspace.'));
+    }
+  };
+
+  const handleRevealRecentWorkspace = async (workspacePath: string): Promise<void> => {
+    if (!window.api?.revealPath) {
+      return;
+    }
+
+    try {
+      await window.api.revealPath(workspacePath);
+    } catch (error) {
+      setWorkspaceActionError(getErrorMessage(error, 'Failed to reveal workspace.'));
+    }
+  };
+
+  const handleRemoveRecentWorkspace = async (workspacePath: string): Promise<void> => {
+    if (!window.api?.removeRecentWorkspace) {
+      return;
+    }
+
+    try {
+      const entries = await window.api.removeRecentWorkspace(workspacePath);
+      setRecentWorkspaces(entries);
+      setWorkspaceActionError(null);
+    } catch (error) {
+      setWorkspaceActionError(
+        getErrorMessage(error, 'Failed to remove workspace from recent list.')
+      );
+    }
+  };
 
   return (
     <div
-      className="relative flex h-screen w-full flex-1 select-none items-center justify-center overflow-auto px-5 py-10"
+      className="flex h-screen w-full flex-1 select-none overflow-auto px-5 py-8 sm:px-8"
       style={{ background: 'var(--color-canvas)' }}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={(event) => {
+        void handleDrop(event);
+      }}
     >
-      <div className="absolute right-5 top-5">
-        <Tooltip content="Global Settings">
-          <button
-            type="button"
-            aria-label="Open Global Settings"
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-surface-card)]"
-            style={{
-              color: 'var(--color-muted)',
-              border: '1px solid var(--color-hairline)',
-              background: 'var(--color-canvas-soft)',
-            }}
-          >
-            <Settings size={16} />
-          </button>
-        </Tooltip>
-      </div>
-
-      <div className="flex w-full max-w-xl flex-col items-center gap-7">
-        <div className="flex flex-col items-center gap-5 text-center">
+      <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-6">
+        <section className="flex w-full flex-col items-center gap-5 text-center">
           <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl"
+            className="flex h-16 w-16 items-center justify-center rounded-lg"
             style={{
               background: 'var(--color-surface-card)',
               border: '1px solid var(--color-hairline)',
             }}
           >
-            <Workflow size={36} style={{ color: 'var(--color-primary)' }} />
+            <Workflow size={31} style={{ color: 'var(--color-primary)' }} />
           </div>
 
-          <div>
+          <div className="max-w-xl">
             <h1
               className="text-3xl font-normal"
               style={{
                 color: 'var(--color-ink)',
-                letterSpacing: '-0.72px',
+                letterSpacing: 0,
                 lineHeight: 1.2,
               }}
             >
               Fluxion
             </h1>
-            <p
-              className="mt-2 text-sm"
-              style={{ color: 'var(--color-muted)', lineHeight: 1.5 }}
-            >
-              Run local agents across your codebase as a workflow.
+            <p className="mt-3 text-base leading-7" style={{ color: 'var(--color-body)' }}>
+              Turn a local workspace into a reviewable agent workflow.
+            </p>
+            <p className="mt-2 text-sm leading-6" style={{ color: 'var(--color-muted)' }}>
+              Fluxion reads project context, prepares agent workflows, and keeps outputs
+              reviewable.
             </p>
           </div>
-        </div>
+        </section>
 
-        <div
-          className="h-px w-full"
+        <section
+          className="w-full rounded-xl px-5 py-6 text-center transition-colors sm:px-8 sm:py-7"
           style={{
-            background:
-              'linear-gradient(90deg, transparent 0%, var(--color-hairline-strong) 50%, transparent 100%)',
-          }}
-        />
-
-        <div
-          className="w-full rounded-lg px-4 py-4"
-          style={{
-            background: 'var(--color-surface-card)',
-            border: '1px solid var(--color-hairline)',
+            background: isDragActive
+              ? 'var(--color-canvas-soft)'
+              : 'var(--color-surface-card)',
+            border: isDragActive
+              ? '1px solid var(--color-primary)'
+              : '1px solid var(--color-hairline)',
+            boxShadow: isDragActive
+              ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent)'
+              : '0 18px 44px rgba(38, 37, 30, 0.08)',
           }}
         >
-          <p
-            className="text-center text-[11px] font-semibold uppercase tracking-[0.08em]"
-            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-          >
-            Build AI workflows in 3 steps
-          </p>
+          <div className="mx-auto flex max-w-md flex-col items-center gap-4">
+            
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleOpenWorkspace}
+              disabled={isWorkspaceOpening}
+              className="min-w-[180px]"
+            >
+              <FolderOpen size={16} />
+              {isWorkspaceOpening ? 'Opening...' : 'Open Workspace'}
+            </Button>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {ONBOARDING_STEPS.map((step, index) => (
-              <div
-                key={step}
-                className="flex min-w-0 items-center gap-2 sm:flex-col sm:text-center"
-              >
-                <span
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold"
-                  style={{
-                    color: 'var(--color-primary)',
-                    background: 'var(--color-canvas)',
-                    border: '1px solid var(--color-hairline)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {index + 1}
-                </span>
-                <span
-                  className="min-w-0 text-xs font-medium"
-                  style={{ color: 'var(--color-body-strong)' }}
-                >
-                  {step}
-                </span>
+            <p
+              className="text-xs font-medium"
+              style={{ color: isDragActive ? 'var(--color-ink)' : 'var(--color-body)' }}
+            >
+              Drop a project folder here
+            </p>
+
+            <Tooltip content={codexReadiness.detail}>
+              <div className="max-w-full">
+                <StatusChip
+                  tone={readinessChipTone}
+                  label={readinessStatusLabel}
+                  animate={isProviderCapabilitiesLoading}
+                  className="max-w-full"
+                />
               </div>
-            ))}
+            </Tooltip>
           </div>
-        </div>
 
-        <div className="flex w-full flex-col items-center gap-4">
-          <p
-            className="max-w-lg text-center text-xs"
-            style={{ color: 'var(--color-muted)', lineHeight: 1.6 }}
-          >
-            Open a project folder so Fluxion can read context, save workflow files, and
-            write agent output locally.
-          </p>
-
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={handleOpenWorkspace}
-            disabled={isWorkspaceOpening}
-          >
-            <FolderOpen size={16} />
-            {isWorkspaceOpening ? 'Opening...' : 'Open Project Folder'}
-          </Button>
-
-          <p
-            className="text-[11px]"
-            style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
-          >
-            You can also drop a project folder here.
-          </p>
-        </div>
-
-        {recentWorkspaces.length > 0 ? (
-          <div
-            className="w-full rounded-lg px-4 py-4"
-            style={{
-              background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
-            }}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <Clock3 size={14} style={{ color: 'var(--color-muted)' }} />
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                Recent
-              </h2>
-            </div>
-            <div className="grid gap-2">
-              {recentWorkspaces.map((entry) => (
-                <button
-                  key={entry.path}
-                  type="button"
-                  onClick={() => handleOpenRecentWorkspace(entry.path)}
-                  disabled={isWorkspaceOpening}
-                  className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
-                  style={{
-                    color: isWorkspaceOpening ? 'var(--color-muted-soft)' : 'var(--color-ink)',
-                    border: '1px solid var(--color-hairline)',
-                    background: 'var(--color-canvas-soft)',
-                  }}
-                >
-                  <FolderOpen size={15} className="shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{entry.name}</span>
-                    <span
-                      className="block truncate text-[11px]"
-                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-                    >
-                      {entry.path}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {shouldShowReadinessCard ? (
-          <div
-            className="w-full rounded-lg px-4 py-3"
-            style={{
-              background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
-                style={{
-                  background: 'var(--color-canvas)',
-                  border: '1px solid var(--color-hairline)',
-                  color: readinessTone,
-                }}
-              >
-                <AlertTriangle size={15} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                    {readinessCardTitle}
-                  </h2>
-                  <StatusChip
-                    tone={readinessChipTone}
-                    label={codexReadiness.label}
-                    className="shrink-0"
-                  />
-                </div>
-                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                  {providerReadiness.primaryDetail}
-                </p>
-              </div>
-            </div>
-
+          {workspaceActionError ? (
             <div
-              className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+              className="mx-auto mt-4 flex max-w-md items-start gap-2 rounded-md px-3 py-2 text-left text-xs leading-5"
               style={{
+                color: 'var(--color-semantic-error)',
                 background: 'var(--color-canvas)',
                 border: '1px solid var(--color-hairline)',
               }}
             >
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>{workspaceActionError}</span>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="flex max-w-full flex-wrap items-center justify-center gap-2 text-xs">
+          {FLOW_STEPS.map((step, index) => (
+            <React.Fragment key={step}>
               <span
-                className="truncate text-[11px]"
-                style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
+                className="inline-flex items-center gap-1.5"
+                style={{ color: index === 0 ? 'var(--color-body-strong)' : 'var(--color-muted)' }}
               >
-                {providerReadiness.primaryActionCommand ?? 'codex login status'}
+                {index === 0 ? <CheckCircle2 size={13} /> : null}
+                {step}
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => fetchProviderCapabilities(true)}
-                disabled={isProviderCapabilitiesLoading}
+              {index < FLOW_STEPS.length - 1 ? (
+                <span style={{ color: 'var(--color-muted-soft)' }}>→</span>
+              ) : null}
+            </React.Fragment>
+          ))}
+        </section>
+
+        <section className="w-full">
+          {recentWorkspaces.length > 0 ? (
+            <div
+              className="rounded-lg px-3 py-3"
+              style={{
+                background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-hairline)',
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                  Recent Workspaces
+                </h2>
+                <span
+                  className="text-[11px]"
+                  style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+                >
+                  {recentWorkspaces.length}
+                </span>
+              </div>
+              <div className="grid gap-2">
+                {recentWorkspaces.map((entry) => (
+                  <RecentWorkspaceRow
+                    key={entry.path}
+                    entry={entry}
+                    disabled={isWorkspaceOpening}
+                    onOpen={(workspacePath) => {
+                      void handleOpenRecentWorkspace(workspacePath);
+                    }}
+                    onReveal={(workspacePath) => {
+                      void handleRevealRecentWorkspace(workspacePath);
+                    }}
+                    onRemove={(workspacePath) => {
+                      void handleRemoveRecentWorkspace(workspacePath);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+              <span style={{ color: 'var(--color-muted)' }}>
+                No recent workspaces yet.
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenWorkspace}
+                disabled={isWorkspaceOpening}
+                className="rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--color-surface-card)] disabled:cursor-not-allowed"
+                style={{
+                  color: isWorkspaceOpening ? 'var(--color-muted-soft)' : 'var(--color-primary)',
+                }}
               >
-                Refresh
-              </Button>
+                Browse existing workspace
+              </button>
             </div>
-          </div>
-        ) : (
-          <Tooltip content={codexReadiness.detail}>
-            <div className="flex items-center justify-center">
-              <StatusChip
-                tone={readinessChipTone}
-                label={compactReadinessLabel}
-                animate={isProviderCapabilitiesLoading}
-              />
-            </div>
-          </Tooltip>
-        )}
-      </div>
+          )}
+        </section>
+
+        <button
+          type="button"
+          onClick={() => setIsSettingsOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--color-surface-card)]"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          <Settings size={13} />
+          Settings
+        </button>
+      </main>
 
       <GlobalSettingsDialog
         isOpen={isSettingsOpen}

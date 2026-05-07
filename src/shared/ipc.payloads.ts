@@ -66,6 +66,17 @@ export interface RecentWorkspaceEntry {
   lastOpenedAt: string;
 }
 
+export type WorkspaceDirectoryValidationResult =
+  | {
+      ok: true;
+      path: string;
+    }
+  | {
+      ok: false;
+      path: string;
+      message: string;
+    };
+
 export interface WorkspaceFileChangedPayload {
   filePath: string;
   relativePath: string;

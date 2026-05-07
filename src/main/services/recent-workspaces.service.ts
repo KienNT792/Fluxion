@@ -90,6 +90,21 @@ export class RecentWorkspacesService {
       updatedAt: now,
     });
   }
+
+  public async removeRecentWorkspace(workspacePath: string): Promise<RecentWorkspaceEntry[]> {
+    const normalizedPath = normalizeRecentWorkspacePath(workspacePath);
+    const existing = await this.listRecentWorkspaces();
+    const nextEntries = existing.filter(
+      (entry) => normalizeRecentWorkspacePath(entry.path) !== normalizedPath
+    );
+
+    await this.writeDocument({
+      recentWorkspaces: nextEntries,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return nextEntries;
+  }
 }
 
 export const recentWorkspacesService = RecentWorkspacesService.getInstance();

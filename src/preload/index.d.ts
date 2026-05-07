@@ -32,6 +32,7 @@ import {
   WorkflowSavedPayload,
   WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
+  WorkspaceDirectoryValidationResult,
   WorkspaceFileChangedPayload,
   WorkspaceLoadingEvent,
   WorkspaceOpenedPayload,
@@ -45,6 +46,11 @@ export interface FluxionAPI {
   trustWorkspace: (workspacePath: string) => Promise<void>;
   migrateRendererTrustedWorkspaceCache: (workspacePaths: string[]) => Promise<void>;
   listRecentWorkspaces: () => Promise<RecentWorkspaceEntry[]>;
+  removeRecentWorkspace: (workspacePath: string) => Promise<RecentWorkspaceEntry[]>;
+  getPathForFile: (file: File) => string;
+  validateWorkspaceDirectory: (
+    pathValue: string
+  ) => Promise<WorkspaceDirectoryValidationResult>;
   saveWorkflow: (
     workspacePath: string, 
     workflow: Workflow, 

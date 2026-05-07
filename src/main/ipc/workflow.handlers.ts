@@ -24,6 +24,7 @@ import {
   WorkspaceContextOnboardingUpdatePayload,
   LegacyWorkflowMigrationPayload,
   WorkspaceTrustMigrationPayload,
+  WorkspaceDirectoryValidationResult,
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
 } from '@shared';
@@ -96,6 +97,45 @@ async function recordRecentWorkspace(workspacePath: string): Promise<void> {
     await recentWorkspacesService.recordWorkspaceOpened(workspacePath);
   } catch (error) {
     console.warn('Failed to record recent workspace:', error);
+  }
+}
+
+async function validateWorkspaceDirectory(
+  pathValue: string
+): Promise<WorkspaceDirectoryValidationResult> {
+  const candidatePath = pathValue.trim();
+
+  if (!candidatePath) {
+    return {
+      ok: false,
+      path: '',
+      message: 'Drop a folder to open it as a workspace.',
+    };
+  }
+
+  const resolvedPath = resolve(candidatePath);
+
+  try {
+    const pathStats = await stat(resolvedPath);
+
+    if (!pathStats.isDirectory()) {
+      return {
+        ok: false,
+        path: resolvedPath,
+        message: 'Drop a folder, not a file.',
+      };
+    }
+
+    return {
+      ok: true,
+      path: resolvedPath,
+    };
+  } catch {
+    return {
+      ok: false,
+      path: resolvedPath,
+      message: 'Folder does not exist or cannot be accessed.',
+    };
   }
 }
 
@@ -173,6 +213,10 @@ export function registerWorkflowHandlers(): void {
     return payload;
   });
 
+  ipcMain.handle(IpcChannels.WORKSPACE_VALIDATE_DIRECTORY, async (_event, pathValue: string) => {
+    return validateWorkspaceDirectory(pathValue);
+  });
+
   ipcMain.handle(IpcChannels.WORKSPACE_TRUST_IS_TRUSTED, async (_event, workspacePath: string) => {
     return workspaceTrustService.isWorkspaceTrusted(workspacePath);
   });
@@ -190,6 +234,10 @@ export function registerWorkflowHandlers(): void {
 
   ipcMain.handle(IpcChannels.WORKSPACE_RECENT_LIST, async () => {
     return recentWorkspacesService.listRecentWorkspaces();
+  });
+
+  ipcMain.handle(IpcChannels.WORKSPACE_RECENT_REMOVE, async (_event, workspacePath: string) => {
+    return recentWorkspacesService.removeRecentWorkspace(workspacePath);
   });
 
   ipcMain.handle(IpcChannels.WORKSPACE_SAVE, async (_event, payload: WorkflowSavePayload) => {

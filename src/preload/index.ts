@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
@@ -38,6 +38,7 @@ import {
   WorkspaceFileChangedPayload,
   WorkspaceLoadingEvent,
   WorkspaceOpenedPayload,
+  WorkspaceDirectoryValidationResult,
   WorkspaceTrustMigrationPayload,
   WorkflowCreateResult,
 } from '@shared';
@@ -71,6 +72,15 @@ const api = {
     } satisfies WorkspaceTrustMigrationPayload) as Promise<void>,
   listRecentWorkspaces: (): Promise<RecentWorkspaceEntry[]> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_RECENT_LIST) as Promise<RecentWorkspaceEntry[]>,
+  removeRecentWorkspace: (workspacePath: string): Promise<RecentWorkspaceEntry[]> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_RECENT_REMOVE, workspacePath) as Promise<
+      RecentWorkspaceEntry[]
+    >,
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  validateWorkspaceDirectory: (pathValue: string): Promise<WorkspaceDirectoryValidationResult> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_VALIDATE_DIRECTORY, pathValue) as Promise<
+      WorkspaceDirectoryValidationResult
+    >,
   saveWorkflow: (
     workspacePath: string,
     workflow: Workflow,
