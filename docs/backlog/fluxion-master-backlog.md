@@ -1,8 +1,8 @@
 # Fluxion Master Backlog
 
-Date: 2026-05-06
+Date: 2026-05-07
 Workspace: `D:\codex-workflow\Fluxion`
-Source baseline: `README.md`, `docs/assessments/fluxion-project-assessment-2026-05-06.md`, repo verification on `2026-05-06`
+Source baseline: `README.md`, `docs/assessments/fluxion-project-assessment-2026-05-07.md`, repo verification on `2026-05-07`
 
 ## Purpose
 
@@ -29,16 +29,17 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Current Snapshot
 
-- `git status`: working tree contains local implementation changes for `FX-018`, `FX-025`, `FX-027`, Codex readiness onboarding, UI onboarding clarity/accessibility, docs, and supporting tests.
-- `npm run typecheck`: pass
-- `npm test`: pass (`14` files, `73` tests)
-- `npm run smoke:win`: pass
+- `git status`: branch `main` is aligned with `origin/main` at `24a731d` (`docs: Move document to sub-folder`); working tree currently has only this backlog progress update.
+- 2026-05-07 commit batch da land: README/config cleanup, ContextInit v2, runtime action smoothing, Codex approval guardrail/probe, assessment notes, va docs restructure.
+- `npm run typecheck`: pass in the 2026-05-07 assessment.
+- Targeted Phase 2A/runtime tests: pass (`4` files, `24` tests).
+- Full `npm test`: environment-blocked by broken local Electron package install in `node_modules/electron`; Vitest reached `22` files / `92` tests passed before Electron-dependent suites failed to load.
 - P0/P0.1/P1 runtime foundation cho Codex CLI tren Windows da xong.
-- Run-state persistence, artifact gates, va V2 memory frontmatter da co trong code va test.
-- Workflow-level `Auto` / `Manual` execution mode, dynamic Codex capability discovery, va local Windows unpacked smoke baseline da duoc wire xong.
-- Codex runtime readiness onboarding da co: app check `codex login status`, live/bundled model catalog, force refresh, va chi block run khi CLI missing hoac auth missing.
-- UI onboarding clarity pass da co: Welcome readiness, Settings copy cleanup, Topbar node/save state, empty-state `Add Agent` / `Try Simple Chain`, va modal/icon accessibility pass.
-- Gap con lai co tac dong lon nhat hien nay la `Explain with AI`, retry attempt lineage, provider config validation, CI baseline, va product hardening.
+- Run-state persistence, artifact gates, V2 memory frontmatter, workflow-level `Auto` / `Manual` execution mode, dynamic Codex capability discovery, readiness onboarding, va local Windows smoke baseline da duoc wire xong tu cac pass truoc.
+- Runtime UX da duoc lam ro them: terminal/log cleanup direction, output preview, stopping state, review CTA/section, duplicate review-action prevention, va retry/rerun attempt separators.
+- Codex approval guardrail Phase 1 da xong: `on-request` va `untrusted` bi chan truoc spawn tru khi approval protocol duoc xac nhan `supported`.
+- Codex approval protocol probe Phase 2A da xong va hien ket luan `unsupported`; Phase 2B approval host van bi block.
+- Gap con lai co tac dong lon nhat hien nay la fix Electron install/test environment, manual desktop smoke runtime UX batch, WindowsApps/App Execution Alias readiness error handling, CI baseline, provider config validation, va sau do moi quay lai `Explain with AI`.
 
 ## Release Gates
 
@@ -53,7 +54,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 - [x] Co it nhat 1 adapter that de chay agent that.
 - [ ] Co `Retry` va `Explain with AI`. Current state: `Retry` da co, `Explain with AI` chua co.
-- [ ] Co file watch, context init, instruction file generation. Current state: file watch va context init da co; instruction file generation chua co.
+- [ ] Co file watch, context init, instruction file generation. Current state: file watch, context init, va source-scan assisted context draft da co; instruction file generation chua co.
 - [x] UI phan anh dung trang thai workflow va node.
 
 ### MVP Gate [PARTIAL]
@@ -123,14 +124,14 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Priority: `P1`
 - Outcome: App da co context init modal de thu thap thong tin chien luoc ban dau.
 
-### FX-012 Add source-scan assisted context draft
+### FX-012 Add source-scan assisted context draft [DONE]
 
 - Priority: `P2`
-- Outcome: Giam thao tac tay khi setup workspace moi.
+- Outcome: ContextInit v2 co the scan workspace de de xuat draft field tu repo hien co, kem evidence de user review.
 - Deliverable: Co che quet repo de goi y muc tieu, stack, architecture, style.
 - Acceptance:
-- App tao duoc ban nhap context tu source tree.
-- User co the review va sua truoc khi luu.
+- [x] App tao duoc ban nhap context tu source tree.
+- [x] User co the review va sua truoc khi luu.
 
 ### FX-013 Generate instruction files with frontmatter
 
@@ -236,10 +237,10 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Phase E - Error Handling and Operator UX
 
-### FX-020 Add node-level error surface with actions [CURRENT]
+### FX-020 Add node-level error surface with actions [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Node-level status/error surface va `Retry` action da co; `Explain with AI` van chua co.
+- Outcome: Node-level status/error surface va `Retry` action da co; `Explain with AI` van chua co va dang duoc defer den sau runtime smoke.
 - Deliverable: Tooltip/panel loi tren node va trong properties panel.
 - Acceptance:
 - [x] Node loi hien icon/trang thai ro.
@@ -255,14 +256,38 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - User bam `Explain with AI` thi co phan tich nguyen nhan.
 - Mac dinh dung model re hoac local neu cau hinh co san.
 
-### FX-022 Add markdown output preview and artifact links
+### FX-022 Add markdown output preview and artifact links [PARTIAL]
 
 - Priority: `P2`
-- Outcome: User nhin thay san pham cua moi node ngay trong app.
+- Outcome: `OutputPreview` va output file actions da co trong Properties Panel; con can manual desktop smoke de xac nhan end-to-end.
 - Deliverable: Markdown viewer va link mo output file.
 - Acceptance:
-- Node completed co the preview body markdown.
-- Co link toi file `.md` output that.
+- [x] Node completed co the preview body markdown.
+- [x] Co link toi file `.md` output that.
+- [ ] Manual desktop smoke xac nhan preview, open/reveal/copy path, va truncation/error states dung tren Windows.
+
+### FX-030 Manual runtime UX smoke pass [CURRENT]
+
+- Priority: `P1`
+- Outcome: Dong lai vong runtime action smoothing bang desktop verification that, khong chi source-level/test-level.
+- Deliverable: Manual smoke checklist va fix cac issue phat hien trong luong run/review/retry/abort/output.
+- Acceptance:
+- [ ] Full `npm test` chay lai duoc sau khi Electron install state healthy hoac blocker duoc ghi ro.
+- [ ] Successful Codex workflow hien markdown trong Output Preview, khong spam final markdown vao terminal.
+- [ ] Abort hien `Stopping` cho den khi process cleanup xong va khong de stale run actions.
+- [ ] `Review Required` CTA focus dung review section, approve/rerun/reject co pending state.
+- [ ] Retry/rerun giu log context voi attempt separators va latest output label dung.
+
+### FX-031 Harden Codex CLI WindowsApps alias readiness
+
+- Priority: `P1`
+- Outcome: Fluxion bao loi setup Codex CLI tren Windows ro hon khi `codex.exe` resolve vao App Execution Alias / WindowsApps path khong spawn duoc.
+- Deliverable: Resolver/readiness error path phan biet `EPERM`/WindowsApps alias voi CLI missing/auth missing.
+- Acceptance:
+- [ ] Detect `C:\Program Files\WindowsApps` Codex candidates va spawn `EPERM` separately.
+- [ ] Prefer npm global/node-script Codex CLI candidate khi co san va spawnable.
+- [ ] Renderer hien setup copy co action ro: install/update `@openai/codex` globally hoac sua PATH.
+- [ ] Test provider readiness cho WindowsApps alias failure va fallback candidate.
 
 ## Phase F - Data Integrity, Security, and Hardening
 
@@ -296,6 +321,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - [x] Co test cho engine success/error/abort.
 - [x] Co test cho memory frontmatter parsing.
 - [x] Co build smoke tren Windows.
+- [ ] Full local `npm test` lap lai duoc sau khi Electron install state healthy.
 - [ ] Co CI baseline cho lint/typecheck/test.
 
 ### FX-026 Clean lint baseline and align product metadata [PARTIAL]
@@ -310,23 +336,25 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 
 ## Suggested Implementation Order
 
-1. `FX-020`, `FX-023`, `FX-025`
-2. `FX-024`, `FX-026`, `FX-016`
-3. `FX-013`, `FX-014`, `FX-012`
-4. `FX-021`, `FX-022`
+1. `FX-030`, `FX-031`, `FX-025`
+2. `FX-023`, `FX-024`, `FX-026`
+3. `FX-020`, `FX-021`
+4. `FX-016`, `FX-013`, `FX-014`
 
 ## Suggested Next Sprint
 
 Sprint tiep theo nen tap trung vao 6 item:
 
-- `FX-020` Hoan tat `Explain with AI` tren error surface da co.
+- `FX-030` Manual smoke runtime UX batch vua ship: output preview, terminal clarity, stopping, review CTA, retry/rerun separators.
+- `FX-031` Xu ly WindowsApps/App Execution Alias readiness cho Codex CLI va thong bao setup ro rang.
+- `FX-025` Khoi phuc full local `npm test`, sau do dua `typecheck` / `test` / smoke build vao CI baseline.
 - `FX-023` Chan metadata/frontmatter khong hop le truoc khi dua vao downstream context.
-- `FX-025` Dua local `smoke:win` thanh CI baseline cho `typecheck` / `test` / smoke build.
 - `FX-024` Mo rong validate auth/config truoc khi run cho tat ca runtime/provider lien quan ngoai Codex CLI readiness da co.
 - `FX-026` Don dep lint baseline va metadata san pham.
-- `FX-016` Bat dau adapter that thu hai de dong MVP gap "2 real adapters".
 
-Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co smoke baseline va onboarding ro rang" sang "beta candidate co verification lap lai duoc, error intelligence, va product hardening tot hon".
+`Explain with AI` (`FX-020`/`FX-021`) nen quay lai sau khi 6 item tren on dinh, vi diagnostic AI se co gia tri hon khi runtime output/error/retry state da dang tin.
+
+Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co guardrail va runtime UX source-level polish" sang "beta candidate co verification lap lai duoc, Windows setup error ro rang, va product hardening tot hon".
 
 ## Deferred for Later
 
