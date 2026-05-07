@@ -9,7 +9,8 @@ import {
   WorkflowNodeOutputPayload,
   WorkflowReviewRequiredPayload,
   WorkflowNodeStatusPayload,
-  WorkspaceFileChangedPayload
+  WorkspaceFileChangedPayload,
+  WorkspaceLoadingEvent
 } from '@shared';
 import { useWorkflowStore } from '../stores/workflow.store';
 
@@ -29,6 +30,7 @@ export function useIpcListeners(): void {
     setWorkflowStatus
   } = useExecutionStore()
   const recordWorkspaceChange = useWorkflowStore((state) => state.recordWorkspaceChange)
+  const recordWorkspaceLoadingEvent = useWorkflowStore((state) => state.recordWorkspaceLoadingEvent)
 
   useEffect(() => {
     if (!window.api) {
@@ -39,6 +41,12 @@ export function useIpcListeners(): void {
     const unsubWorkspaceChanges = window.api.onWorkspaceFileChanged(
       (payload: WorkspaceFileChangedPayload) => {
         recordWorkspaceChange(payload)
+      }
+    )
+
+    const unsubWorkspaceLoading = window.api.onWorkspaceLoading(
+      (payload: WorkspaceLoadingEvent) => {
+        recordWorkspaceLoadingEvent(payload)
       }
     )
 
@@ -114,6 +122,7 @@ export function useIpcListeners(): void {
     // Cleanup listeners on unmount
     return () => {
       unsubWorkspaceChanges()
+      unsubWorkspaceLoading()
       unsubTerminal()
       unsubTerminalError()
       unsubTerminalExit()
@@ -128,6 +137,7 @@ export function useIpcListeners(): void {
     addReviewNode,
     clearReviewNodes,
     recordWorkspaceChange,
+    recordWorkspaceLoadingEvent,
     removeReviewNode,
     setCompiledContext,
     setActiveRunId,

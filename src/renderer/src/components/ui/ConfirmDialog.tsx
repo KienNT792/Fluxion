@@ -7,11 +7,12 @@ import { Button } from './Button';
 interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
-  description: string;
+  description: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmVariant?: 'primary' | 'secondary' | 'danger';
   confirmDisabled?: boolean;
+  iconTone?: 'danger' | 'accent';
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -24,6 +25,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel = 'Cancel',
   confirmVariant = 'danger',
   confirmDisabled = false,
+  iconTone = 'danger',
   onConfirm,
   onCancel,
 }) => {
@@ -75,7 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="w-full max-w-md overflow-hidden rounded-lg"
+        className="flex max-h-[calc(100vh-32px)] w-full max-w-md flex-col overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',
           border: '1px solid var(--color-hairline)',
@@ -83,7 +85,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         onClick={(event) => event.stopPropagation()}
       >
         <div
-          className="flex items-start gap-3 px-5 py-4"
+          className="flex min-h-0 items-start gap-3 overflow-y-auto px-5 py-4"
           style={{ borderBottom: '1px solid var(--color-hairline)' }}
         >
           <div
@@ -91,7 +93,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             style={{
               background: 'var(--color-canvas-soft)',
               border: '1px solid var(--color-hairline)',
-              color: 'var(--color-semantic-error)',
+              color:
+                iconTone === 'danger'
+                  ? 'var(--color-semantic-error)'
+                  : 'var(--color-primary)',
             }}
           >
             <AlertTriangle size={16} />
@@ -100,13 +105,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
               {title}
             </h3>
-            <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+            <div className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
               {description}
-            </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-5 py-4">
           <Button variant="secondary" size="sm" onClick={onCancel} disabled={confirmDisabled}>
             {cancelLabel}
           </Button>

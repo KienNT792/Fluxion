@@ -17,6 +17,7 @@ import {
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
   ProjectContextDraft,
+  RecentWorkspaceEntry,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -35,7 +36,9 @@ import {
   WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
+  WorkspaceLoadingEvent,
   WorkspaceOpenedPayload,
+  WorkspaceTrustMigrationPayload,
   WorkflowCreateResult,
 } from '@shared';
 
@@ -56,6 +59,18 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKSPACE_OPEN_DIALOG) as Promise<string | null>,
   loadWorkspace: (workspacePath: string): Promise<WorkspaceOpenedPayload> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_LOAD, workspacePath) as Promise<WorkspaceOpenedPayload>,
+  isWorkspaceTrusted: (workspacePath: string): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_TRUST_IS_TRUSTED, workspacePath) as Promise<boolean>,
+  trustWorkspace: (workspacePath: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_TRUST_MARK_TRUSTED, workspacePath) as Promise<void>,
+  migrateRendererTrustedWorkspaceCache: (
+    workspacePaths: WorkspaceTrustMigrationPayload['workspacePaths']
+  ): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_TRUST_MIGRATE_RENDERER_CACHE, {
+      workspacePaths,
+    } satisfies WorkspaceTrustMigrationPayload) as Promise<void>,
+  listRecentWorkspaces: (): Promise<RecentWorkspaceEntry[]> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_RECENT_LIST) as Promise<RecentWorkspaceEntry[]>,
   saveWorkflow: (
     workspacePath: string,
     workflow: Workflow,
@@ -165,6 +180,8 @@ const api = {
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) =>
     bindListener(IpcChannels.WORKSPACE_FILE_CHANGED, callback),
+  onWorkspaceLoading: (callback: (payload: WorkspaceLoadingEvent) => void) =>
+    bindListener(IpcChannels.WORKSPACE_LOADING, callback),
   onTerminalDataBatch: (callback: (payload: TerminalDataBatchPayload) => void) =>
     bindListener(IpcChannels.TERMINAL_DATA_BATCH, callback),
   onTerminalError: (callback: (payload: TerminalErrorPayload) => void) =>

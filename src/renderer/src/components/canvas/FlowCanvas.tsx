@@ -23,21 +23,27 @@ const nodeTypes = { agentNode: AgentNode };
 const edgeTypes = { animatedEdge: AnimatedEdge };
 
 interface CanvasEmptyStateProps {
+  contextStatus: 'missing' | 'incomplete' | 'ready' | 'legacy';
   onAddAgent: () => void;
+  onReviewContext: () => void;
   onTrySimpleChain: () => void;
 }
 
 const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
+  contextStatus,
   onAddAgent,
+  onReviewContext,
   onTrySimpleChain,
-}) => (
+}) => {
+  const shouldReviewContext = contextStatus !== 'ready';
+
+  return (
   <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10">
     <div
       className="pointer-events-auto flex w-[360px] max-w-[calc(100vw-48px)] flex-col items-center gap-4 rounded-lg px-5 py-5 text-center"
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
-        boxShadow: '0 18px 40px rgba(38, 37, 30, 0.06)',
       }}
     >
       <div
@@ -54,27 +60,35 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
           className="font-semibold text-sm"
           style={{ color: 'var(--color-body-strong)', letterSpacing: '-0.1px' }}
         >
-          Start Building Your Workflow
+          {shouldReviewContext ? 'Project context needs review' : 'Start building your workflow'}
         </p>
         <p
           className="text-xs mt-1 leading-5"
           style={{ color: 'var(--color-muted)' }}
         >
-          Add a Codex agent, connect nodes into a DAG, then run through the local CLI.
+          {shouldReviewContext
+            ? 'Review local context before adding agents or running a workflow.'
+            : 'Add a Codex agent, connect nodes into a DAG, then run through the local CLI.'}
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <Button variant="primary" size="sm" onClick={onAddAgent}>
+        {shouldReviewContext ? (
+          <Button variant="primary" size="lg" onClick={onReviewContext}>
+            Review Context
+          </Button>
+        ) : null}
+        <Button variant={shouldReviewContext ? 'secondary' : 'primary'} size="lg" onClick={onAddAgent}>
           <Plus size={14} />
           Add Agent
         </Button>
-        <Button variant="secondary" size="sm" onClick={onTrySimpleChain}>
+        <Button variant="secondary" size="lg" onClick={onTrySimpleChain}>
           Try Simple Chain
         </Button>
       </div>
     </div>
   </div>
-);
+  );
+};
 
 export const FlowCanvas: React.FC = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -91,6 +105,8 @@ export const FlowCanvas: React.FC = () => {
   const setEdges = useWorkflowStore(state => state.setEdges);
   const deleteNode = useWorkflowStore(state => state.deleteNode);
   const setSelectedNode = useWorkflowStore(state => state.setSelectedNode);
+  const contextStatus = useWorkflowStore(state => state.contextStatus);
+  const setContextSetupOpen = useWorkflowStore(state => state.setContextSetupOpen);
 
   // ── Delete/Backspace key shortcut ──────────────────────────────
   useEffect(() => {
@@ -196,7 +212,9 @@ export const FlowCanvas: React.FC = () => {
     <div className="flex-1 h-full w-full relative" ref={reactFlowWrapper}>
       {nodes.length === 0 && (
         <CanvasEmptyState
+          contextStatus={contextStatus}
           onAddAgent={handleAddAgentFromEmptyState}
+          onReviewContext={() => setContextSetupOpen(true)}
           onTrySimpleChain={handleTrySimpleChain}
         />
       )}

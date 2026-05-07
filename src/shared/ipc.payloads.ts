@@ -43,6 +43,27 @@ export interface WorkspaceOpenedPayload {
   contextSummary?: ProjectContextDraft | null;
   /** True if a legacy `.fluxion/workflow.json` was detected. */
   legacyWorkflowDetected: boolean;
+  /** Backup path produced by the latest legacy workflow migration, when applicable. */
+  legacyWorkflowBackupFilePath?: string;
+}
+
+export type WorkspaceLoadingStep = 'init' | 'loadWorkflows' | 'loadContext' | 'watcher' | 'ready';
+
+export interface WorkspaceLoadingEvent {
+  workspacePath: string;
+  step: WorkspaceLoadingStep;
+  status: 'active' | 'done' | 'error';
+  message?: string;
+}
+
+export interface WorkspaceTrustMigrationPayload {
+  workspacePaths: string[];
+}
+
+export interface RecentWorkspaceEntry {
+  path: string;
+  name: string;
+  lastOpenedAt: string;
 }
 
 export interface WorkspaceFileChangedPayload {

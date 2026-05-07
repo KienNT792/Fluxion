@@ -1,16 +1,18 @@
 import React from 'react';
-import { AlertTriangle, FolderOpen, Settings, Workflow } from 'lucide-react';
+import { AlertTriangle, Clock3, FolderOpen, Settings, Workflow } from 'lucide-react';
+import { RecentWorkspaceEntry } from '@shared';
 import {
   getCodexReadinessBadgeState,
   getProviderReadinessSummary,
 } from '../../lib/provider-capabilities';
-import { openWorkspaceFromDialog } from '../../lib/workflow-session';
+import { openWorkspaceFromDialog, openWorkspacePath } from '../../lib/workflow-session';
 import { useWorkspaceTrustPrompt } from '../../hooks/useWorkspaceTrustPrompt';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 import { Tooltip } from '../ui/Tooltip';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
+import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
 
 const ONBOARDING_STEPS = [
   'Open your codebase',
@@ -20,7 +22,9 @@ const ONBOARDING_STEPS = [
 
 export const WelcomeScreen: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [recentWorkspaces, setRecentWorkspaces] = React.useState<RecentWorkspaceEntry[]>([]);
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const workspaceOpenState = useWorkflowStore((state) => state.workspaceOpenState);
   const isProviderCapabilitiesLoading = useWorkflowStore(
     (state) => state.isProviderCapabilitiesLoading
   );
@@ -38,9 +42,52 @@ export const WelcomeScreen: React.FC = () => {
     }
   }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
 
+  React.useEffect(() => {
+    let isMounted = true;
+
+    async function loadRecentWorkspaces(): Promise<void> {
+      if (!window.api?.listRecentWorkspaces) {
+        return;
+      }
+
+      try {
+        const entries = await window.api.listRecentWorkspaces();
+        if (isMounted) {
+          setRecentWorkspaces(entries);
+        }
+      } catch {
+        if (isMounted) {
+          setRecentWorkspaces([]);
+        }
+      }
+    }
+
+    void loadRecentWorkspaces();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleOpenWorkspace = async (): Promise<void> => {
-    await openWorkspaceFromDialog(requestWorkspaceTrust);
+    try {
+      await openWorkspaceFromDialog({ requestWorkspaceTrust });
+    } catch {
+      // The opening overlay owns the visible error state.
+    }
   };
+
+  const handleOpenRecentWorkspace = async (workspacePath: string): Promise<void> => {
+    try {
+      await openWorkspacePath(workspacePath, { requestWorkspaceTrust });
+    } catch {
+      // The opening overlay owns the visible error state.
+    }
+  };
+
+  const isWorkspaceOpening =
+    workspaceOpenState.phase === 'selecting'
+    || workspaceOpenState.phase === 'awaitingTrust'
+    || workspaceOpenState.phase === 'opening';
 
   const readinessTone =
     codexReadiness.tone === 'ready'
@@ -181,9 +228,14 @@ export const WelcomeScreen: React.FC = () => {
             write agent output locally.
           </p>
 
-          <Button variant="primary" size="lg" onClick={handleOpenWorkspace}>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={handleOpenWorkspace}
+            disabled={isWorkspaceOpening}
+          >
             <FolderOpen size={16} />
-            Open Project Folder
+            {isWorkspaceOpening ? 'Opening...' : 'Open Project Folder'}
           </Button>
 
           <p
@@ -193,6 +245,50 @@ export const WelcomeScreen: React.FC = () => {
             You can also drop a project folder here.
           </p>
         </div>
+
+        {recentWorkspaces.length > 0 ? (
+          <div
+            className="w-full rounded-lg px-4 py-4"
+            style={{
+              background: 'var(--color-surface-card)',
+              border: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <Clock3 size={14} style={{ color: 'var(--color-muted)' }} />
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                Recent
+              </h2>
+            </div>
+            <div className="grid gap-2">
+              {recentWorkspaces.map((entry) => (
+                <button
+                  key={entry.path}
+                  type="button"
+                  onClick={() => handleOpenRecentWorkspace(entry.path)}
+                  disabled={isWorkspaceOpening}
+                  className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                  style={{
+                    color: isWorkspaceOpening ? 'var(--color-muted-soft)' : 'var(--color-ink)',
+                    border: '1px solid var(--color-hairline)',
+                    background: 'var(--color-canvas-soft)',
+                  }}
+                >
+                  <FolderOpen size={15} className="shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{entry.name}</span>
+                    <span
+                      className="block truncate text-[11px]"
+                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                    >
+                      {entry.path}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {shouldShowReadinessCard ? (
           <div
@@ -271,6 +367,7 @@ export const WelcomeScreen: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
       />
       {trustDialog}
+      <WorkspaceOpeningOverlay />
     </div>
   );
 };

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorkspaceOpenedPayload } from '@shared';
 import {
+  getContextEntryBehavior,
   markWorkspaceAsTrusted,
   openWorkspaceFromDialog,
   runCurrentWorkflow,
@@ -11,6 +13,8 @@ import { useWorkflowStore } from '../stores/workflow.store';
 describe('runCurrentWorkflow approval guardrail', () => {
   beforeEach(() => {
     const localStorageStore = new Map<string, string>();
+    const trustedWorkspaces = new Set<string>();
+    const normalizePath = (value: string): string => value.replace(/\\/g, '/').toLowerCase();
     vi.stubGlobal('window', {
       localStorage: {
         getItem: vi.fn((key: string) => localStorageStore.get(key) ?? null),
@@ -24,6 +28,17 @@ describe('runCurrentWorkflow approval guardrail', () => {
       api: {
         openWorkspaceDialog: vi.fn(),
         loadWorkspace: vi.fn(),
+        isWorkspaceTrusted: vi.fn(async (workspacePath: string) =>
+          trustedWorkspaces.has(normalizePath(workspacePath))
+        ),
+        trustWorkspace: vi.fn(async (workspacePath: string) => {
+          trustedWorkspaces.add(normalizePath(workspacePath));
+        }),
+        migrateRendererTrustedWorkspaceCache: vi.fn(async (workspacePaths: string[]) => {
+          workspacePaths.forEach((workspacePath) => {
+            trustedWorkspaces.add(normalizePath(workspacePath));
+          });
+        }),
         fetchProviderCapabilities: vi.fn(),
         getProviderCapabilities: vi.fn().mockResolvedValue({}),
         runWorkflow: vi.fn(),
@@ -133,11 +148,11 @@ describe('runCurrentWorkflow approval guardrail', () => {
 
     expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Workspace');
     expect(window.api.loadWorkspace).toHaveBeenCalledWith('C:\\Workspace');
-    expect(shouldPromptWorkspaceTrust('C:\\Workspace')).toBe(false);
+    await expect(shouldPromptWorkspaceTrust('C:\\Workspace')).resolves.toBe(false);
   });
 
   it('skips trust prompt for a trusted workspace path', async () => {
-    markWorkspaceAsTrusted('C:\\Trusted');
+    await markWorkspaceAsTrusted('C:\\Trusted');
     const requestWorkspaceTrust = vi.fn(async () => true);
     window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Trusted');
     window.api.loadWorkspace = vi.fn().mockResolvedValue({
@@ -167,6 +182,46 @@ describe('runCurrentWorkflow approval guardrail', () => {
 
     expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Declined');
     expect(window.api.loadWorkspace).not.toHaveBeenCalled();
-    expect(shouldPromptWorkspaceTrust('C:\\Declined')).toBe(true);
+    await expect(shouldPromptWorkspaceTrust('C:\\Declined')).resolves.toBe(true);
+  });
+
+  it('maps context entry behavior without auto-opening incomplete or legacy context', () => {
+    const basePayload: Omit<WorkspaceOpenedPayload, 'contextStatus'> = {
+      workspacePath: 'C:\\Workspace',
+      workflow: { id: 'w1', name: 'Workflow', executionMode: 'auto', nodes: [], edges: [] },
+      activeWorkflowFilePath: 'C:\\Workspace\\.fluxion\\workflows\\workflow.fluxion.json',
+      activeWorkflowId: 'w1',
+      workflows: [],
+      isNewWorkspace: false,
+      contextSummary: null,
+      legacyWorkflowDetected: false,
+    };
+
+    expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'missing' })).toMatchObject({
+      autoOpenModal: true,
+      showIncompleteBanner: false,
+      showLegacyBanner: false,
+    });
+    expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'incomplete' })).toMatchObject({
+      autoOpenModal: false,
+      showIncompleteBanner: true,
+      showLegacyBanner: false,
+    });
+    expect(
+      getContextEntryBehavior({
+        ...basePayload,
+        contextStatus: 'legacy',
+        legacyWorkflowDetected: true,
+      })
+    ).toMatchObject({
+      autoOpenModal: false,
+      showIncompleteBanner: false,
+      showLegacyBanner: true,
+    });
+    expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'ready' })).toMatchObject({
+      autoOpenModal: false,
+      showIncompleteBanner: false,
+      showLegacyBanner: false,
+    });
   });
 });

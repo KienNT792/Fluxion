@@ -301,6 +301,7 @@ export const Topbar: React.FC = () => {
   const contextStatus = useWorkflowStore((state) => state.contextStatus);
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
   const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
+  const workspaceOpenState = useWorkflowStore((state) => state.workspaceOpenState);
   const reviewNodeIds = useExecutionStore((state) => state.reviewNodeIds);
 
   const { theme, toggleTheme } = useThemeStore();
@@ -312,7 +313,11 @@ export const Topbar: React.FC = () => {
   const isRunning = workflowStatus === 'running';
   const isStopping = workflowStatus === 'stopping';
   const isPaused = workflowStatus === 'paused';
-  const isBusy = isRunning || isStopping || isPaused;
+  const isWorkspaceOpening =
+    workspaceOpenState.phase === 'selecting'
+    || workspaceOpenState.phase === 'awaitingTrust'
+    || workspaceOpenState.phase === 'opening';
+  const isBusy = isRunning || isStopping || isPaused || isWorkspaceOpening;
   const approvalGuardrail = useMemo(
     () =>
       getWorkflowCodexApprovalGuardrail(
@@ -399,7 +404,6 @@ export const Topbar: React.FC = () => {
     }
 
     runStartedAtRef.current = null;
-    setElapsedMs(0);
     return undefined;
   }, [workflowStatus]);
 
@@ -474,7 +478,7 @@ export const Topbar: React.FC = () => {
   const handleOpenWorkspace = async (): Promise<void> => {
     try {
       setIsProjectMenuOpen(false);
-      await openWorkspaceFromDialog(requestWorkspaceTrust);
+      await openWorkspaceFromDialog({ requestWorkspaceTrust });
       setWorkflowError(null);
     } catch (error) {
       const errorMessage =
@@ -999,11 +1003,14 @@ export const Topbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleOpenWorkspace}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)]"
-                  style={{ color: 'var(--color-ink)' }}
+                  disabled={isWorkspaceOpening}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+                  style={{
+                    color: isWorkspaceOpening ? 'var(--color-muted-soft)' : 'var(--color-ink)',
+                  }}
                 >
                   <FolderOpen size={14} />
-                  Open Workspace
+                  {isWorkspaceOpening ? 'Opening...' : 'Open Workspace'}
                 </button>
 
                 <button

@@ -16,11 +16,20 @@ import {
 
 const TRUSTED_WORKSPACE_STORAGE_KEY = 'fluxion.trusted-workspaces';
 
-function normalizeWorkspacePath(value: string): string {
-  return value.replace(/\\/g, '/').trim().toLowerCase();
+export type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
+
+export interface WorkspaceOpenStatus {
+  phase: WorkspaceOpenPhase;
+  workspacePath?: string;
+  error?: string;
 }
 
-function readTrustedWorkspaces(): string[] {
+interface WorkspaceOpenOptions {
+  requestWorkspaceTrust?: (workspacePath: string) => Promise<boolean>;
+  onStatusChange?: (status: WorkspaceOpenStatus) => void;
+}
+
+function readRendererTrustedWorkspaceCache(): string[] {
   if (typeof window === 'undefined' || !window.localStorage) {
     return [];
   }
@@ -40,39 +49,52 @@ function readTrustedWorkspaces(): string[] {
   }
 }
 
-function writeTrustedWorkspaces(paths: string[]): void {
+function clearRendererTrustedWorkspaceCache(): void {
   if (typeof window === 'undefined' || !window.localStorage) {
     return;
   }
 
   try {
-    window.localStorage.setItem(TRUSTED_WORKSPACE_STORAGE_KEY, JSON.stringify(paths));
+    window.localStorage.removeItem(TRUSTED_WORKSPACE_STORAGE_KEY);
   } catch {
-    // A storage failure should not block the explicit trust action; it only means
-    // Fluxion will ask again the next time this workspace is opened.
+    // A cache cleanup failure should not block workspace open.
   }
 }
 
-export function isTrustedWorkspacePath(workspacePath: string): boolean {
-  const normalizedPath = normalizeWorkspacePath(workspacePath);
-  return readTrustedWorkspaces().includes(normalizedPath);
-}
-
-export function markWorkspaceAsTrusted(workspacePath: string): void {
-  const normalizedPath = normalizeWorkspacePath(workspacePath);
-  const trustedWorkspaces = readTrustedWorkspaces();
-  if (trustedWorkspaces.includes(normalizedPath)) {
+async function migrateRendererTrustedWorkspaceCache(): Promise<void> {
+  const cachedPaths = readRendererTrustedWorkspaceCache();
+  if (cachedPaths.length === 0 || !window.api?.migrateRendererTrustedWorkspaceCache) {
     return;
   }
 
-  // Renderer localStorage is intentionally a short-term trust cache for this release.
-  // Clearing app data or reinstalling the app removes these entries and will prompt
-  // for trust again. A future hardening pass should persist this in Electron userData.
-  writeTrustedWorkspaces([...trustedWorkspaces, normalizedPath]);
+  try {
+    await window.api.migrateRendererTrustedWorkspaceCache(cachedPaths);
+    clearRendererTrustedWorkspaceCache();
+  } catch {
+    // If migration fails, main-process trust remains the source of truth and the
+    // user may be asked to trust the workspace again.
+  }
 }
 
-export function shouldPromptWorkspaceTrust(workspacePath: string): boolean {
-  return !isTrustedWorkspacePath(workspacePath);
+export async function isTrustedWorkspacePath(workspacePath: string): Promise<boolean> {
+  await migrateRendererTrustedWorkspaceCache();
+  if (!window.api?.isWorkspaceTrusted) {
+    return false;
+  }
+
+  return window.api.isWorkspaceTrusted(workspacePath);
+}
+
+export async function markWorkspaceAsTrusted(workspacePath: string): Promise<void> {
+  if (!window.api?.trustWorkspace) {
+    return;
+  }
+
+  await window.api.trustWorkspace(workspacePath);
+}
+
+export async function shouldPromptWorkspaceTrust(workspacePath: string): Promise<boolean> {
+  return !(await isTrustedWorkspacePath(workspacePath));
 }
 
 export function requiresLegacyWorkflowAction(payload: WorkspaceOpenedPayload): boolean {
@@ -82,12 +104,22 @@ export function requiresLegacyWorkflowAction(payload: WorkspaceOpenedPayload): b
   );
 }
 
-export function shouldShowInitialIncompleteContextPrompt(payload: WorkspaceOpenedPayload): boolean {
-  if (payload.contextStatus !== 'incomplete' || !payload.isNewWorkspace) {
-    return false;
-  }
+export function shouldShowInitialIncompleteContextPrompt(): boolean {
+  return false;
+}
 
-  return !payload.contextSummary?.contextOnboarding.initialPromptDismissedAt;
+export function getContextEntryBehavior(payload: WorkspaceOpenedPayload): {
+  autoOpenModal: boolean;
+  showIncompleteBanner: boolean;
+  showLegacyBanner: boolean;
+} {
+  return {
+    autoOpenModal:
+      payload.contextStatus === 'missing'
+      && !payload.contextSummary?.contextOnboarding.initialPromptDismissedAt,
+    showIncompleteBanner: payload.contextStatus === 'incomplete',
+    showLegacyBanner: requiresLegacyWorkflowAction(payload),
+  };
 }
 
 function mapCanvasNodesToWorkflowNodes(): WorkflowNode[] {
@@ -154,18 +186,13 @@ export function buildWorkflowDocument(): Workflow {
 }
 
 export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
+  const entryBehavior = getContextEntryBehavior(payload);
   useWorkflowStore.getState().hydrateWorkspace(payload);
   useWorkflowStore.getState().setContextState(
     payload.contextStatus,
     payload.contextSummary ?? null
   );
-  useWorkflowStore
-    .getState()
-    .setContextSetupOpen(
-      payload.contextStatus === 'missing'
-      || payload.contextStatus === 'legacy'
-      || shouldShowInitialIncompleteContextPrompt(payload)
-    );
+  useWorkflowStore.getState().setContextSetupOpen(entryBehavior.autoOpenModal);
   const executionStore = useExecutionStore.getState();
   executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id));
   executionStore.setWorkflowStatus('idle');
@@ -182,28 +209,83 @@ export async function selectWorkspacePathFromDialog(): Promise<string | null> {
   return window.api.openWorkspaceDialog();
 }
 
-export async function openWorkspaceFromDialog(
-  requestWorkspaceTrust?: (workspacePath: string) => Promise<boolean>
+function toWorkspaceOpenOptions(
+  optionsOrRequestWorkspaceTrust?:
+    | ((workspacePath: string) => Promise<boolean>)
+    | WorkspaceOpenOptions
+): WorkspaceOpenOptions {
+  if (typeof optionsOrRequestWorkspaceTrust === 'function') {
+    return { requestWorkspaceTrust: optionsOrRequestWorkspaceTrust };
+  }
+
+  return optionsOrRequestWorkspaceTrust ?? {};
+}
+
+function emitWorkspaceOpenStatus(
+  options: WorkspaceOpenOptions,
+  status: WorkspaceOpenStatus
+): void {
+  useWorkflowStore.getState().setWorkspaceOpenState(status);
+  options.onStatusChange?.(status);
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export async function openWorkspacePath(
+  workspacePath: string,
+  optionsOrRequestWorkspaceTrust?:
+    | ((workspacePath: string) => Promise<boolean>)
+    | WorkspaceOpenOptions
 ): Promise<void> {
+  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust);
+
+  try {
+    if (await shouldPromptWorkspaceTrust(workspacePath)) {
+      if (!options.requestWorkspaceTrust) {
+        emitWorkspaceOpenStatus(options, { phase: 'idle' });
+        return;
+      }
+
+      emitWorkspaceOpenStatus(options, { phase: 'awaitingTrust', workspacePath });
+      const isTrusted = await options.requestWorkspaceTrust(workspacePath);
+      if (!isTrusted) {
+        emitWorkspaceOpenStatus(options, { phase: 'idle' });
+        return;
+      }
+
+      await markWorkspaceAsTrusted(workspacePath);
+    }
+
+    useWorkflowStore.getState().resetWorkspaceLoadingEvents();
+    emitWorkspaceOpenStatus(options, { phase: 'opening', workspacePath });
+    await loadWorkspaceFromPath(workspacePath);
+    emitWorkspaceOpenStatus(options, { phase: 'idle' });
+  } catch (error) {
+    emitWorkspaceOpenStatus(options, {
+      phase: 'error',
+      workspacePath,
+      error: getErrorMessage(error, 'Failed to open workspace.'),
+    });
+    throw error;
+  }
+}
+
+export async function openWorkspaceFromDialog(
+  optionsOrRequestWorkspaceTrust?:
+    | ((workspacePath: string) => Promise<boolean>)
+    | WorkspaceOpenOptions
+): Promise<void> {
+  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust);
+  emitWorkspaceOpenStatus(options, { phase: 'selecting' });
   const selectedPath = await selectWorkspacePathFromDialog();
   if (!selectedPath) {
+    emitWorkspaceOpenStatus(options, { phase: 'idle' });
     return;
   }
 
-  if (shouldPromptWorkspaceTrust(selectedPath)) {
-    if (!requestWorkspaceTrust) {
-      return;
-    }
-
-    const isTrusted = await requestWorkspaceTrust(selectedPath);
-    if (!isTrusted) {
-      return;
-    }
-
-    markWorkspaceAsTrusted(selectedPath);
-  }
-
-  await loadWorkspaceFromPath(selectedPath);
+  await openWorkspacePath(selectedPath, options);
 }
 
 export async function reloadCurrentWorkspaceFromDisk(): Promise<void> {
@@ -320,10 +402,6 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
 
 export function retryWorkflowFromNode(nodeId: NodeId): void {
   void runCurrentWorkflow(nodeId);
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
 }
 
 export async function approveReviewNode(nodeId: NodeId): Promise<void> {

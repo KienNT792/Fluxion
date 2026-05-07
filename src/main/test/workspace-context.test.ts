@@ -2,7 +2,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import matter from 'gray-matter';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyProjectContextDraft, normalizeProjectContextDraft } from '@shared';
 import { memoryManager } from '../services/memory-manager';
 import { workspaceService } from '../services/workspace.service';
@@ -150,5 +150,43 @@ describe('workspaceService project context', () => {
     );
     expect(JSON.parse(await readFile(result.backupFilePath, 'utf8')).id).toBe('legacy-workflow');
     expect(context?.contextOnboarding.legacyWorkflowDecision).toBe('migrated');
+  });
+
+  it('emits loading events in order while opening a workspace', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workspace-load-events-'));
+    const sendSpy = vi.fn();
+    const sender = { send: sendSpy } as unknown as Electron.WebContents;
+
+    await workspaceService.loadWorkspace(workspacePath, sender);
+    await workspaceService.dispose();
+
+    const loadingCalls = sendSpy.mock.calls.filter(([channel]) => channel === 'workspace:loading');
+    expect(loadingCalls.map(([, payload]) => payload.step)).toEqual([
+      'init',
+      'init',
+      'loadWorkflows',
+      'loadWorkflows',
+      'loadContext',
+      'loadContext',
+      'watcher',
+      'watcher',
+      'ready',
+    ]);
+  });
+
+  it('emits a loading error event when opening fails', async () => {
+    workspacePath = join(tmpdir(), `fluxion-workspace-load-file-${Date.now()}`);
+    await writeFile(workspacePath, 'not a directory', 'utf8');
+    const sendSpy = vi.fn();
+    const sender = { send: sendSpy } as unknown as Electron.WebContents;
+
+    await expect(workspaceService.loadWorkspace(workspacePath, sender)).rejects.toThrow();
+
+    const loadingCalls = sendSpy.mock.calls.filter(([channel]) => channel === 'workspace:loading');
+    const lastPayload = loadingCalls[loadingCalls.length - 1]?.[1];
+    expect(lastPayload).toMatchObject({
+      step: 'init',
+      status: 'error',
+    });
   });
 });

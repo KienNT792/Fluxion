@@ -8,6 +8,7 @@ import { PropertiesPanel } from './PropertiesPanel';
 import { TerminalViewer } from '../terminal/TerminalViewer';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ContextInitModal } from './ContextInitModal';
+import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
 import { hydrateWorkspaceState } from '../../lib/workflow-session';
 import { useThemeStore, applyTheme } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
@@ -22,9 +23,13 @@ export const AppShell: React.FC = () => {
   const contextSummary = useWorkflowStore((state) => state.contextSummary);
   const isContextSetupOpen = useWorkflowStore((state) => state.isContextSetupOpen);
   const legacyWorkflowDetected = useWorkflowStore((state) => state.legacyWorkflowDetected);
+  const legacyWorkflowBackupFilePath = useWorkflowStore(
+    (state) => state.legacyWorkflowBackupFilePath
+  );
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
   const setContextState = useWorkflowStore((state) => state.setContextState);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
+  const clearLegacyWorkflowBackup = useWorkflowStore((state) => state.clearLegacyWorkflowBackup);
   const [contextBannerError, setContextBannerError] = useState<string | null>(null);
   const [isDismissingIncomplete, setIsDismissingIncomplete] = useState(false);
   const [isKeepingLegacy, setIsKeepingLegacy] = useState(false);
@@ -40,10 +45,13 @@ export const AppShell: React.FC = () => {
       return;
     }
 
-    if (contextStatus === 'missing' || contextStatus === 'legacy') {
+    if (
+      contextStatus === 'missing'
+      && !contextSummary?.contextOnboarding.initialPromptDismissedAt
+    ) {
       setContextSetupOpen(true);
     }
-  }, [contextStatus, setContextSetupOpen, workspacePath]);
+  }, [contextStatus, contextSummary, setContextSetupOpen, workspacePath]);
 
   const handleContextSaved = useCallback(
     (payload: WorkspaceContextSavedPayload) => {
@@ -136,6 +144,20 @@ export const AppShell: React.FC = () => {
     }
   }, [fetchProviderCapabilities, isMigratingLegacy, workspacePath]);
 
+  const handleRevealLegacyBackup = useCallback(async () => {
+    if (!legacyWorkflowBackupFilePath) {
+      return;
+    }
+
+    try {
+      await window.api.revealPath(legacyWorkflowBackupFilePath);
+    } catch (error) {
+      setContextBannerError(
+        error instanceof Error ? error.message : 'Failed to reveal legacy backup.'
+      );
+    }
+  }, [legacyWorkflowBackupFilePath]);
+
   if (!workspacePath) {
     return (
       <TooltipProvider>
@@ -190,7 +212,7 @@ export const AppShell: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="lg"
                   onClick={handleDismissIncompleteBanner}
                   disabled={isDismissingIncomplete}
                 >
@@ -198,7 +220,7 @@ export const AppShell: React.FC = () => {
                 </Button>
                 <Button
                   variant="secondary"
-                  size="sm"
+                  size="lg"
                   onClick={() => setContextSetupOpen(true)}
                 >
                   Review Context
@@ -228,7 +250,7 @@ export const AppShell: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="lg"
                   onClick={handleKeepLegacyWorkflow}
                   disabled={isKeepingLegacy || isMigratingLegacy}
                 >
@@ -236,11 +258,48 @@ export const AppShell: React.FC = () => {
                 </Button>
                 <Button
                   variant="secondary"
-                  size="sm"
+                  size="lg"
                   onClick={handleMigrateLegacyWorkflow}
                   disabled={isKeepingLegacy || isMigratingLegacy}
                 >
                   {isMigratingLegacy ? 'Migrating...' : 'Migrate'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {legacyWorkflowBackupFilePath ? (
+            <div
+              className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
+              style={{
+                background: 'var(--color-canvas-soft)',
+                borderBottom: '1px solid var(--color-hairline)',
+              }}
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <GitBranch size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-semantic-success)' }} />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                    Legacy workflow migrated
+                  </p>
+                  <p className="mt-1 truncate text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                    Backup saved at {legacyWorkflowBackupFilePath}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={clearLegacyWorkflowBackup}
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={handleRevealLegacyBackup}
+                >
+                  Reveal backup
                 </Button>
               </div>
             </div>
@@ -264,6 +323,7 @@ export const AppShell: React.FC = () => {
           onClose={handleContextClose}
         />
       )}
+      <WorkspaceOpeningOverlay />
     </TooltipProvider>
   );
 };

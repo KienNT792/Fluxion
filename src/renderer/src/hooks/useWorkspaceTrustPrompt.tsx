@@ -29,12 +29,36 @@ export function useWorkspaceTrustPrompt(): {
         title="Trust this workspace?"
         description={
           pendingWorkspacePath
-            ? `Fluxion will create and update .fluxion/ in this folder to store workflows, context, memory, and runs. Workspace: ${pendingWorkspacePath}`
+            ? (
+              <div className="space-y-3">
+                <p>
+                  Fluxion will create and manage workflow data inside this folder.
+                </p>
+                <ul className="space-y-1">
+                  <li>Creates or updates `.fluxion/`.</li>
+                  <li>Stores workflows, runs, and local context.</li>
+                  <li>May read files after you trust it to build local context.</li>
+                </ul>
+                <p>You should only trust workspaces you control.</p>
+                <p
+                  className="break-all rounded-md px-3 py-2"
+                  style={{
+                    background: 'var(--color-canvas-soft)',
+                    border: '1px solid var(--color-hairline)',
+                    color: 'var(--color-body)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {pendingWorkspacePath}
+                </p>
+              </div>
+            )
             : ''
         }
         confirmLabel="Trust and Open"
         cancelLabel="Cancel"
         confirmVariant="primary"
+        iconTone="accent"
         onConfirm={() => resolvePendingTrust(true)}
         onCancel={() => resolvePendingTrust(false)}
       />

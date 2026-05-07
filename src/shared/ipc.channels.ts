@@ -3,6 +3,7 @@ export const IpcChannels = {
   // Workspace
   WORKSPACE_OPEN_DIALOG: 'workspace:open-dialog',
   WORKSPACE_LOAD: 'workspace:load',
+  WORKSPACE_LOADING: 'workspace:loading',
   WORKSPACE_SAVE: 'workspace:save',
   WORKSPACE_OPENED: 'workspace:opened',
   WORKSPACE_INIT: 'workspace:init',
@@ -15,6 +16,10 @@ export const IpcChannels = {
   WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY: 'workspace:save-context-v2',
   WORKSPACE_UPDATE_CONTEXT_ONBOARDING: 'workspace:update-context-onboarding',
   WORKSPACE_MIGRATE_LEGACY_WORKFLOW: 'workspace:migrate-legacy-workflow',
+  WORKSPACE_TRUST_IS_TRUSTED: 'workspace-trust:is-trusted',
+  WORKSPACE_TRUST_MARK_TRUSTED: 'workspace-trust:mark-trusted',
+  WORKSPACE_TRUST_MIGRATE_RENDERER_CACHE: 'workspace-trust:migrate-renderer-cache',
+  WORKSPACE_RECENT_LIST: 'workspace-recent:list',
 
   // Agent Config Export
   AGENT_CONFIG_LIST_EXPORTERS: 'agent-config:list-exporters',

@@ -17,6 +17,7 @@ import {
   ExecutionMode,
   ProviderCapabilitiesMap,
   ReasoningLevel,
+  WorkspaceLoadingEvent,
   WorkspaceContextStatus,
   WorkflowNode,
   WorkspaceFileChangedPayload,
@@ -35,6 +36,14 @@ interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
 interface ReviewFocusRequest {
   nodeId: string;
   requestId: number;
+}
+
+type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
+
+interface WorkspaceOpenState {
+  phase: WorkspaceOpenPhase;
+  workspacePath?: string;
+  error?: string;
 }
 
 interface WorkflowState {
@@ -61,6 +70,11 @@ interface WorkflowState {
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
   legacyWorkflowDetected: boolean;
+  legacyWorkflowBackupFilePath: string | null;
+  workspaceLoadingEvents: WorkspaceLoadingEvent[];
+  workspaceLoadingPath: string | null;
+  workspaceLoadingError: string | null;
+  workspaceOpenState: WorkspaceOpenState;
   providerCapabilities: ProviderCapabilitiesMap;
   isProviderCapabilitiesLoading: boolean;
   hasFetchedProviderCapabilities: boolean;
@@ -91,10 +105,21 @@ interface WorkflowState {
     status: WorkspaceContextStatus,
     contextSummary: ProjectContextDraft | null
   ) => void;
+  recordWorkspaceLoadingEvent: (event: WorkspaceLoadingEvent) => void;
+  resetWorkspaceLoadingEvents: () => void;
+  setWorkspaceOpenState: (state: WorkspaceOpenState) => void;
+  clearLegacyWorkflowBackup: () => void;
 }
 
 const MAX_WORKSPACE_CHANGES = 5;
 const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitiesMap = {};
+const WORKSPACE_LOADING_STEP_ORDER: WorkspaceLoadingEvent['step'][] = [
+  'init',
+  'loadWorkflows',
+  'loadContext',
+  'watcher',
+  'ready',
+];
 
 function normalizeNodeData(data: WorkflowNode['data']): WorkflowNode['data'] {
   const model =
@@ -161,6 +186,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   activeWorkflowFilePath: null,
   workflows: [],
   legacyWorkflowDetected: false,
+  legacyWorkflowBackupFilePath: null,
+  workspaceLoadingEvents: [],
+  workspaceLoadingPath: null,
+  workspaceLoadingError: null,
+  workspaceOpenState: { phase: 'idle' },
   providerCapabilities: EMPTY_PROVIDER_CAPABILITIES,
   isProviderCapabilitiesLoading: false,
   hasFetchedProviderCapabilities: false,
@@ -256,6 +286,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       activeWorkflowFilePath: payload.activeWorkflowFilePath,
       workflows: payload.workflows,
       legacyWorkflowDetected: payload.legacyWorkflowDetected,
+      legacyWorkflowBackupFilePath: payload.legacyWorkflowBackupFilePath ?? null,
       contextStatus: payload.contextStatus,
       contextSummary: payload.contextSummary ?? null,
       isContextSetupOpen: false,
@@ -471,4 +502,32 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setContextSetupOpen: (isContextSetupOpen) => set({ isContextSetupOpen }),
   setContextState: (contextStatus, contextSummary) =>
     set({ contextStatus, contextSummary }),
+  recordWorkspaceLoadingEvent: (event) =>
+    set((state) => {
+      const nextEvents = [
+        ...state.workspaceLoadingEvents.filter((candidate) => candidate.step !== event.step),
+        event,
+      ].sort(
+        (a, b) =>
+          WORKSPACE_LOADING_STEP_ORDER.indexOf(a.step)
+          - WORKSPACE_LOADING_STEP_ORDER.indexOf(b.step)
+      );
+
+      return {
+        workspaceLoadingEvents: nextEvents,
+        workspaceLoadingPath: event.workspacePath,
+        workspaceLoadingError:
+          event.status === 'error'
+            ? event.message ?? 'Failed to load workspace.'
+            : null,
+      };
+    }),
+  resetWorkspaceLoadingEvents: () =>
+    set({
+      workspaceLoadingEvents: [],
+      workspaceLoadingPath: null,
+      workspaceLoadingError: null,
+    }),
+  setWorkspaceOpenState: (workspaceOpenState) => set({ workspaceOpenState }),
+  clearLegacyWorkflowBackup: () => set({ legacyWorkflowBackupFilePath: null }),
 }));

@@ -23,6 +23,7 @@ import {
   WorkflowDeletePayload,
   WorkspaceContextOnboardingUpdatePayload,
   LegacyWorkflowMigrationPayload,
+  WorkspaceTrustMigrationPayload,
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
 } from '@shared';
@@ -34,6 +35,8 @@ import { settingsService } from '../services/settings.service';
 import { openShellPath, revealShellPath } from '../services/shell-path.service';
 import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service';
 import { workspaceService } from '../services/workspace.service';
+import { workspaceTrustService } from '../services/workspace-trust.service';
+import { recentWorkspacesService } from '../services/recent-workspaces.service';
 
 const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
 const HARD_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
@@ -86,6 +89,14 @@ function coercePreviewMaxBytes(maxBytes: number | undefined): number {
     HARD_TEXT_PREVIEW_MAX_BYTES,
     Math.max(1, Math.floor(maxBytes))
   );
+}
+
+async function recordRecentWorkspace(workspacePath: string): Promise<void> {
+  try {
+    await recentWorkspacesService.recordWorkspaceOpened(workspacePath);
+  } catch (error) {
+    console.warn('Failed to record recent workspace:', error);
+  }
 }
 
 async function resolveWorkspaceBoundFile(
@@ -157,7 +168,28 @@ export function registerWorkflowHandlers(): void {
   });
 
   ipcMain.handle(IpcChannels.WORKSPACE_LOAD, async (event, workspacePath: string) => {
-    return workspaceService.loadWorkspace(workspacePath, event.sender);
+    const payload = await workspaceService.loadWorkspace(workspacePath, event.sender);
+    await recordRecentWorkspace(payload.workspacePath);
+    return payload;
+  });
+
+  ipcMain.handle(IpcChannels.WORKSPACE_TRUST_IS_TRUSTED, async (_event, workspacePath: string) => {
+    return workspaceTrustService.isWorkspaceTrusted(workspacePath);
+  });
+
+  ipcMain.handle(IpcChannels.WORKSPACE_TRUST_MARK_TRUSTED, async (_event, workspacePath: string) => {
+    await workspaceTrustService.markWorkspaceAsTrusted(workspacePath);
+  });
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_TRUST_MIGRATE_RENDERER_CACHE,
+    async (_event, payload: WorkspaceTrustMigrationPayload) => {
+      await workspaceTrustService.migrateTrustedWorkspaces(payload.workspacePaths);
+    }
+  );
+
+  ipcMain.handle(IpcChannels.WORKSPACE_RECENT_LIST, async () => {
+    return recentWorkspacesService.listRecentWorkspaces();
   });
 
   ipcMain.handle(IpcChannels.WORKSPACE_SAVE, async (_event, payload: WorkflowSavePayload) => {
@@ -259,8 +291,13 @@ export function registerWorkflowHandlers(): void {
   ipcMain.handle(
     IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW,
     async (event, payload: LegacyWorkflowMigrationPayload) => {
-      await workspaceService.migrateLegacyWorkflow(payload.workspacePath);
-      return workspaceService.loadWorkspace(payload.workspacePath, event.sender);
+      const migrationResult = await workspaceService.migrateLegacyWorkflow(payload.workspacePath);
+      const openedPayload = await workspaceService.loadWorkspace(payload.workspacePath, event.sender);
+      await recordRecentWorkspace(openedPayload.workspacePath);
+      return {
+        ...openedPayload,
+        legacyWorkflowBackupFilePath: migrationResult.backupFilePath,
+      };
     }
   );
 

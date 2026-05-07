@@ -15,6 +15,7 @@ import {
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
   ProjectContextDraft,
+  RecentWorkspaceEntry,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -32,6 +33,7 @@ import {
   WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
+  WorkspaceLoadingEvent,
   WorkspaceOpenedPayload,
   WorkflowCreateResult,
 } from '@shared';
@@ -39,6 +41,10 @@ import {
 export interface FluxionAPI {
   openWorkspaceDialog: () => Promise<string | null>;
   loadWorkspace: (workspacePath: string) => Promise<WorkspaceOpenedPayload>;
+  isWorkspaceTrusted: (workspacePath: string) => Promise<boolean>;
+  trustWorkspace: (workspacePath: string) => Promise<void>;
+  migrateRendererTrustedWorkspaceCache: (workspacePaths: string[]) => Promise<void>;
+  listRecentWorkspaces: () => Promise<RecentWorkspaceEntry[]>;
   saveWorkflow: (
     workspacePath: string, 
     workflow: Workflow, 
@@ -92,6 +98,7 @@ export interface FluxionAPI {
   rerunWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>;
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) => () => void;
+  onWorkspaceLoading: (callback: (payload: WorkspaceLoadingEvent) => void) => () => void;
   onTerminalDataBatch: (callback: (payload: TerminalDataBatchPayload) => void) => () => void;
   onTerminalError: (callback: (payload: TerminalErrorPayload) => void) => () => void;
   onTerminalExit: (callback: (payload: TerminalExitPayload) => void) => () => void;

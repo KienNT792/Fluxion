@@ -18,6 +18,7 @@ import {
   resolveProjectContextStatus,
   Workflow, 
   WorkflowNode, 
+  WorkspaceLoadingStep,
   WorkspaceOpenedPayload, 
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
@@ -464,69 +465,118 @@ export class WorkspaceService {
     sender: Electron.WebContents
   ): Promise<WorkspaceOpenedPayload> {
     const resolvedWorkspacePath = path.resolve(workspacePath);
+    let activeStep: WorkspaceLoadingStep = 'init';
 
-    await memoryManager.initWorkspace(resolvedWorkspacePath);
-
-    let isNewWorkspace = false;
-    const { workflows, legacyWorkflowDetected } = await this.scanWorkflows(resolvedWorkspacePath);
-
-    let activeWorkflowFilePath: string;
-    let workflow: Workflow;
-
-    // If no workflows exist, create a default one
-    if (workflows.length === 0) {
-      workflow = this.createDefaultWorkflow(resolvedWorkspacePath);
-      activeWorkflowFilePath = path.join(
-        this.getWorkflowsDirectory(resolvedWorkspacePath), 
-        `${slugify(workflow.name)}.fluxion.json`
+    try {
+      this.emitWorkspaceLoading(
+        sender,
+        resolvedWorkspacePath,
+        activeStep,
+        'active',
+        'Initialize workspace storage'
       );
-      
-      await this.writeWorkflowToDisk(activeWorkflowFilePath, workflow);
-      isNewWorkspace = true;
-      
-      // Update metadata list
-      workflows.push({
-        id: workflow.id,
-        name: workflow.name,
-        fluxionVersion: '1.0',
-        createdAt: workflow.createdAt!,
-        updatedAt: workflow.updatedAt!,
-        filePath: activeWorkflowFilePath,
-        isLegacy: false
-      });
-    } else {
-      // Preserve the currently active workflow when possible (for explicit switch),
-      // otherwise fall back to the most recently updated workflow.
-      const preferredActivePath = this.activeWorkflowFilePath
-        ? normalizePathForCompare(this.activeWorkflowFilePath)
-        : null;
-      const preferredActiveWorkflow = preferredActivePath
-        ? workflows.find(
-            (candidate) => normalizePathForCompare(candidate.filePath) === preferredActivePath
-          )
-        : undefined;
-      const workflowToLoad = preferredActiveWorkflow ?? workflows[0];
-      activeWorkflowFilePath = workflowToLoad.filePath;
-      workflow = await this.readWorkflowFromDisk(activeWorkflowFilePath);
+      await memoryManager.initWorkspace(resolvedWorkspacePath);
+      this.emitWorkspaceLoading(sender, resolvedWorkspacePath, activeStep, 'done');
+
+      activeStep = 'loadWorkflows';
+      this.emitWorkspaceLoading(
+        sender,
+        resolvedWorkspacePath,
+        activeStep,
+        'active',
+        'Load workflow catalog'
+      );
+      let isNewWorkspace = false;
+      const { workflows, legacyWorkflowDetected } = await this.scanWorkflows(resolvedWorkspacePath);
+
+      let activeWorkflowFilePath: string;
+      let workflow: Workflow;
+
+      // If no workflows exist, create a default one
+      if (workflows.length === 0) {
+        workflow = this.createDefaultWorkflow(resolvedWorkspacePath);
+        activeWorkflowFilePath = path.join(
+          this.getWorkflowsDirectory(resolvedWorkspacePath),
+          `${slugify(workflow.name)}.fluxion.json`
+        );
+
+        await this.writeWorkflowToDisk(activeWorkflowFilePath, workflow);
+        isNewWorkspace = true;
+
+        // Update metadata list
+        workflows.push({
+          id: workflow.id,
+          name: workflow.name,
+          fluxionVersion: '1.0',
+          createdAt: workflow.createdAt!,
+          updatedAt: workflow.updatedAt!,
+          filePath: activeWorkflowFilePath,
+          isLegacy: false
+        });
+      } else {
+        // Preserve the currently active workflow when possible (for explicit switch),
+        // otherwise fall back to the most recently updated workflow.
+        const preferredActivePath = this.activeWorkflowFilePath
+          ? normalizePathForCompare(this.activeWorkflowFilePath)
+          : null;
+        const preferredActiveWorkflow = preferredActivePath
+          ? workflows.find(
+              (candidate) => normalizePathForCompare(candidate.filePath) === preferredActivePath
+            )
+          : undefined;
+        const workflowToLoad = preferredActiveWorkflow ?? workflows[0];
+        activeWorkflowFilePath = workflowToLoad.filePath;
+        workflow = await this.readWorkflowFromDisk(activeWorkflowFilePath);
+      }
+      this.emitWorkspaceLoading(sender, resolvedWorkspacePath, activeStep, 'done');
+
+      activeStep = 'loadContext';
+      this.emitWorkspaceLoading(
+        sender,
+        resolvedWorkspacePath,
+        activeStep,
+        'active',
+        'Prepare local context'
+      );
+      const contextSummary = await this.getContext(resolvedWorkspacePath);
+      const contextStatus = contextSummary?.contextStatus ?? 'missing';
+      this.emitWorkspaceLoading(sender, resolvedWorkspacePath, activeStep, 'done');
+
+      activeStep = 'watcher';
+      this.emitWorkspaceLoading(
+        sender,
+        resolvedWorkspacePath,
+        activeStep,
+        'active',
+        'Start workspace watcher'
+      );
+      this.activeWorkflowFilePath = activeWorkflowFilePath;
+      await this.startWatcher(resolvedWorkspacePath, sender);
+      this.emitWorkspaceLoading(sender, resolvedWorkspacePath, activeStep, 'done');
+
+      this.emitWorkspaceLoading(sender, resolvedWorkspacePath, 'ready', 'done');
+
+      return {
+        workspacePath: resolvedWorkspacePath,
+        workflow,
+        activeWorkflowFilePath,
+        activeWorkflowId: workflow.id,
+        workflows,
+        isNewWorkspace,
+        contextStatus,
+        contextSummary,
+        legacyWorkflowDetected
+      };
+    } catch (error) {
+      this.emitWorkspaceLoading(
+        sender,
+        resolvedWorkspacePath,
+        activeStep,
+        'error',
+        error instanceof Error ? error.message : 'Failed to load workspace.'
+      );
+      throw error;
     }
-
-    this.activeWorkflowFilePath = activeWorkflowFilePath;
-    await this.startWatcher(resolvedWorkspacePath, sender);
-
-    const contextSummary = await this.getContext(resolvedWorkspacePath);
-    const contextStatus = contextSummary?.contextStatus ?? 'missing';
-
-    return {
-      workspacePath: resolvedWorkspacePath,
-      workflow,
-      activeWorkflowFilePath,
-      activeWorkflowId: workflow.id,
-      workflows,
-      isNewWorkspace,
-      contextStatus,
-      contextSummary,
-      legacyWorkflowDetected
-    };
   }
 
   public async saveWorkflow(
@@ -924,6 +974,21 @@ export class WorkspaceService {
 
     this.watcher.on('error', (error: unknown) => {
       console.error('Workspace watcher error:', error);
+    });
+  }
+
+  private emitWorkspaceLoading(
+    sender: Electron.WebContents,
+    workspacePath: string,
+    step: WorkspaceLoadingStep,
+    status: 'active' | 'done' | 'error',
+    message?: string
+  ): void {
+    sender.send(IpcChannels.WORKSPACE_LOADING, {
+      workspacePath,
+      step,
+      status,
+      message,
     });
   }
 
