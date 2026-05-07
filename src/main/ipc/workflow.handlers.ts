@@ -21,6 +21,8 @@ import {
   WorkflowCreatePayload,
   WorkflowLoadPayload,
   WorkflowDeletePayload,
+  WorkspaceContextOnboardingUpdatePayload,
+  LegacyWorkflowMigrationPayload,
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
 } from '@shared';
@@ -244,6 +246,21 @@ export function registerWorkflowHandlers(): void {
         payload.draft,
         payload.mode
       );
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_UPDATE_CONTEXT_ONBOARDING,
+    async (_event, payload: WorkspaceContextOnboardingUpdatePayload) => {
+      return workspaceService.updateContextOnboarding(payload.workspacePath, payload.patch);
+    }
+  );
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW,
+    async (event, payload: LegacyWorkflowMigrationPayload) => {
+      await workspaceService.migrateLegacyWorkflow(payload.workspacePath);
+      return workspaceService.loadWorkspace(payload.workspacePath, event.sender);
     }
   );
 

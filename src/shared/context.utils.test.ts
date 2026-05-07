@@ -6,6 +6,7 @@ import {
   isProjectContextReadyForFinalSave,
   normalizeProjectContextDraft,
   resolveProjectContextStatus,
+  shouldShowIncompleteContextBanner,
 } from './context.utils';
 
 describe('context.utils', () => {
@@ -65,5 +66,47 @@ describe('context.utils', () => {
     expect(markdown).toContain('Prefer Windows-safe commands');
     expect(markdown).toContain('Verify with `npm run typecheck`');
     expect(markdown).toContain('# Open Questions');
+  });
+
+  it('normalizes context onboarding metadata without rendering it into markdown', () => {
+    const draft = normalizeProjectContextDraft({
+      ...createEmptyProjectContextDraft('existing', 'Fluxion'),
+      contextOnboarding: {
+        initialPromptDismissedAt: '2026-05-07T01:00:00.000Z',
+        incompleteBannerDismissedAt: '2026-05-07T02:00:00.000Z',
+        legacyWorkflowDecision: 'keep',
+        legacyWorkflowDecisionAt: '2026-05-07T03:00:00.000Z',
+      },
+    });
+    const markdown = formatProjectContextMarkdown(draft);
+
+    expect(draft.contextOnboarding).toEqual({
+      initialPromptDismissedAt: '2026-05-07T01:00:00.000Z',
+      incompleteBannerDismissedAt: '2026-05-07T02:00:00.000Z',
+      legacyWorkflowDecision: 'keep',
+      legacyWorkflowDecisionAt: '2026-05-07T03:00:00.000Z',
+    });
+    expect(markdown).not.toContain('contextOnboarding');
+    expect(markdown).not.toContain('legacyWorkflowDecision');
+  });
+
+  it('shows incomplete context banner again after the context is saved later', () => {
+    const dismissedDraft = normalizeProjectContextDraft({
+      ...createEmptyProjectContextDraft('existing', 'Fluxion'),
+      contextStatus: 'incomplete',
+      lastReviewedAt: '2026-05-07T01:00:00.000Z',
+      contextOnboarding: {
+        incompleteBannerDismissedAt: '2026-05-07T02:00:00.000Z',
+      },
+    });
+    const updatedDraft = normalizeProjectContextDraft({
+      ...dismissedDraft,
+      lastReviewedAt: '2026-05-07T03:00:00.000Z',
+    });
+
+    expect(shouldShowIncompleteContextBanner('incomplete', dismissedDraft, false)).toBe(false);
+    expect(shouldShowIncompleteContextBanner('incomplete', updatedDraft, false)).toBe(true);
+    expect(shouldShowIncompleteContextBanner('ready', updatedDraft, false)).toBe(false);
+    expect(shouldShowIncompleteContextBanner('incomplete', updatedDraft, true)).toBe(false);
   });
 });

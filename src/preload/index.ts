@@ -32,6 +32,7 @@ import {
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
   WorkflowSavedPayload,
+  WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
@@ -86,6 +87,18 @@ const api = {
       draft,
       mode,
     }) as Promise<WorkspaceContextSavedPayload>,
+  updateContextOnboarding: (
+    workspacePath: string,
+    patch: WorkspaceContextOnboardingUpdatePayload['patch']
+  ): Promise<WorkspaceContextSavedPayload> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_UPDATE_CONTEXT_ONBOARDING, {
+      workspacePath,
+      patch,
+    } satisfies WorkspaceContextOnboardingUpdatePayload) as Promise<WorkspaceContextSavedPayload>,
+  migrateLegacyWorkflow: (workspacePath: string): Promise<WorkspaceOpenedPayload> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW, {
+      workspacePath,
+    }) as Promise<WorkspaceOpenedPayload>,
   listAgentConfigExporters: (): Promise<AgentConfigExporterSummary[]> =>
     ipcRenderer.invoke(
       IpcChannels.AGENT_CONFIG_LIST_EXPORTERS

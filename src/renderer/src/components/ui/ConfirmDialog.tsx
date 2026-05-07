@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmVariant?: 'primary' | 'secondary' | 'danger';
   confirmDisabled?: boolean;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
@@ -21,6 +22,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   description,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  confirmVariant = 'danger',
   confirmDisabled = false,
   onConfirm,
   onCancel,
@@ -108,7 +110,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <Button variant="secondary" size="sm" onClick={onCancel} disabled={confirmDisabled}>
             {cancelLabel}
           </Button>
-          <Button variant="danger" size="sm" onClick={onConfirm} disabled={confirmDisabled}>
+          <Button variant={confirmVariant} size="sm" onClick={onConfirm} disabled={confirmDisabled}>
             {confirmLabel}
           </Button>
         </div>

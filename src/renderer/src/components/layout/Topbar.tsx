@@ -22,6 +22,7 @@ import {
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
+import { useWorkspaceTrustPrompt } from '../../hooks/useWorkspaceTrustPrompt';
 import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
 import {
   createNewWorkflow,
@@ -266,6 +267,7 @@ export const Topbar: React.FC = () => {
   const [isActivityPopoverOpen, setIsActivityPopoverOpen] = useState(false);
   const [isReadinessPopoverOpen, setIsReadinessPopoverOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt();
 
   const runStartedAtRef = useRef<number | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -472,7 +474,7 @@ export const Topbar: React.FC = () => {
   const handleOpenWorkspace = async (): Promise<void> => {
     try {
       setIsProjectMenuOpen(false);
-      await openWorkspaceFromDialog();
+      await openWorkspaceFromDialog(requestWorkspaceTrust);
       setWorkflowError(null);
     } catch (error) {
       const errorMessage =
@@ -600,6 +602,7 @@ export const Topbar: React.FC = () => {
       : workflowChipState.label;
 
   return (
+    <>
     <header
       className="relative z-40 flex h-14 shrink-0 items-center px-3 sm:px-4 lg:px-5"
       style={{
@@ -1111,5 +1114,7 @@ export const Topbar: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
       />
     </header>
+    {trustDialog}
+    </>
   );
 };

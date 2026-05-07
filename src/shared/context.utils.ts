@@ -6,6 +6,7 @@ import {
   ProjectContextCommand,
   ProjectContextComponent,
   ProjectContextDraft,
+  ProjectContextOnboarding,
   ProjectContextReadiness,
   ProjectSecurityPolicy,
   WorkspaceTrustLevel,
@@ -105,6 +106,26 @@ function normalizeAgentInstructionSources(
   });
 }
 
+function normalizeContextOnboarding(
+  value: ProjectContextOnboarding | undefined
+): ProjectContextOnboarding {
+  return {
+    initialPromptDismissedAt: value?.initialPromptDismissedAt?.trim() || undefined,
+    incompleteBannerDismissedAt: value?.incompleteBannerDismissedAt?.trim() || undefined,
+    legacyWorkflowDecision: value?.legacyWorkflowDecision,
+    legacyWorkflowDecisionAt: value?.legacyWorkflowDecisionAt?.trim() || undefined,
+  };
+}
+
+function parseTimestamp(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function createEmptyProjectContextDraft(
   workspaceType: WorkspaceContextType,
   projectName: string
@@ -141,6 +162,7 @@ export function createEmptyProjectContextDraft(
     agentInstructionSources: [],
     securityPolicy: defaultSecurityPolicy(),
     readiness: defaultReadiness(),
+    contextOnboarding: {},
     sourceEvidence: [],
     lastReviewedAt: new Date(0).toISOString(),
     contextStatus: 'missing',
@@ -232,6 +254,9 @@ export function normalizeProjectContextDraft(
       ),
     },
     readiness: draft.readiness ?? defaults?.readiness ?? defaultReadiness(),
+    contextOnboarding: normalizeContextOnboarding(
+      draft.contextOnboarding ?? defaults?.contextOnboarding
+    ),
     sourceEvidence: draft.sourceEvidence ?? defaults?.sourceEvidence ?? [],
     lastReviewedAt:
       draft.lastReviewedAt ?? defaults?.lastReviewedAt ?? new Date(0).toISOString(),
@@ -272,6 +297,34 @@ export function resolveProjectContextStatus(
   }
 
   return isProjectContextReadyForFinalSave(draft) ? 'ready' : 'incomplete';
+}
+
+export function isContextOnboardingDismissalCurrent(
+  dismissedAt: string | undefined,
+  lastReviewedAt: string | undefined
+): boolean {
+  const dismissedTime = parseTimestamp(dismissedAt);
+  if (dismissedTime == null) {
+    return false;
+  }
+
+  const lastReviewedTime = parseTimestamp(lastReviewedAt) ?? 0;
+  return dismissedTime > lastReviewedTime;
+}
+
+export function shouldShowIncompleteContextBanner(
+  contextStatus: WorkspaceContextStatus,
+  draft: ProjectContextDraft | null,
+  isContextSetupOpen: boolean
+): boolean {
+  if (contextStatus !== 'incomplete' || isContextSetupOpen) {
+    return false;
+  }
+
+  return !isContextOnboardingDismissalCurrent(
+    draft?.contextOnboarding.incompleteBannerDismissedAt,
+    draft?.lastReviewedAt
+  );
 }
 
 export function buildSkippedProjectContextDraft(

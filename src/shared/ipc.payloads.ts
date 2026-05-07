@@ -8,6 +8,7 @@ import {
 } from './agent-config.types';
 import {
   ContextScanResult,
+  ProjectContextOnboarding,
   ProjectContextDraft,
   WorkspaceContextSavedPayload,
   WorkspaceContextStatus,
@@ -76,6 +77,19 @@ export interface WorkflowSavedPayload {
 export type WorkspaceContextScanPayload = ContextScanResult;
 export type WorkspaceContextPayload = ProjectContextDraft | null;
 export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload;
+
+export interface WorkspaceContextOnboardingUpdatePayload {
+  workspacePath: string;
+  patch: ProjectContextOnboarding;
+}
+
+export type WorkspaceContextOnboardingUpdateResult = WorkspaceContextSavedPayload;
+
+export interface LegacyWorkflowMigrationPayload {
+  workspacePath: string;
+}
+
+export type LegacyWorkflowMigrationResult = WorkspaceOpenedPayload;
 
 export type AgentConfigListExportersResult = AgentConfigExporterSummary[];
 export type AgentConfigCreatePreviewPayload = AgentConfigPreviewRequest;

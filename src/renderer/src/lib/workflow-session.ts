@@ -14,6 +14,82 @@ import {
   getCodexReadinessBlockMessage,
 } from './provider-capabilities';
 
+const TRUSTED_WORKSPACE_STORAGE_KEY = 'fluxion.trusted-workspaces';
+
+function normalizeWorkspacePath(value: string): string {
+  return value.replace(/\\/g, '/').trim().toLowerCase();
+}
+
+function readTrustedWorkspaces(): string[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TRUSTED_WORKSPACE_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTrustedWorkspaces(paths: string[]): void {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TRUSTED_WORKSPACE_STORAGE_KEY, JSON.stringify(paths));
+  } catch {
+    // A storage failure should not block the explicit trust action; it only means
+    // Fluxion will ask again the next time this workspace is opened.
+  }
+}
+
+export function isTrustedWorkspacePath(workspacePath: string): boolean {
+  const normalizedPath = normalizeWorkspacePath(workspacePath);
+  return readTrustedWorkspaces().includes(normalizedPath);
+}
+
+export function markWorkspaceAsTrusted(workspacePath: string): void {
+  const normalizedPath = normalizeWorkspacePath(workspacePath);
+  const trustedWorkspaces = readTrustedWorkspaces();
+  if (trustedWorkspaces.includes(normalizedPath)) {
+    return;
+  }
+
+  // Renderer localStorage is intentionally a short-term trust cache for this release.
+  // Clearing app data or reinstalling the app removes these entries and will prompt
+  // for trust again. A future hardening pass should persist this in Electron userData.
+  writeTrustedWorkspaces([...trustedWorkspaces, normalizedPath]);
+}
+
+export function shouldPromptWorkspaceTrust(workspacePath: string): boolean {
+  return !isTrustedWorkspacePath(workspacePath);
+}
+
+export function requiresLegacyWorkflowAction(payload: WorkspaceOpenedPayload): boolean {
+  return (
+    payload.legacyWorkflowDetected
+    && !payload.contextSummary?.contextOnboarding.legacyWorkflowDecision
+  );
+}
+
+export function shouldShowInitialIncompleteContextPrompt(payload: WorkspaceOpenedPayload): boolean {
+  if (payload.contextStatus !== 'incomplete' || !payload.isNewWorkspace) {
+    return false;
+  }
+
+  return !payload.contextSummary?.contextOnboarding.initialPromptDismissedAt;
+}
+
 function mapCanvasNodesToWorkflowNodes(): WorkflowNode[] {
   return useWorkflowStore.getState().nodes.map((node) => ({
     id: node.id,
@@ -83,6 +159,13 @@ export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
     payload.contextStatus,
     payload.contextSummary ?? null
   );
+  useWorkflowStore
+    .getState()
+    .setContextSetupOpen(
+      payload.contextStatus === 'missing'
+      || payload.contextStatus === 'legacy'
+      || shouldShowInitialIncompleteContextPrompt(payload)
+    );
   const executionStore = useExecutionStore.getState();
   executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id));
   executionStore.setWorkflowStatus('idle');
@@ -95,10 +178,29 @@ export async function loadWorkspaceFromPath(workspacePath: string): Promise<void
   await useWorkflowStore.getState().fetchProviderCapabilities();
 }
 
-export async function openWorkspaceFromDialog(): Promise<void> {
-  const selectedPath = await window.api.openWorkspaceDialog();
+export async function selectWorkspacePathFromDialog(): Promise<string | null> {
+  return window.api.openWorkspaceDialog();
+}
+
+export async function openWorkspaceFromDialog(
+  requestWorkspaceTrust?: (workspacePath: string) => Promise<boolean>
+): Promise<void> {
+  const selectedPath = await selectWorkspacePathFromDialog();
   if (!selectedPath) {
     return;
+  }
+
+  if (shouldPromptWorkspaceTrust(selectedPath)) {
+    if (!requestWorkspaceTrust) {
+      return;
+    }
+
+    const isTrusted = await requestWorkspaceTrust(selectedPath);
+    if (!isTrusted) {
+      return;
+    }
+
+    markWorkspaceAsTrusted(selectedPath);
   }
 
   await loadWorkspaceFromPath(selectedPath);

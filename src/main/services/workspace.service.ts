@@ -8,11 +8,13 @@ import {
   CODEX_DEFAULT_MODEL,
   ContextScanResult,
   ContextSaveMode,
+  createEmptyProjectContextDraft,
   IpcChannels, 
   formatProjectContextMarkdown,
   normalizeProjectContextDraft,
   PROJECT_CONTEXT_VERSION,
   ProjectContextDraft,
+  ProjectContextOnboarding,
   resolveProjectContextStatus,
   Workflow, 
   WorkflowNode, 
@@ -175,6 +177,13 @@ const projectContextReadinessSchema = z.object({
   recommendedFirstActions: z.array(z.string()),
 });
 
+const projectContextOnboardingSchema = z.object({
+  initialPromptDismissedAt: z.string().optional(),
+  incompleteBannerDismissedAt: z.string().optional(),
+  legacyWorkflowDecision: z.enum(['keep', 'migrated']).optional(),
+  legacyWorkflowDecisionAt: z.string().optional(),
+});
+
 const projectContextDraftSchema = z.object({
   version: z.literal(PROJECT_CONTEXT_VERSION),
   workspaceType: z.enum(['blank', 'existing', 'existing_with_instructions']),
@@ -207,6 +216,7 @@ const projectContextDraftSchema = z.object({
   agentInstructionSources: z.array(agentInstructionSourceSchema).optional(),
   securityPolicy: projectSecurityPolicySchema.optional(),
   readiness: projectContextReadinessSchema.optional(),
+  contextOnboarding: projectContextOnboardingSchema.optional(),
   sourceEvidence: z.array(contextSourceEvidenceSchema),
   lastReviewedAt: z.string(),
   contextStatus: z.enum(['missing', 'incomplete', 'ready', 'legacy']),
@@ -320,6 +330,10 @@ function slugify(text: string): string {
   }
 
   return slug;
+}
+
+function formatTimestampForFilename(date = new Date()): string {
+  return date.toISOString().replace(/[:.]/g, '-');
 }
 
 export class WorkspaceService {
@@ -636,7 +650,7 @@ export class WorkspaceService {
       workspaceType: draft.workspaceType,
     });
     const now = new Date().toISOString();
-    const contextToSave =
+    const contextToSave: ProjectContextDraft =
       mode === 'skip'
         ? {
             ...buildSkippedProjectContextDraft(
@@ -658,6 +672,101 @@ export class WorkspaceService {
       throw new Error(validationError);
     }
 
+    return this.writeProjectContextFiles(resolvedWorkspacePath, contextToSave);
+  }
+
+  public async updateContextOnboarding(
+    workspacePath: string,
+    patch: ProjectContextOnboarding
+  ): Promise<WorkspaceContextSavedPayload> {
+    const resolvedWorkspacePath = path.resolve(workspacePath);
+    const existingContext = await this.getContext(resolvedWorkspacePath);
+    const workspaceName = path.basename(resolvedWorkspacePath) || 'Workspace';
+    const baseContext =
+      existingContext
+      ?? normalizeProjectContextDraft({
+        ...createEmptyProjectContextDraft('existing', workspaceName),
+        contextStatus: 'incomplete',
+      });
+    const contextToSave = normalizeProjectContextDraft({
+      ...baseContext,
+      contextOnboarding: {
+        ...baseContext.contextOnboarding,
+        ...patch,
+      },
+    });
+
+    return this.writeProjectContextFiles(resolvedWorkspacePath, contextToSave);
+  }
+
+  public async migrateLegacyWorkflow(
+    workspacePath: string
+  ): Promise<{ workflowFilePath: string; backupFilePath: string }> {
+    const resolvedWorkspacePath = path.resolve(workspacePath);
+    const legacyPath = this.getLegacyWorkflowFilePath(resolvedWorkspacePath);
+
+    try {
+      const legacyStat = await fs.stat(legacyPath);
+      if (!legacyStat.isFile()) {
+        throw new Error('Legacy workflow path is not a file.');
+      }
+    } catch {
+      throw new Error('No legacy workflow.json file was found for this workspace.');
+    }
+
+    const workflow = await this.readWorkflowFromDisk(legacyPath);
+    const workflowsDir = this.getWorkflowsDirectory(resolvedWorkspacePath);
+    await fs.mkdir(workflowsDir, { recursive: true });
+
+    let workflowFilePath = path.join(workflowsDir, `${slugify(workflow.name)}.fluxion.json`);
+    let counter = 1;
+    while (true) {
+      try {
+        await fs.access(workflowFilePath);
+        workflowFilePath = path.join(
+          workflowsDir,
+          `${slugify(workflow.name)}-${counter}.fluxion.json`
+        );
+        counter++;
+      } catch {
+        break;
+      }
+    }
+
+    await this.writeWorkflowToDisk(workflowFilePath, workflow);
+
+    const legacyBackupDir = path.join(resolvedWorkspacePath, '.fluxion', 'legacy');
+    await fs.mkdir(legacyBackupDir, { recursive: true });
+    const backupFilePath = path.join(
+      legacyBackupDir,
+      `workflow-${formatTimestampForFilename()}.json`
+    );
+    await fs.rename(legacyPath, backupFilePath);
+
+    await this.updateContextOnboarding(resolvedWorkspacePath, {
+      legacyWorkflowDecision: 'migrated',
+      legacyWorkflowDecisionAt: new Date().toISOString(),
+    });
+
+    return { workflowFilePath, backupFilePath };
+  }
+
+  public async saveContext(
+    workspacePath: string,
+    context: Record<string, string>
+  ): Promise<void> {
+    const legacyDraft = mapLegacyContextToDraft(
+      legacyContextSchema.parse(context),
+      path.resolve(workspacePath)
+    );
+
+    await this.saveProjectContext(workspacePath, legacyDraft, 'draft');
+  }
+
+  private async writeProjectContextFiles(
+    resolvedWorkspacePath: string,
+    contextToSave: ProjectContextDraft
+  ): Promise<WorkspaceContextSavedPayload> {
     await memoryManager.initWorkspace(resolvedWorkspacePath);
 
     const contextFilePath = this.getContextFilePath(resolvedWorkspacePath);
@@ -676,18 +785,6 @@ export class WorkspaceService {
       contextStatus: contextToSave.contextStatus,
       context: contextToSave,
     };
-  }
-
-  public async saveContext(
-    workspacePath: string,
-    context: Record<string, string>
-  ): Promise<void> {
-    const legacyDraft = mapLegacyContextToDraft(
-      legacyContextSchema.parse(context),
-      path.resolve(workspacePath)
-    );
-
-    await this.saveProjectContext(workspacePath, legacyDraft, 'draft');
   }
 
   private createDefaultWorkflow(workspacePath: string): Workflow {

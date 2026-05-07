@@ -29,6 +29,7 @@ import {
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
   WorkflowSavedPayload,
+  WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
@@ -53,6 +54,11 @@ export interface FluxionAPI {
     draft: ProjectContextDraft,
     mode?: ContextSaveMode
   ) => Promise<WorkspaceContextSavedPayload>;
+  updateContextOnboarding: (
+    workspacePath: string,
+    patch: WorkspaceContextOnboardingUpdatePayload['patch']
+  ) => Promise<WorkspaceContextSavedPayload>;
+  migrateLegacyWorkflow: (workspacePath: string) => Promise<WorkspaceOpenedPayload>;
   listAgentConfigExporters: () => Promise<AgentConfigExporterSummary[]>;
   createAgentConfigPreview: (
     payload: AgentConfigPreviewRequest

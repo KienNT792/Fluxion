@@ -3,6 +3,7 @@ import { ProviderCapabilitiesMap } from '@shared';
 import {
   getCodexReadinessBadgeState,
   getCodexReadinessBlockMessage,
+  getProviderReadinessSummary,
 } from './provider-capabilities';
 
 function createCapabilities(
@@ -110,6 +111,26 @@ describe('provider-capabilities readiness helpers', () => {
       tone: 'ready',
       blocking: false,
       unknownModels: [],
+    });
+  });
+
+  it('summarizes provider availability in a provider-neutral way', () => {
+    const summary = getProviderReadinessSummary(
+      createCapabilities({
+        code: 'ready',
+        blocking: false,
+        title: 'Codex CLI ready.',
+        message: 'Ready.',
+        catalogSource: 'live',
+      })
+    );
+
+    expect(summary).toMatchObject({
+      availableCount: 1,
+      blockingCount: 0,
+      warningCount: 0,
+      primaryLabel: 'Codex CLI ready.',
+      primaryDetail: 'Ready.',
     });
   });
 });

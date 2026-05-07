@@ -10,6 +10,8 @@ export type ContextEvidenceConfidence = 'high' | 'medium' | 'low';
 
 export type WorkspaceTrustLevel = 'unknown' | 'trusted' | 'untrusted';
 
+export type LegacyWorkflowDecision = 'keep' | 'migrated';
+
 export type ProjectComponentType =
   | 'frontend'
   | 'backend'
@@ -91,6 +93,13 @@ export interface ProjectContextReadiness {
   recommendedFirstActions: string[];
 }
 
+export interface ProjectContextOnboarding {
+  initialPromptDismissedAt?: string;
+  incompleteBannerDismissedAt?: string;
+  legacyWorkflowDecision?: LegacyWorkflowDecision;
+  legacyWorkflowDecisionAt?: string;
+}
+
 export type ProjectContextField =
   | 'workspaceType'
   | 'projectName'
@@ -167,6 +176,7 @@ export interface ProjectContextDraft {
   agentInstructionSources: AgentInstructionSource[];
   securityPolicy: ProjectSecurityPolicy;
   readiness: ProjectContextReadiness;
+  contextOnboarding: ProjectContextOnboarding;
   sourceEvidence: ContextSourceEvidence[];
   lastReviewedAt: string;
   contextStatus: WorkspaceContextStatus;
@@ -176,7 +186,10 @@ export interface ContextScanResult {
   workspaceType: WorkspaceContextType;
   projectName: string;
   detectedFields: Partial<
-    Omit<ProjectContextDraft, 'version' | 'sourceEvidence' | 'lastReviewedAt' | 'contextStatus'>
+    Omit<
+      ProjectContextDraft,
+      'version' | 'sourceEvidence' | 'lastReviewedAt' | 'contextStatus' | 'contextOnboarding'
+    >
   >;
   sourceEvidence: ContextSourceEvidence[];
   unresolvedFields: ProjectContextField[];

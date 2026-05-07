@@ -164,6 +164,7 @@ function mergeScanIntoDraft(
         existingContext?.agentInstructionSources ?? scanFields.agentInstructionSources ?? [],
       securityPolicy: existingContext?.securityPolicy ?? scanFields.securityPolicy,
       readiness: existingContext?.readiness ?? scanFields.readiness,
+      contextOnboarding: existingContext?.contextOnboarding,
       sourceEvidence: scan?.sourceEvidence ?? existingContext?.sourceEvidence ?? [],
       lastReviewedAt: existingContext?.lastReviewedAt,
       contextStatus: existingContext?.contextStatus ?? initialStatus,
@@ -705,9 +706,16 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
       setSaveError(null);
 
       try {
+        const skippedAt = new Date().toISOString();
         const payloadDraft =
           mode === 'skip'
-            ? buildSkippedProjectContextDraft(draft, draft.workspaceType, draft.projectName)
+            ? normalizeProjectContextDraft({
+              ...buildSkippedProjectContextDraft(draft, draft.workspaceType, draft.projectName),
+              contextOnboarding: {
+                ...draft.contextOnboarding,
+                initialPromptDismissedAt: skippedAt,
+              },
+            })
             : draft;
         const result = await window.api.saveProjectContext(workspacePath, payloadDraft, mode);
         setDraft(result.context);

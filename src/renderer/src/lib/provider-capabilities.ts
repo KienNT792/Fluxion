@@ -18,6 +18,15 @@ export interface CodexReadinessBadgeState {
   unknownModels: string[];
 }
 
+export interface ProviderReadinessSummary {
+  availableCount: number;
+  blockingCount: number;
+  warningCount: number;
+  primaryLabel: string;
+  primaryDetail: string;
+  primaryActionCommand?: string;
+}
+
 export function getCodexCapabilities(
   providerCapabilities: ProviderCapabilitiesMap
 ): ProviderCapabilities | undefined {
@@ -171,4 +180,52 @@ export function getCodexReadinessBlockMessage(
   return readiness.actionCommand
     ? `${readiness.summary} ${readiness.detail} Run \`${readiness.actionCommand}\`, then refresh Codex readiness.`
     : `${readiness.summary} ${readiness.detail}`;
+}
+
+export function getProviderReadinessSummary(
+  providerCapabilities: ProviderCapabilitiesMap
+): ProviderReadinessSummary {
+  const providers = Object.values(providerCapabilities).filter(
+    (capability): capability is ProviderCapabilities => Boolean(capability)
+  );
+
+  if (providers.length === 0) {
+    return {
+      availableCount: 0,
+      blockingCount: 0,
+      warningCount: 1,
+      primaryLabel: 'Provider status not checked',
+      primaryDetail: 'Refresh provider readiness to verify local agent tooling.',
+      primaryActionCommand: 'codex login status',
+    };
+  }
+
+  const availableCount = providers.filter((provider) => provider.available).length;
+  const blockingProviders = providers.filter((provider) => provider.readiness?.blocking);
+  const warningProviders = providers.filter(
+    (provider) =>
+      !provider.readiness?.blocking
+      && (
+        provider.readiness?.code === 'catalog_failed'
+        || provider.readiness?.code === 'auth_unknown'
+        || provider.readiness?.catalogSource === 'bundled'
+      )
+  );
+
+  const primaryProvider =
+    blockingProviders[0]
+    ?? warningProviders[0]
+    ?? providers.find((provider) => provider.available)
+    ?? providers[0];
+
+  return {
+    availableCount,
+    blockingCount: blockingProviders.length,
+    warningCount: warningProviders.length,
+    primaryLabel: primaryProvider?.readiness?.title ?? `${primaryProvider.displayName} ready`,
+    primaryDetail:
+      primaryProvider?.readiness?.message
+      ?? `${primaryProvider.displayName} is available for local workflow execution.`,
+    primaryActionCommand: primaryProvider?.readiness?.actionCommand,
+  };
 }

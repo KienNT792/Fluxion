@@ -13,6 +13,8 @@ export const IpcChannels = {
   WORKSPACE_GET_CONTEXT: 'workspace:get-context',
   WORKSPACE_SAVE_PROJECT_CONTEXT: 'workspace:save-project-context',
   WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY: 'workspace:save-context-v2',
+  WORKSPACE_UPDATE_CONTEXT_ONBOARDING: 'workspace:update-context-onboarding',
+  WORKSPACE_MIGRATE_LEGACY_WORKFLOW: 'workspace:migrate-legacy-workflow',
 
   // Agent Config Export
   AGENT_CONFIG_LIST_EXPORTERS: 'agent-config:list-exporters',

@@ -1,7 +1,11 @@
 import React from 'react';
 import { AlertTriangle, FolderOpen, Settings, Workflow } from 'lucide-react';
-import { getCodexReadinessBadgeState } from '../../lib/provider-capabilities';
+import {
+  getCodexReadinessBadgeState,
+  getProviderReadinessSummary,
+} from '../../lib/provider-capabilities';
 import { openWorkspaceFromDialog } from '../../lib/workflow-session';
+import { useWorkspaceTrustPrompt } from '../../hooks/useWorkspaceTrustPrompt';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { StatusChip, StatusChipTone } from '../ui/StatusChip';
@@ -10,7 +14,7 @@ import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 
 const ONBOARDING_STEPS = [
   'Open your codebase',
-  'Define Codex agents',
+  'Configure agents',
   'Run and review outputs',
 ] as const;
 
@@ -24,7 +28,9 @@ export const WelcomeScreen: React.FC = () => {
     (state) => state.hasFetchedProviderCapabilities
   );
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
+  const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt();
   const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, []);
+  const providerReadiness = getProviderReadinessSummary(providerCapabilities);
 
   React.useEffect(() => {
     if (!hasFetchedProviderCapabilities) {
@@ -33,7 +39,7 @@ export const WelcomeScreen: React.FC = () => {
   }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
 
   const handleOpenWorkspace = async (): Promise<void> => {
-    await openWorkspaceFromDialog();
+    await openWorkspaceFromDialog(requestWorkspaceTrust);
   };
 
   const readinessTone =
@@ -44,19 +50,22 @@ export const WelcomeScreen: React.FC = () => {
         : 'var(--color-timeline-done)';
   const readinessChipTone: StatusChipTone = isProviderCapabilitiesLoading
     ? 'running'
-    : codexReadiness.tone === 'ready'
-      ? 'success'
-      : codexReadiness.tone === 'blocked'
-        ? 'error'
-        : 'warning';
+    : providerReadiness.blockingCount > 0
+      ? 'error'
+      : providerReadiness.warningCount > 0 || codexReadiness.tone !== 'ready'
+        ? 'warning'
+        : 'success';
   const compactReadinessLabel = isProviderCapabilitiesLoading
-    ? 'Checking Codex CLI...'
-    : 'Codex CLI ready';
+    ? 'Checking providers...'
+    : `${providerReadiness.availableCount} provider${
+        providerReadiness.availableCount === 1 ? '' : 's'
+      } ready`;
   const shouldShowReadinessCard =
-    !isProviderCapabilitiesLoading && codexReadiness.tone !== 'ready';
-  const readinessCardTitle = codexReadiness.blocking
-    ? 'Codex setup needed'
-    : 'Codex warning';
+    !isProviderCapabilitiesLoading
+    && (providerReadiness.blockingCount > 0 || providerReadiness.warningCount > 0);
+  const readinessCardTitle = providerReadiness.blockingCount > 0
+    ? 'Provider setup needed'
+    : 'Provider warning';
 
   return (
     <div
@@ -108,7 +117,7 @@ export const WelcomeScreen: React.FC = () => {
               className="mt-2 text-sm"
               style={{ color: 'var(--color-muted)', lineHeight: 1.5 }}
             >
-              Run Codex agents across your codebase as a workflow.
+              Run local agents across your codebase as a workflow.
             </p>
           </div>
         </div>
@@ -216,7 +225,7 @@ export const WelcomeScreen: React.FC = () => {
                   />
                 </div>
                 <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                  {codexReadiness.detail}
+                  {providerReadiness.primaryDetail}
                 </p>
               </div>
             </div>
@@ -232,7 +241,7 @@ export const WelcomeScreen: React.FC = () => {
                 className="truncate text-[11px]"
                 style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
               >
-                {codexReadiness.actionCommand ?? 'codex login status'}
+                {providerReadiness.primaryActionCommand ?? 'codex login status'}
               </span>
               <Button
                 variant="secondary"
@@ -261,6 +270,7 @@ export const WelcomeScreen: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+      {trustDialog}
     </div>
   );
 };
