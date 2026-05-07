@@ -1,252 +1,306 @@
-# 🌊 Fluxion
+# Fluxion
 
-**Windows-first Desktop Orchestrator for Codex CLI**
+Diagram-based desktop orchestration for Codex workflows on Windows.
 
-Fluxion là ứng dụng desktop dùng Electron, Vite, React và TypeScript để thiết kế, chạy và quan sát các workflow tự động hóa bằng **Codex CLI** trên Windows. Thay vì viết chuỗi lệnh terminal rời rạc, Fluxion biến từng tác vụ `codex exec` thành node trực quan trên canvas, nối chúng thành DAG, truyền context giữa các bước, và stream log chạy thật về giao diện.
+Fluxion is an Electron desktop app that turns repeatable `codex exec` work into a visual workflow: author nodes on a canvas, connect them as a DAG, run them locally, stream logs in real time, and persist outputs inside the workspace.
 
-## Trọng Tâm Sản Phẩm
+## Overview
 
-- **Codex CLI là runtime chính**: MVP tập trung vào việc điều phối `codex exec`, model selection, prompt, system instruction, sandbox và approval mode của Codex.
-- **Windows là nền tảng ưu tiên**: mọi luồng chạy, build, path handling và process cleanup được tối ưu cho Windows.
-- **Workflow trực quan thay cho shell script**: người dùng kéo thả node, nối dependency, chạy toàn bộ pipeline và theo dõi trạng thái từng bước.
-- **Workspace-first**: Fluxion mở trực tiếp một project folder, tạo `.fluxion/`, lưu workflow và memory ngay trong workspace đó.
-- **Có thể mở rộng adapter sau MVP**: kiến trúc vẫn giữ lớp adapter cho provider khác, nhưng hướng build hiện tại ưu tiên Codex CLI + Windows trước.
+Fluxion exists to solve the gap between one-off terminal prompts and repeatable agent workflows.
+Raw CLI sessions are hard to review, chain, retry, and preserve as project context. Fluxion gives that workflow a desktop shell with a graph editor, typed execution contracts, run persistence, and workspace-local memory files.
 
-## Năng Lực Cốt Lõi
+The project is aimed at:
 
-### Visual Codex Workflow
+- Developers who already use Codex CLI and want a reusable workflow instead of ad hoc terminal history
+- Reviewers who need visible execution state, checkpoints, and persisted artifacts
+- Teams working primarily on Windows and needing predictable path handling, process cleanup, and local workspace storage
 
-- **React Flow Canvas**: dựng workflow dạng node/edge cho các tác vụ Codex.
-- **Agent Nodes**: mỗi node đại diện cho một lần chạy Codex với prompt, model và cấu hình riêng.
-- **Dependency Graph**: node sau tự nhận output của node trước làm context.
+Current source state, based on this repository:
 
-### Codex CLI Execution
+- Codex CLI is the primary execution runtime
+- Workflow files, run state, and memory artifacts are persisted locally under `.fluxion/`
+- Auto and Manual execution modes are implemented
+- Review checkpoints, retry from a node, and Windows-oriented packaging scripts are present
+- Secondary provider support and "Explain with AI" diagnostics are still roadmap items, not the main execution path
 
-- **CLI-first Runtime**: hướng tới chạy Codex qua `codex exec` trong workspace đã chọn.
-- **Workspace Sandbox**: mặc định thiết kế quanh chế độ làm việc an toàn trong phạm vi project.
-- **Realtime Terminal Stream**: stdout/stderr được stream về UI theo batch để tránh làm treo renderer.
+## Features
 
-### Windows Runtime Reliability
+### Workflow authoring
 
-- **Windows Path Safety**: dùng đường dẫn tuyệt đối và xử lý path bằng Node APIs phù hợp Windows.
-- **Process Cleanup**: ưu tiên dọn process tree bằng cơ chế Windows như `taskkill /T /F` khi abort hoặc đóng app.
-- **No Zombie Processes**: workflow cancellation phải kết thúc sạch các tiến trình CLI đang chạy.
+- React Flow canvas for building node-based agent workflows
+- Drag-and-drop Codex agent palette
+- Multi-workflow workspace library stored under `.fluxion/workflows`
+- Per-node prompt, label, system instruction, model, and reasoning controls
+- Auto and Manual execution modes at the workflow level
+- Optional per-node human review checkpoints
+- Artifact contracts through `requires` and `produces` fields
 
-### Memory & Context Pipeline
+### Execution and runtime
 
-- **`.fluxion/memory/`**: lưu output node dưới dạng Markdown + Frontmatter.
-- **Global Context**: đọc `global-context.md` để inject rule chung cho các lần chạy.
-- **Short-term Context**: node sau đọc kết quả `.md` của node trước.
-- **Long-term Context**: dành chỗ cho lịch sử/tóm tắt dài hạn khi workflow phát triển.
+- Real Codex CLI execution through a Windows-aware runner
+- DAG validation and topological scheduling before execution
+- Realtime stdout/stderr streaming into an in-app xterm.js terminal
+- Abort flow with Windows process-tree cleanup
+- Retry from a selected node and rerun of paused review nodes
+- Codex readiness checks based on local CLI availability, login status, and model catalog discovery
 
-### Type-safe Desktop Bridge
+### Workspace and persistence
 
-- **Main Process**: workflow engine, workspace service, memory manager, provider/CLI adapter.
-- **Preload Bridge**: expose API an toàn qua `contextBridge`.
-- **Shared Contracts**: IPC channels, payloads và workflow types được định nghĩa trong `src/shared`.
+- Workspace bootstrap under `.fluxion/`
+- Context initialization modal that saves `.fluxion/context.json`
+- Markdown memory pipeline with frontmatter under `.fluxion/memory`
+- Persisted run state under `.fluxion/runs/<runId>.json`
+- File watching for external workspace changes
+- Legacy single-workflow compatibility for `.fluxion/workflow.json`
+
+### Configuration and safety
+
+- Typed shared contracts for workflow data, IPC payloads, and run state
+- Secure Electron preload bridge via `contextBridge`
+- Optional OpenAI API key storage in app user data, encrypted with Electron `safeStorage` when available
+- Windows-first path handling and packaging conventions
 
 ## Tech Stack
 
-### Frontend (Renderer)
+### Frontend
 
-- React 19 + TypeScript
-- Vite qua `electron-vite`
-- TailwindCSS v4
+- React 19
+- TypeScript
+- Vite via `electron-vite`
+- Tailwind CSS v4
 - Zustand
 - React Flow (`@xyflow/react`)
 - Lucide React
-- Xterm.js cho terminal surface
+- xterm.js
 
-### Backend (Main Process)
+### Backend
 
-- Electron + Node.js
-- `child_process` cho CLI execution
-- `chokidar` cho file watching
-- `gray-matter` cho Markdown + Frontmatter
-- Type-safe IPC qua shared contracts
+- Electron main process
+- Node.js services and adapters
+- `child_process` for CLI execution
+- `chokidar` for workspace file watching
+- `gray-matter` for Markdown + frontmatter
+- `zod` for schemas and validation
 
-## Getting Started
+### Database and persistence
+
+- No database server
+- Workflow, run, and memory data are stored as local JSON and Markdown files in the workspace
+- App-level provider settings are stored in Electron user data
+
+### Tooling and packaging
+
+- ESLint
+- Prettier
+- Vitest
+- TypeScript compiler
+- electron-builder
+
+## Installation
 
 ### Prerequisites
 
-- Windows 10/11
-- Node.js 18+
-- Codex CLI đã cài và đăng nhập
+- Windows 10 or Windows 11
+- Node.js and npm
+- Codex CLI installed in the Windows PATH
+- Codex CLI logged in before running workflows
 
-```bash
+Install and authenticate Codex CLI:
+
+```powershell
 npm install -g @openai/codex
-codex --version
+codex login
+codex login status
 ```
 
-### Installation
+Clone and install the project:
 
-```bash
+```powershell
+git clone <repository-url>
+cd Fluxion
 npm install
 ```
 
-### Development
+### Optional configuration
 
-```bash
+This repository does not currently include a required `.env` file or a built-in `.env` loader.
+
+Optional OpenAI configuration is available for settings/capability flows and the unfinished OpenAI adapter:
+
+```powershell
+$env:OPENAI_API_KEY="your_api_key"
+```
+
+You can also configure the OpenAI API key from Fluxion's Global Settings dialog. In the current UI, Codex remains the active workflow runner.
+
+## Usage
+
+### Start development
+
+```powershell
 npm run dev
 ```
 
-### Windows Build
+### Run quality checks
 
-```bash
+```powershell
+npm run typecheck
+npm test
+npm run lint
+```
+
+### Build the app
+
+```powershell
+npm run build
 npm run build:win
 ```
 
-Build cho macOS/Linux có thể vẫn tồn tại trong script dự án, nhưng không phải mục tiêu ưu tiên của Fluxion MVP.
+### Run the Windows smoke flow
+
+```powershell
+npm run smoke:win
+```
+
+The smoke script executes typecheck, tests, production build, and an unpacked Windows package build, then verifies that the generated executable and `app.asar` exist.
+
+### Typical in-app workflow
+
+1. Open a project folder.
+2. Review and complete the workspace context modal.
+3. Add one or more Codex nodes to the canvas.
+4. Configure prompts, model selection, and optional review/artifact settings.
+5. Save the workflow.
+6. Run in `Auto` mode for continuous execution or `Manual` mode to pause every completed node for review.
+7. Inspect terminal logs, output artifacts, and persisted memory files under `.fluxion/`.
 
 ## Project Structure
 
 ```text
 Fluxion/
-├── src/
-│   ├── core/             # Pure TypeScript contracts: schema, DAG, runs, artifacts, runners
-│   ├── main/             # Electron backend: workflow engine, memory, workspace, CLI adapters
-│   ├── preload/          # Secure bridge: window.api via contextBridge
-│   ├── renderer/         # React app: canvas, layout, stores, terminal UI
-│   └── shared/           # IPC contracts, workflow types, provider/capability types
-├── docs/                 # Roadmap, backlog, implementation notes
-├── resources/            # App assets
-└── .fluxion/             # Local Fluxion workspace data
+|-- build/                     # Packaging assets and platform-specific build resources
+|-- docs/                      # Project assessments and backlog notes
+|-- resources/                 # Application icons and bundled assets
+|-- scripts/
+|   `-- smoke/
+|       `-- windows-build.mjs  # Windows packaging smoke script
+|-- src/
+|   |-- core/                  # Framework-agnostic workflow, DAG, artifact, and run-state contracts
+|   |-- main/                  # Electron main process, runners, adapters, services, and IPC handlers
+|   |-- preload/               # Secure renderer API exposed through contextBridge
+|   |-- renderer/              # React UI, canvas, terminal, layout, and Zustand stores
+|   `-- shared/                # Shared types, IPC payloads, model metadata, and workflow contracts
+|-- electron-builder.yml       # Packaging configuration
+|-- electron.vite.config.ts    # Electron + Vite build configuration
+|-- eslint.config.mjs          # Lint configuration
+|-- package.json               # Scripts and dependencies
+|-- tsconfig*.json             # TypeScript project configuration
+`-- vitest.config.ts           # Test configuration
 ```
 
-## Next Architecture Direction
+## Configuration
 
-Fluxion đi theo hướng **AIDLC-style orchestration core**, nhưng giữ trọng tâm **Codex CLI + Windows-first desktop UX**. P0/P0.1 đã đặt nền contract thuần TypeScript để workflow validation, DAG validation, run state, artifact contracts và runner contracts có thể được test độc lập với Electron/UI. P1 đã nối runtime thật qua Codex CLI để workflow node mặc định chạy bằng `codex exec`.
-
-### Core-first Design
-
-- **`src/core` thuần TypeScript đã có**: chứa workflow schema, Codex execution options, artifact schema, run state schema, DAG validation, topological batching và runner contracts; không import Electron hoặc React.
-- **Electron là orchestration shell**: Main process gọi core để validate workflow và dùng adapter bridge để chạy Codex CLI; phần run persistence/artifact gates vẫn để phase sau.
-- **Renderer là control surface**: React Flow hiển thị, chỉnh sửa và điều khiển workflow; logic runtime sẽ tiếp tục được kéo dần về core ở các phase sau.
-
-### Codex Runner Registry
-
-- **Runner registry contract đã có**: `codex` là runner chính, `custom` là extension point có kiểm soát.
-- **`CodexCliRunner` đã được triển khai ở P1**: runner thật chạy `codex exec` bằng `spawn`, không nối command string cho lệnh chính.
-- **Codex JSON mode đã hoạt động ở runner layer**: runner parse NDJSON từ `codex exec --json` thành `json-event`, đồng thời giữ fallback stdout/stderr raw.
-- **Final output ổn định cho memory**: P1 dùng `--output-last-message` để lấy assistant final message sạch thay vì lưu raw NDJSON.
-
-### Workflow Schema & Artifact Gates
-
-Mỗi node có contract rõ ràng hơn thay vì chỉ là prompt:
-
-```ts
-{
-  id: string;
-  data: {
-    runner: 'codex' | 'custom';
-    model?: string;
-    prompt: string;
-    systemInstruction?: string;
-    codex?: {
-      json: boolean;
-      sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
-      approvalPolicy: 'untrusted' | 'on-request' | 'never';
-      windowsSandbox?: 'unelevated' | 'elevated';
-      profile?: string;
-      config?: Record<string, string | number | boolean>;
-    };
-    requires?: Array<{ path: string; required?: boolean }>;
-    produces?: Array<{ path: string; required?: boolean }>;
-    humanReview?: boolean;
-  };
-}
-```
-
-- **`requires`**: artifact hoặc file context cần tồn tại trước khi node chạy.
-- **`produces`**: artifact node phải tạo ra sau khi chạy.
-- **Backward-compatible defaults**: workflow cũ không có `runner`, `codex`, `requires`, `produces` hoặc `humanReview` vẫn validate được.
-- **Artifact-first memory**: output vẫn lưu trong `.fluxion/memory/`, nhưng frontmatter cần chuẩn hóa theo `runId`, `nodeId`, `runner`, `model`, `status`, `exitCode`, `startedAt`, `completedAt`.
-
-### Run State & Manual Accept
-
-Run state contract đã được định nghĩa trong core. Ở P2, mỗi lần chạy workflow sẽ được lưu tại:
+### Workspace files created by Fluxion
 
 ```text
-.fluxion/runs/<runId>.json
+.fluxion/
+|-- context.json
+|-- workflow.json                  # Legacy single-workflow format
+|-- workflows/
+|   `-- *.fluxion.json             # Current multi-workflow format
+|-- memory/
+|   |-- global-context.md
+|   |-- short-term/
+|   `-- long-term/
+`-- runs/
+    `-- <runId>.json
 ```
 
-Run state cần hỗ trợ các trạng thái:
+### Important runtime settings
 
-- `pending`
-- `running`
-- `awaiting_review`
-- `completed`
-- `failed`
-- `aborted`
-- `rejected`
+- `OPENAI_API_KEY`: optional; used for OpenAI settings/capability flows and the OpenAI adapter code path
+- Global Settings dialog: can store the OpenAI API key in the app user-data directory
+- `ELECTRON_RENDERER_URL`: used by `electron-vite` during development; not something you typically set manually
 
-Điều này mở đường cho resume, retry, audit trail và Manual Accept. Nếu node có `humanReview: true`, Fluxion dừng ở `awaiting_review`; user có thể approve, reject hoặc rerun trước khi downstream nodes tiếp tục.
+### Important project config files
 
-## Trạng Thái Hiện Tại
+- `electron.vite.config.ts`: aliases and renderer plugins
+- `electron-builder.yml`: packaging targets and app metadata
+- `eslint.config.mjs`: lint rules for TypeScript and React
+- `vitest.config.ts`: test runner setup and aliases
+- `tsconfig.node.json` and `tsconfig.web.json`: split TypeScript configs for Electron/node and renderer
 
-- **Core contract đã sẵn sàng**: `src/core` có schema, DAG validation, runner contracts, run state schema và artifact contracts.
-- **Codex runtime đã có**: main process có `CodexCliRunner`, Windows CLI resolver và `CodexCliAdapter` làm runtime mặc định cho workflow node.
-- **Streaming đã có nền tảng**: stdout/stderr vẫn đi qua terminal UI hiện tại; NDJSON được parse ở runner contract để phục vụ telemetry/runtime sau này.
-- **Memory vẫn theo cơ chế hiện tại**: output node tiếp tục lưu trong `.fluxion/memory/short-term/<workflowId>/<nodeId>.md`.
-- **Chưa có P2/P3**: chưa persist `.fluxion/runs/<runId>.json`, chưa enforce `requires`/`produces`, chưa có Manual Accept UI.
+## Architecture
 
-## Ưu Tiên Triển Khai
+```mermaid
+flowchart LR
+  User["User"] --> Renderer["Renderer (React + React Flow + Zustand)"]
+  Renderer --> Preload["Preload IPC Bridge"]
+  Preload --> Main["Electron Main Process"]
+  Main --> Core["Core Contracts and DAG Validation"]
+  Main --> Workspace["Workspace, Memory, and Run-State Services"]
+  Main --> Runner["Codex CLI Runner"]
+  Runner --> Codex["Codex CLI"]
+  Workspace --> FluxionData[".fluxion/ JSON + Markdown artifacts"]
+  Main --> Renderer
+```
 
-### P0 - Core Contract: Hoàn tất
+### Execution flow
 
-- Đã tạo `src/core` thuần TypeScript, tách khỏi Electron/React.
-- Đã có Zod schemas cho workflow, node, edge, artifact, run state và Codex execution options.
-- Đã có DAG validation, cycle detection, topological batching và reachable-node helpers.
-- IPC workflow validation đã dùng core validator thay cho logic local trong handler.
-- Đã có Vitest coverage cho schema, artifact path, run state và DAG validation.
+1. The renderer builds or edits a workflow graph.
+2. The preload layer exposes typed IPC methods to the renderer.
+3. The main process validates the workflow structure using `src/core`.
+4. The workflow engine compiles context from global memory plus upstream node outputs.
+5. The selected runner executes the node, currently centered on Codex CLI.
+6. Logs stream back to the renderer while output artifacts and run state are persisted locally.
+7. Review gates either continue automatically or pause for explicit approval, depending on workflow mode and node settings.
 
-### P0.1 - Codex-compatible Contracts: Hoàn tất
+### Architectural boundaries
 
-- Đã chuẩn bị `data.codex` với default `json: true`, `sandboxMode: 'workspace-write'`, `approvalPolicy: 'never'`.
-- Runner event contract hỗ trợ `stdout`, `stderr`, `status` và `json-event`.
-- Run state có chỗ lưu `runner`, `model` và `runnerSessionId` để phục vụ `codex exec resume` ở phase sau.
-- IPC validation dùng `safeParse` để báo lỗi payload rõ hơn.
+- `src/core` is intentionally framework-agnostic and testable without Electron or React.
+- `src/main` owns process execution, filesystem persistence, provider discovery, and workflow orchestration.
+- `src/preload` is the only direct bridge into Electron APIs for the renderer.
+- `src/renderer` is a control surface for workflow editing, status visualization, and terminal inspection.
+- `src/shared` keeps workflow shapes, IPC contracts, and provider metadata consistent across processes.
 
-### P1 - Real Codex Runner: Hoàn tất
+## Contributing
 
-- Đã thêm `CodexCliRunner` chạy `codex exec` bằng `spawn`.
-- Prompt được truyền qua stdin với `PROMPT = -`, tránh lỗi quoting Windows.
-- Đã map model, workspace `--cd`, sandbox mode, approval policy, Windows sandbox, profile và config override.
-- Mặc định dùng `--json`, parse NDJSON thành `json-event`, vẫn giữ fallback stdout/stderr raw.
-- Đã dùng `--output-last-message` để lấy final assistant output sạch cho memory.
-- Abort dùng process-tree cleanup trên Windows qua `taskkill` argument array.
-- Test dùng fake child process, không phụ thuộc Codex CLI thật.
+Contributions should preserve Fluxion's current direction: Windows-first, local-workspace orchestration, typed contracts, and non-blocking desktop UX.
 
-### P2 - Run State & Artifact Gates: Ưu tiên hiện tại
+Recommended workflow:
 
-- Persist `.fluxion/runs/<runId>.json`.
-- Chỉ cho node chạy khi `requires` hợp lệ.
-- Validate `produces` sau execution.
-- Chuẩn hóa Markdown memory frontmatter trong `.fluxion/memory/short-term/<workflowId>/<nodeId>.md`.
+1. Open an issue or describe the problem clearly before large changes.
+2. Create a focused branch for one feature or fix.
+3. Keep workflow contracts, IPC payloads, and path handling type-safe and Windows-compatible.
+4. Run the narrowest relevant verification before opening a pull request:
 
-### P3 - Human Review / Manual Accept
+```powershell
+npm run typecheck
+npm test
+npm run lint
+```
 
-- Nếu `humanReview: true`, workflow chuyển sang `awaiting_review`.
-- UI cho phép Approve, Reject và Rerun.
-- Downstream nodes chỉ chạy sau khi được approve.
+5. For packaging or process changes, also run:
 
-### P4 - Thin UI Shell
+```powershell
+npm run smoke:win
+```
 
-- Renderer tập trung vào visual editing và control surface.
-- Main process giữ vai trò IPC/process bridge.
-- Core quyết định workflow hợp lệ, node nào có thể chạy tiếp và run state hiện tại.
+6. In the pull request, include the problem statement, the user-visible flows that changed, screenshots or recordings for UI changes, and any Codex CLI, workspace persistence, or Windows-specific validation notes.
 
-## MVP Direction
+## Roadmap
 
-Fluxion MVP được đánh giá hoàn thành khi:
+Based on the current source and backlog files, the next major areas are:
 
-- [x] Có adapter Codex CLI chạy thật trên Windows.
-- [ ] Chạy được workflow DAG `Node A -> Node B` end-to-end qua smoke test thủ công.
-- [x] Output node được lưu thành `.md` có Frontmatter trong `.fluxion/memory/`.
-- [x] Node sau đọc được output node trước làm context bằng memory pipeline hiện tại.
-- [x] Abort workflow có process-tree cleanup cho Codex CLI trên Windows.
-- [ ] Build Windows chạy được và có smoke test cơ bản.
+- "Explain with AI" diagnostics for failed nodes
+- Real scout/source-scan context drafting instead of the current heuristic modal autofill
+- Instruction-file generation with frontmatter for agent-specific handoff files
+- Additional execution providers on the main workflow path beyond Codex
+- Stronger CI coverage for Windows packaging and smoke validation
+- Product hardening around retries, attempt lineage, and provider configuration
 
----
+## License
 
-Fluxion ưu tiên một mục tiêu rõ ràng: **biến Codex CLI trên Windows thành một workflow desktop có thể quan sát, điều khiển và lặp lại được.**
+This repository does not currently include a `LICENSE` file.
+
+If the project is intended for open-source distribution, adding an MIT license would be a reasonable default.
