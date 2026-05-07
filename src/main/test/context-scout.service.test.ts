@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { basename, dirname, join } from 'path';
 import { tmpdir } from 'os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { scanWorkspaceContext } from '../services/context-scout.service';
@@ -134,7 +134,17 @@ describe('context-scout.service', () => {
     const result = await scanWorkspaceContext(workspacePath);
 
     expect(result.workspaceType).toBe('existing');
-    expect(result.projectName).toBe('hospital-management');
+    expect(result.projectName).toBe(basename(workspacePath));
+    expect(result.sourceEvidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'projectName',
+          sourcePath: 'workspace',
+          confidence: 'high',
+          note: expect.stringContaining('Using workspace folder name'),
+        }),
+      ])
+    );
     expect(result.detectedFields.primaryStack).toEqual(
       expect.arrayContaining(['Java', 'Spring Boot', 'MyBatis', 'PostgreSQL', 'Redis'])
     );
