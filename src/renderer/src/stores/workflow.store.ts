@@ -13,9 +13,11 @@ import {
   AgentNodeData,
   CODEX_DEFAULT_MODEL,
   CODEX_DEFAULT_REASONING_LEVEL,
+  ProjectContextDraftV2,
   ExecutionMode,
   ProviderCapabilitiesMap,
   ReasoningLevel,
+  WorkspaceContextStatus,
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
@@ -47,7 +49,9 @@ interface WorkflowState {
   saveError: string | null;
   hasExternalWorkflowChange: boolean;
   recentWorkspaceChanges: WorkspaceChangeRecord[];
-  hasContext: boolean;
+  contextStatus: WorkspaceContextStatus;
+  contextSummary: ProjectContextDraftV2 | null;
+  isContextSetupOpen: boolean;
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
   legacyWorkflowDetected: boolean;
@@ -75,7 +79,11 @@ interface WorkflowState {
   markSaveFailed: (error: string) => void;
   recordWorkspaceChange: (change: WorkspaceFileChangedPayload) => void;
   clearExternalWorkflowChange: () => void;
-  setHasContext: (hasContext: boolean) => void;
+  setContextSetupOpen: (isOpen: boolean) => void;
+  setContextState: (
+    status: WorkspaceContextStatus,
+    contextSummary: ProjectContextDraftV2 | null
+  ) => void;
 }
 
 const MAX_WORKSPACE_CHANGES = 5;
@@ -139,7 +147,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   saveError: null,
   hasExternalWorkflowChange: false,
   recentWorkspaceChanges: [],
-  hasContext: false,
+  contextStatus: 'missing',
+  contextSummary: null,
+  isContextSetupOpen: false,
   activeWorkflowFilePath: null,
   workflows: [],
   legacyWorkflowDetected: false,
@@ -237,7 +247,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       activeWorkflowFilePath: payload.activeWorkflowFilePath,
       workflows: payload.workflows,
       legacyWorkflowDetected: payload.legacyWorkflowDetected,
-      hasContext: payload.hasContext,
+      contextStatus: payload.contextStatus,
+      contextSummary: payload.contextSummary ?? null,
+      isContextSetupOpen: false,
     }),
 
   setNodes: (nodes) =>
@@ -435,5 +447,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   clearExternalWorkflowChange: () => set({ hasExternalWorkflowChange: false }),
-  setHasContext: (hasContext) => set({ hasContext }),
+  setContextSetupOpen: (isContextSetupOpen) => set({ isContextSetupOpen }),
+  setContextState: (contextStatus, contextSummary) =>
+    set({ contextStatus, contextSummary }),
 }));

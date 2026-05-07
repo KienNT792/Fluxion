@@ -8,6 +8,9 @@ export const IpcChannels = {
   WORKSPACE_INIT: 'workspace:init',
   WORKSPACE_FILE_CHANGED: 'workspace:file-changed',
   WORKSPACE_SAVE_CONTEXT: 'workspace:save-context',
+  WORKSPACE_SCAN_CONTEXT: 'workspace:scan-context',
+  WORKSPACE_GET_CONTEXT: 'workspace:get-context',
+  WORKSPACE_SAVE_CONTEXT_V2: 'workspace:save-context-v2',
 
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   WORKSPACE_WORKFLOW_CREATE: 'workspace:workflow-create',

@@ -1,40 +1,53 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { WorkspaceContextSavedPayload } from '@shared';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { FlowCanvas } from '../canvas/FlowCanvas';
 import { PropertiesPanel } from './PropertiesPanel';
 import { TerminalViewer } from '../terminal/TerminalViewer';
 import { WelcomeScreen } from './WelcomeScreen';
-import { ContextInitModal, ProjectContext } from './ContextInitModal';
+import { ContextInitModal } from './ContextInitModal';
 import { useThemeStore, applyTheme } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { TooltipProvider } from '../ui/Tooltip';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 export const AppShell: React.FC = () => {
-  const theme = useThemeStore(state => state.theme);
-  const workspacePath = useWorkflowStore(state => state.workspacePath);
-  const hasContext = useWorkflowStore(state => state.hasContext);
+  const theme = useThemeStore((state) => state.theme);
+  const workspacePath = useWorkflowStore((state) => state.workspacePath);
+  const contextStatus = useWorkflowStore((state) => state.contextStatus);
+  const contextSummary = useWorkflowStore((state) => state.contextSummary);
+  const isContextSetupOpen = useWorkflowStore((state) => state.isContextSetupOpen);
+  const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
+  const setContextState = useWorkflowStore((state) => state.setContextState);
 
-  // Apply persisted theme on first mount, then sync on every change
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
-  const handleContextComplete = useCallback(
-    async (context: ProjectContext) => {
-      if (!workspacePath) return;
-      try {
-        await window.api.saveContext(workspacePath, context as unknown as Record<string, string>);
-        useWorkflowStore.getState().setHasContext(true);
-      } catch (error) {
-        console.error('Failed to save context:', error);
-      }
+  useEffect(() => {
+    if (!workspacePath) {
+      setContextSetupOpen(false);
+      return;
+    }
+
+    if (contextStatus === 'missing' || contextStatus === 'legacy') {
+      setContextSetupOpen(true);
+    }
+  }, [contextStatus, setContextSetupOpen, workspacePath]);
+
+  const handleContextSaved = useCallback(
+    (payload: WorkspaceContextSavedPayload) => {
+      setContextState(payload.contextStatus, payload.context);
+      setContextSetupOpen(false);
     },
-    [workspacePath]
+    [setContextSetupOpen, setContextState]
   );
 
-  // ── Zero State: No workspace opened yet ──
+  const handleContextClose = useCallback(() => {
+    setContextSetupOpen(false);
+  }, [setContextSetupOpen]);
+
   if (!workspacePath) {
     return (
       <TooltipProvider>
@@ -50,9 +63,9 @@ export const AppShell: React.FC = () => {
         style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
       >
         <Sidebar />
-        <div className="flex flex-col flex-1 relative h-full min-w-0">
+        <div className="flex flex-1 min-w-0 h-full flex-col relative">
           <Topbar />
-          <main className="flex-1 relative flex overflow-hidden">
+          <main className="relative flex flex-1 overflow-hidden">
             <FlowCanvas />
             <ErrorBoundary fallbackTitle="Config panel crashed">
               <PropertiesPanel />
@@ -62,11 +75,13 @@ export const AppShell: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Context Init Modal: shown when workspace has no context.json ── */}
-      {!hasContext && (
+      {isContextSetupOpen && (
         <ContextInitModal
           workspacePath={workspacePath}
-          onComplete={handleContextComplete}
+          initialContext={contextSummary}
+          initialStatus={contextStatus}
+          onSaved={handleContextSaved}
+          onClose={handleContextClose}
         />
       )}
     </TooltipProvider>

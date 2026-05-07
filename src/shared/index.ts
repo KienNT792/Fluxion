@@ -12,6 +12,8 @@ export * from './workflow.types';
 export * from './codex.models';
 export * from './openai.models';
 export * from './agent.types';
+export * from './context.types';
+export * from './context.utils';
 export * from './memory.types';
 export * from './ipc.channels';
 export * from './ipc.payloads';

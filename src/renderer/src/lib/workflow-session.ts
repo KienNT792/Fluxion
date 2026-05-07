@@ -71,7 +71,10 @@ export function buildWorkflowDocument(): Workflow {
 
 export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
   useWorkflowStore.getState().hydrateWorkspace(payload);
-  useWorkflowStore.getState().setHasContext(payload.hasContext);
+  useWorkflowStore.getState().setContextState(
+    payload.contextStatus,
+    payload.contextSummary ?? null
+  );
   const executionStore = useExecutionStore.getState();
   executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id));
   executionStore.setWorkflowStatus('idle');

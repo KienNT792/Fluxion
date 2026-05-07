@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { electronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  ContextSaveMode,
+  ContextScanResult,
   ExecutionMode,
   IpcChannels,
   MemoryContextReadyPayload,
@@ -9,6 +11,7 @@ import {
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
+  ProjectContextDraftV2,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -22,6 +25,7 @@ import {
   WorkflowNodeOutputPayload,
   WorkflowNodeStatusPayload,
   WorkflowSavedPayload,
+  WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
   WorkflowCreateResult,
@@ -57,11 +61,20 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_LOAD, { workspacePath, workflowId }) as Promise<Workflow>,
   deleteWorkflow: (workspacePath: string, workflowId: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_DELETE, { workspacePath, workflowId }) as Promise<void>,
-  saveContext: (
+  scanWorkspaceContext: (workspacePath: string): Promise<ContextScanResult> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_SCAN_CONTEXT, workspacePath) as Promise<ContextScanResult>,
+  getContext: (workspacePath: string): Promise<ProjectContextDraftV2 | null> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_GET_CONTEXT, workspacePath) as Promise<ProjectContextDraftV2 | null>,
+  saveContextV2: (
     workspacePath: string,
-    context: Record<string, string>
-  ): Promise<void> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT, { workspacePath, context }) as Promise<void>,
+    draft: ProjectContextDraftV2,
+    mode?: ContextSaveMode
+  ): Promise<WorkspaceContextSavedPayload> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_CONTEXT_V2, {
+      workspacePath,
+      draft,
+      mode,
+    }) as Promise<WorkspaceContextSavedPayload>,
   getProviderCapabilities: (
     payload?: GetProviderCapabilitiesPayload
   ): Promise<ProviderCapabilitiesPayload> =>

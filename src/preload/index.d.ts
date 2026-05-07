@@ -1,12 +1,15 @@
 import { ElectronAPI } from '@electron-toolkit/preload';
 import {
   AbortReason,
+  ContextSaveMode,
+  ContextScanResult,
   ExecutionMode,
   MemoryContextReadyPayload,
   NodeId,
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
+  ProjectContextDraftV2,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -19,6 +22,7 @@ import {
   WorkflowNodeOutputPayload,
   WorkflowNodeStatusPayload,
   WorkflowSavedPayload,
+  WorkspaceContextSavedPayload,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
   WorkflowCreateResult,
@@ -32,7 +36,13 @@ export interface FluxionAPI {
     workflow: Workflow, 
     activeWorkflowFilePath: string
   ) => Promise<WorkflowSavedPayload>;
-  saveContext: (workspacePath: string, context: Record<string, string>) => Promise<void>;
+  scanWorkspaceContext: (workspacePath: string) => Promise<ContextScanResult>;
+  getContext: (workspacePath: string) => Promise<ProjectContextDraftV2 | null>;
+  saveContextV2: (
+    workspacePath: string,
+    draft: ProjectContextDraftV2,
+    mode?: ContextSaveMode
+  ) => Promise<WorkspaceContextSavedPayload>;
   getProviderCapabilities: (
     payload?: GetProviderCapabilitiesPayload
   ) => Promise<ProviderCapabilitiesPayload>;

@@ -1,8 +1,10 @@
 import { app, dialog, ipcMain, IpcMainEvent, shell } from 'electron';
 import {
+  ContextSaveMode,
   IpcChannels,
   ProviderSettingsSummaryPayload,
   GetProviderCapabilitiesPayload,
+  ProjectContextDraftV2,
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowAbortPayload,
@@ -124,6 +126,28 @@ export function registerWorkflowHandlers(): void {
     IpcChannels.WORKSPACE_SAVE_CONTEXT,
     async (_event, payload: { workspacePath: string; context: Record<string, string> }) => {
       await workspaceService.saveContext(payload.workspacePath, payload.context);
+    }
+  );
+
+  ipcMain.handle(IpcChannels.WORKSPACE_SCAN_CONTEXT, async (_event, workspacePath: string) => {
+    return workspaceService.scanWorkspaceContext(workspacePath);
+  });
+
+  ipcMain.handle(IpcChannels.WORKSPACE_GET_CONTEXT, async (_event, workspacePath: string) => {
+    return workspaceService.getContext(workspacePath);
+  });
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_SAVE_CONTEXT_V2,
+    async (
+      _event,
+      payload: { workspacePath: string; draft: ProjectContextDraftV2; mode?: ContextSaveMode }
+    ) => {
+      return workspaceService.saveContextV2(
+        payload.workspacePath,
+        payload.draft,
+        payload.mode
+      );
     }
   );
 

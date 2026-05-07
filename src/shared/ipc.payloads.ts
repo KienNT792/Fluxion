@@ -1,5 +1,11 @@
 import { AbortReason } from './agent.types';
 import {
+  ContextScanResult,
+  ProjectContextDraftV2,
+  WorkspaceContextSavedPayload,
+  WorkspaceContextStatus,
+} from './context.types';
+import {
   ExecutionMode,
   NodeId,
   NodeStatus,
@@ -23,8 +29,10 @@ export interface WorkspaceOpenedPayload {
   /** List of all detected workflows (metadata only, no nodes/edges). */
   workflows: WorkflowMetadata[];
   isNewWorkspace: boolean;
-  /** Whether .fluxion/context.json already exists for this workspace. */
-  hasContext: boolean;
+  /** Current project-context state for this workspace. */
+  contextStatus: WorkspaceContextStatus;
+  /** Parsed project-context draft when available. */
+  contextSummary?: ProjectContextDraftV2 | null;
   /** True if a legacy `.fluxion/workflow.json` was detected. */
   legacyWorkflowDetected: boolean;
 }
@@ -46,6 +54,10 @@ export interface WorkflowSavedPayload {
   workflowFilePath: string;
   savedAt: string;
 }
+
+export type WorkspaceContextScanPayload = ContextScanResult;
+export type WorkspaceContextPayload = ProjectContextDraftV2 | null;
+export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload;
 
 // ─── Multi-Workflow Payloads ──────────────────────────────────────────────────
 

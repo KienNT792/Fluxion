@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Settings,
+  Sparkles,
   Square,
   Sun,
 } from 'lucide-react';
@@ -142,6 +143,39 @@ function getSaveChipState(
   return { label: 'Saved', tone: 'success', animate: false };
 }
 
+function getContextChipState(contextStatus: 'missing' | 'incomplete' | 'ready' | 'legacy'): {
+  label: string;
+  tone: StatusChipTone;
+  detail: string;
+} {
+  switch (contextStatus) {
+    case 'ready':
+      return {
+        label: 'Context Ready',
+        tone: 'success',
+        detail: 'Project context is ready and will be injected into agent runtime.',
+      };
+    case 'legacy':
+      return {
+        label: 'Context Legacy',
+        tone: 'warning',
+        detail: 'This workspace still uses an older context shape. Review and resave it.',
+      };
+    case 'incomplete':
+      return {
+        label: 'Context Incomplete',
+        tone: 'warning',
+        detail: 'A draft context exists, but it still needs review before it is fully ready.',
+      };
+    default:
+      return {
+        label: 'Context Missing',
+        tone: 'error',
+        detail: 'No project context has been saved for this workspace yet.',
+      };
+  }
+}
+
 interface ActionTextButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   dimmed?: boolean;
 }
@@ -253,6 +287,8 @@ export const Topbar: React.FC = () => {
   );
   const recentWorkspaceChanges = useWorkflowStore((state) => state.recentWorkspaceChanges);
   const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
+  const contextStatus = useWorkflowStore((state) => state.contextStatus);
+  const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
 
   const { theme, toggleTheme } = useThemeStore();
 
@@ -297,6 +333,7 @@ export const Topbar: React.FC = () => {
           : 'Run workflow';
   const saveStateLabel = saveError ?? formatSavedLabel(lastSavedAt);
   const saveChipState = getSaveChipState(isDirty, isSaving, saveError);
+  const contextChipState = getContextChipState(contextStatus);
   const nodeCountLabel = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
   const activityHasAttention = changeCount > 0 || hasExternalWorkflowChange;
 
@@ -596,6 +633,21 @@ export const Topbar: React.FC = () => {
         </div>
 
         <div className="flex min-w-0 items-center justify-end gap-1.5">
+          <Tooltip content={contextChipState.detail}>
+            <ActionTextButton
+              aria-label={contextChipState.label}
+              onClick={() => setContextSetupOpen(true)}
+            >
+              <Sparkles size={14} />
+              <span className="hidden lg:inline">Context</span>
+              <StatusChip
+                tone={contextChipState.tone}
+                label={contextChipState.label.replace('Context ', '')}
+                className="hidden xl:inline-flex"
+              />
+            </ActionTextButton>
+          </Tooltip>
+
           <div className="relative" ref={readinessPopoverRef}>
             <button
               type="button"
