@@ -2,150 +2,264 @@
 
 Diagram-based desktop orchestration for Codex workflows on Windows.
 
-Fluxion is an Electron desktop app that turns repeatable `codex exec` work into a visual workflow: author nodes on a canvas, connect them as a DAG, run them locally, stream logs in real time, and persist outputs inside the workspace.
+Fluxion is an Electron desktop app that transforms repeatable `codex exec` workflows into a visual orchestration system: design DAG-based agent pipelines on a canvas, persist execution state locally, stream logs in real time, and standardize repository-level AI workflow setup.
 
-## Overview
+The project is intentionally Windows-first and optimized around local workspaces, Codex CLI, and durable repository context.
 
-Fluxion exists to solve the gap between one-off terminal prompts and repeatable agent workflows.
-Raw CLI sessions are hard to review, chain, retry, and preserve as project context. Fluxion gives that workflow a desktop shell with a graph editor, typed execution contracts, run persistence, and workspace-local memory files.
+---
 
-The project is aimed at:
+# Why Fluxion Exists
 
-- Developers who already use Codex CLI and want a reusable workflow instead of ad hoc terminal history
-- Reviewers who need visible execution state, checkpoints, and persisted artifacts
-- Teams working primarily on Windows and needing predictable path handling, process cleanup, and local workspace storage
+Most Codex workflows today still live in:
 
-Current source state, based on this repository:
+* ad hoc terminal history
+* temporary prompts
+* disconnected markdown notes
+* unrecoverable shell sessions
+* manual retry chains
 
-- Codex CLI is the primary execution runtime
-- Workflow files, run state, and memory artifacts are persisted locally under `.fluxion/`
-- Auto and Manual execution modes are implemented
-- Review checkpoints, retry from a node, and Windows-oriented packaging scripts are present
-- Workspace trust verification and recent workspace reopening are implemented
-- Context initialization now scans the workspace, records source evidence, and can export Codex project instructions
-- Codex approval protocol guardrails can block unsafe run configurations until permissions are fixed
-- Secondary provider support and "Explain with AI" diagnostics are still roadmap items, not the main execution path
+That makes review, collaboration, reproducibility, and long-running agent orchestration difficult.
 
-### Codex workspace setup direction
+Fluxion provides:
 
-Fluxion's most relevant Codex setup path is a repo-governed workspace flow: use the local Codex CLI as the runtime, treat the Codex IDE extension as an optional companion surface, and keep repeatable setup artifacts in the project instead of relying on ad hoc terminal history.
+* a visual DAG editor for repeatable workflows
+* persistent workspace-local execution state
+* reusable project instructions and memory
+* typed execution contracts between nodes
+* review checkpoints and retry flows
+* Codex-aware repository bootstrapping
 
-For new software projects, Fluxion should help users inspect and prepare these files:
+Instead of treating Codex as a one-off terminal assistant, Fluxion treats it as a reusable execution runtime.
 
-- `.codex/config.toml` for project-scoped Codex defaults such as sandbox and approval policy
-- `AGENTS.md` for durable repository instructions
-- `.github/codex/prompts/*.md` for reusable prompt templates such as brainstorm, planning, developer, and review flows
-- `.fluxion/context.json` and `.fluxion/workflows/*.fluxion.json` for Fluxion's workspace context and executable DAGs
+---
 
-The setup flow should run through workspace trust and Codex readiness checks before applying project-scoped Codex configuration. This keeps Fluxion aligned with Codex's shared CLI/IDE configuration model while preserving the current Windows-first, local-workspace runtime.
+# Core Philosophy
 
-Useful official references:
+Fluxion follows a repository-governed AI workflow model.
 
-- [Codex configuration reference](https://developers.openai.com/codex/config-reference#configtoml)
-- [Codex IDE extension](https://developers.openai.com/codex/ide#extension-setup)
-- [Codex IDE settings](https://developers.openai.com/codex/ide/settings#change-a-setting)
-- [Codex CLI slash commands](https://developers.openai.com/codex/cli/slash-commands#built-in-slash-commands)
-- [Codex GitHub Action](https://developers.openai.com/codex/github-action#configure-codex-exec)
-- [Codex best practices for repeatable work](https://developers.openai.com/codex/learn/best-practices#turn-repeatable-work-into-skills)
+Project behavior should be:
 
-## Features
+* reproducible
+* inspectable
+* versionable
+* workspace-scoped
+* durable across sessions and contributors
 
-### Workflow authoring
+Fluxion therefore encourages projects to keep AI workflow configuration directly inside the repository:
 
-- React Flow canvas for building node-based agent workflows
-- Drag-and-drop Codex agent palette
-- Multi-workflow workspace library stored under `.fluxion/workflows`
-- Per-node prompt, label, system instruction, model, and reasoning controls
-- Auto and Manual execution modes at the workflow level
-- Optional per-node human review checkpoints
-- Artifact contracts through `requires` and `produces` fields
+```text
+.codex/config.toml
+AGENTS.md
+.github/codex/prompts/*.md
+.fluxion/context.json
+.fluxion/workflows/*.fluxion.json
+```
 
-### Execution and runtime
+The goal is to move AI workflows away from ephemeral terminal usage and toward structured, reviewable project infrastructure.
 
-- Real Codex CLI execution through a Windows-aware runner
-- DAG validation and topological scheduling before execution
-- Realtime stdout/stderr streaming into an in-app xterm.js terminal
-- Abort flow with Windows process-tree cleanup
-- Retry from a selected node and rerun of paused review nodes
-- Codex readiness checks based on local CLI availability, login status, and model catalog discovery
-- Codex approval protocol guardrail with UI prompts to fix blocked permission settings
-- Text output previews for produced artifacts and runtime output fields
+---
 
-### Workspace and persistence
+# Current Project Status
 
-- Workspace trust prompt before Fluxion writes `.fluxion/` data into a project folder
-- Recent workspace list on the welcome screen, stored in Electron app user data
-- Workspace bootstrap under `.fluxion/`
-- Context initialization modal that scans project files and saves `.fluxion/context.json`
-- Context scan source evidence, readiness state, detected commands, important paths, and agent instruction sources
-- Markdown memory pipeline with frontmatter under `.fluxion/memory`
-- Persisted run state under `.fluxion/runs/<runId>.json`
-- File watching for external workspace changes
-- Legacy single-workflow compatibility for `.fluxion/workflow.json`
-- Agent config preview/apply flow for exporting ready context to Codex `AGENTS.md` and optional `.codex/config.toml`
+Based on the current repository implementation:
 
-### Configuration and safety
+## Implemented
 
-- Typed shared contracts for workflow data, IPC payloads, and run state
-- Secure Electron preload bridge via `contextBridge`
-- Optional OpenAI API key storage in app user data, encrypted with Electron `safeStorage` when available
-- Trusted and recent workspace registries stored in Electron app user data
-- Windows-first path handling and packaging conventions
+* Codex CLI runtime integration
+* DAG workflow execution
+* React Flow visual editor
+* Manual and Auto execution modes
+* Real-time terminal streaming
+* Retry from node
+* Human review checkpoints
+* Workspace trust system
+* Workspace scanning and context initialization
+* AGENTS.md export flow
+* Optional `.codex/config.toml` export
+* Local run persistence
+* Markdown memory pipeline
+* Windows packaging and smoke validation
+* Approval protocol guardrails
 
-## Tech Stack
+## In Progress / Roadmap
 
-### Frontend
+* Explain-with-AI diagnostics
+* Additional execution providers
+* Stronger CI and packaging automation
+* Workflow lineage visualization
+* Expanded agent-config exporters
+* Better approval UX and remediation flows
 
-- React 19
-- TypeScript
-- Vite via `electron-vite`
-- Tailwind CSS v4
-- Zustand
-- React Flow (`@xyflow/react`)
-- Lucide React
-- xterm.js
+---
 
-### Backend
+# Recommended Fluxion + Codex Workspace Structure
 
-- Electron main process
-- Node.js services and adapters
-- `child_process` for CLI execution
-- `chokidar` for workspace file watching
-- `gray-matter` for Markdown + frontmatter
-- `zod` for schemas and validation
+Fluxion works best when the repository itself contains durable AI workflow infrastructure.
 
-### Database and persistence
+```text
+project/
+|-- .codex/
+|   `-- config.toml
+|-- .github/
+|   `-- codex/
+|       `-- prompts/
+|           |-- brainstorm.md
+|           |-- planning.md
+|           |-- implement.md
+|           `-- review.md
+|-- .fluxion/
+|   |-- context.json
+|   |-- workflows/
+|   |   `-- *.fluxion.json
+|   |-- memory/
+|   `-- runs/
+|-- AGENTS.md
+`-- src/
+```
 
-- No database server
-- Workflow, run, and memory data are stored as local JSON and Markdown files in the workspace
-- App-level provider settings, trusted workspaces, and recent workspaces are stored in Electron user data
+This structure keeps:
 
-### Tooling and packaging
+* repository instructions durable
+* prompts reusable
+* execution reproducible
+* workflows reviewable
+* Codex behavior consistent across contributors
 
-- ESLint
-- Prettier
-- Vitest
-- TypeScript compiler
-- electron-builder
+---
 
-## Installation
+# Features
 
-### Prerequisites
+## Workflow Authoring
 
-- Windows 10 or Windows 11
-- Node.js and npm
-- Codex CLI installed in the Windows PATH
-- Codex CLI logged in before running workflows
+* React Flow canvas for node-based orchestration
+* Drag-and-drop Codex agent palette
+* DAG-based execution graph
+* Multi-workflow workspace library
+* Node-level prompt and system instruction controls
+* Per-node model and reasoning configuration
+* Auto and Manual execution modes
+* Human review checkpoints
+* Artifact contracts using `requires` and `produces`
 
-Install and authenticate Codex CLI:
+## Runtime and Execution
+
+* Native Codex CLI execution
+* Windows-aware process management
+* DAG validation and topological scheduling
+* Realtime stdout/stderr streaming
+* xterm.js terminal integration
+* Retry from selected node
+* Paused review-node reruns
+* Approval protocol guardrails
+* Readiness checks for:
+
+  * Codex installation
+  * authentication state
+  * model availability
+  * permission configuration
+
+## Workspace and Persistence
+
+* Workspace trust verification
+* Recent workspace reopening
+* `.fluxion/` workspace bootstrap
+* Context scanning and initialization
+* Source evidence tracking
+* Command and path discovery
+* Persisted run state
+* Markdown memory pipeline
+* External workspace file watching
+* Legacy workflow compatibility
+* AGENTS.md export flow
+* Optional `.codex/config.toml` generation
+
+## Safety and Contracts
+
+* Typed IPC contracts
+* Typed workflow schemas
+* Secure Electron preload bridge
+* Windows-safe path handling
+* Optional encrypted API-key storage via Electron `safeStorage`
+
+---
+
+# Tech Stack
+
+## Frontend
+
+* React 19
+* TypeScript
+* Tailwind CSS v4
+* React Flow (`@xyflow/react`)
+* Zustand
+* Lucide React
+* xterm.js
+* Vite via `electron-vite`
+
+## Desktop Runtime
+
+* Electron
+* Node.js
+* `child_process`
+* `chokidar`
+* `gray-matter`
+* `zod`
+
+## Persistence
+
+Fluxion intentionally avoids a database server.
+
+All workflow state is stored locally inside the workspace:
+
+* JSON workflow definitions
+* JSON run state
+* Markdown memory artifacts
+* project-level Codex config files
+
+---
+
+# Installation
+
+## Prerequisites
+
+### Required
+
+* Windows 10 or Windows 11
+* Node.js 20+
+* npm
+* Git
+* Codex CLI
+
+### Recommended
+
+* VS Code
+* Codex IDE extension
+* PowerShell 7+
+
+---
+
+## 1. Install Codex CLI
 
 ```powershell
 npm install -g @openai/codex
+```
+
+Authenticate:
+
+```powershell
 codex login
 codex login status
 ```
 
-Clone and install the project:
+Useful references:
+
+* [https://developers.openai.com/codex/config-reference#configtoml](https://developers.openai.com/codex/config-reference#configtoml)
+* [https://developers.openai.com/codex/ide#extension-setup](https://developers.openai.com/codex/ide#extension-setup)
+* [https://developers.openai.com/codex/cli/slash-commands#built-in-slash-commands](https://developers.openai.com/codex/cli/slash-commands#built-in-slash-commands)
+
+---
+
+## 2. Clone Fluxion
 
 ```powershell
 git clone <repository-url>
@@ -153,95 +267,102 @@ cd Fluxion
 npm install
 ```
 
-### Optional configuration
+---
 
-This repository does not currently include a required `.env` file or a built-in `.env` loader.
-
-Optional OpenAI configuration is available for settings/capability flows and the unfinished OpenAI adapter:
-
-```powershell
-$env:OPENAI_API_KEY="your_api_key"
-```
-
-You can also configure the OpenAI API key from Fluxion's Global Settings dialog. In the current UI, Codex remains the active workflow runner.
-
-## Usage
-
-### Start development
+## 3. Start Development
 
 ```powershell
 npm run dev
 ```
 
-### Run quality checks
+---
 
-```powershell
-npm run typecheck
-npm test
-npm run lint
-```
+# First-Time Workspace Setup
 
-### Build the app
+Fluxion is designed around trusted repository-local setup.
 
-```powershell
-npm run build
-npm run build:win
-```
+Recommended first-run flow:
 
-### Run the Windows smoke flow
+## Step 1 — Open a Workspace
 
-```powershell
-npm run smoke:win
-```
+Open an existing repository or create a new project folder.
 
-The smoke script executes typecheck, tests, production build, and an unpacked Windows package build, then verifies that the generated executable and `app.asar` exist.
+Fluxion will:
 
-### Typical in-app workflow
+* verify workspace trust
+* initialize `.fluxion/`
+* detect Codex readiness
+* scan repository context
 
-1. Open or reopen a project folder.
-2. Trust the workspace when prompted.
-3. Review the scanned workspace context, then save it as draft/final or skip it for later.
-4. Optionally export ready context to Codex `AGENTS.md`.
-5. Add one or more Codex nodes to the canvas.
-6. Configure prompts, model selection, permissions, and optional review/artifact settings.
-7. Save the workflow.
-8. Run in `Auto` mode for continuous execution or `Manual` mode to pause every completed node for review.
-9. Inspect terminal logs, output previews, output artifacts, and persisted memory files under `.fluxion/`.
+---
 
-## Project Structure
+## Step 2 — Review Context Scan
+
+The context initializer scans for:
+
+* package managers
+* build commands
+* test commands
+* important source folders
+* existing AI instruction files
+* repository metadata
+
+Detected information is persisted into:
 
 ```text
-Fluxion/
-|-- build/                     # Packaging assets and platform-specific build resources
-|-- docs/                      # Project assessments and backlog notes
-|-- resources/                 # Application icons and bundled assets
-|-- scripts/
-|   `-- smoke/
-|       `-- windows-build.mjs  # Windows packaging smoke script
-|-- src/
-|   |-- core/                  # Framework-agnostic workflow, DAG, artifact, and run-state contracts
-|   |-- main/                  # Electron main process, runners, adapters, services, and IPC handlers
-|   |-- preload/               # Secure renderer API exposed through contextBridge
-|   |-- renderer/              # React UI, canvas, terminal, layout, and Zustand stores
-|   `-- shared/                # Shared types, IPC payloads, model metadata, and workflow contracts
-|-- electron-builder.yml       # Packaging configuration
-|-- electron.vite.config.ts    # Electron + Vite build configuration
-|-- eslint.config.mjs          # Lint configuration
-|-- package.json               # Scripts and dependencies
-|-- tsconfig*.json             # TypeScript project configuration
-`-- vitest.config.ts           # Test configuration
+.fluxion/context.json
 ```
 
-## Configuration
+---
 
-### Workspace files created by Fluxion
+## Step 3 — Export Durable Project Instructions
+
+Fluxion can generate:
+
+```text
+AGENTS.md
+.codex/config.toml
+```
+
+These files allow Codex behavior to remain:
+
+* reproducible
+* repository-scoped
+* reviewable
+* durable across sessions
+
+---
+
+## Step 4 — Create Workflow DAGs
+
+Workflows are stored under:
+
+```text
+.fluxion/workflows/
+```
+
+Each workflow is a reusable executable DAG.
+
+---
+
+## Step 5 — Execute and Review
+
+Run workflows in:
+
+* `Auto` mode for continuous execution
+* `Manual` mode for gated review-driven execution
+
+Artifacts, logs, and memory persist locally.
+
+---
+
+# Example Workspace Layout
 
 ```text
 .fluxion/
 |-- context.json
-|-- workflow.json                  # Legacy single-workflow format
 |-- workflows/
-|   `-- *.fluxion.json             # Current multi-workflow format
+|   `-- feature-implementation.fluxion.json
 |-- memory/
 |   |-- global-context.md
 |   |-- short-term/
@@ -250,77 +371,184 @@ Fluxion/
     `-- <runId>.json
 ```
 
-Fluxion can also write project-level agent instruction files outside `.fluxion/` when the user applies an agent config preview:
+Additional generated project files:
 
 ```text
 AGENTS.md
 .codex/
-`-- config.toml                    # Optional advanced Codex project config
+`-- config.toml
 ```
 
-### Important runtime settings
+---
 
-- `OPENAI_API_KEY`: optional; used for OpenAI settings/capability flows and the OpenAI adapter code path
-- Global Settings dialog: can store the OpenAI API key in the app user-data directory
-- Workspace trust registry: app user-data `trusted-workspaces.json`
-- Recent workspace registry: app user-data `recent-workspaces.json`
-- `ELECTRON_RENDERER_URL`: used by `electron-vite` during development; not something you typically set manually
+# Usage
 
-### Important project config files
+## Development Commands
 
-- `electron.vite.config.ts`: aliases and renderer plugins
-- `electron-builder.yml`: packaging targets and app metadata
-- `eslint.config.mjs`: lint rules for TypeScript and React
-- `vitest.config.ts`: test runner setup and aliases
-- `tsconfig.node.json` and `tsconfig.web.json`: split TypeScript configs for Electron/node and renderer
+### Start Development
 
-## Architecture
+```powershell
+npm run dev
+```
+
+### Typecheck
+
+```powershell
+npm run typecheck
+```
+
+### Tests
+
+```powershell
+npm test
+```
+
+### Lint
+
+```powershell
+npm run lint
+```
+
+### Production Build
+
+```powershell
+npm run build
+npm run build:win
+```
+
+### Windows Smoke Validation
+
+```powershell
+npm run smoke:win
+```
+
+The smoke flow validates:
+
+* type safety
+* tests
+* production builds
+* unpacked Windows packaging
+* executable generation
+* `app.asar` creation
+
+---
+
+# Typical Workflow Lifecycle
+
+1. Open a workspace
+2. Trust the workspace
+3. Review context scan results
+4. Export AGENTS.md and optional Codex config
+5. Build a DAG visually
+6. Configure prompts and permissions
+7. Save the workflow
+8. Execute nodes through Codex CLI
+9. Review logs and artifacts
+10. Retry failed nodes when necessary
+11. Persist outputs into `.fluxion/`
+
+---
+
+# Architecture
 
 ```mermaid
 flowchart LR
   User["User"] --> Renderer["Renderer (React + React Flow + Zustand)"]
   Renderer --> Preload["Preload IPC Bridge"]
   Preload --> Main["Electron Main Process"]
-  Main --> Core["Core Contracts and DAG Validation"]
-  Main --> Workspace["Workspace, Memory, and Run-State Services"]
-  Main --> Context["Context Scout and Agent Config Export"]
+  Main --> Core["Core DAG + Contracts"]
+  Main --> Workspace["Workspace + Memory Services"]
+  Main --> Context["Context Scout + Agent Export"]
   Main --> Runner["Codex CLI Runner"]
   Runner --> Codex["Codex CLI"]
-  Workspace --> FluxionData[".fluxion/ JSON + Markdown artifacts"]
-  Context --> AgentFiles["AGENTS.md / .codex config"]
+  Workspace --> FluxionData[".fluxion Workspace Data"]
+  Context --> AgentFiles["AGENTS.md + .codex/config.toml"]
   Main --> Renderer
 ```
 
-### Execution flow
+---
 
-1. The renderer builds or edits a workflow graph.
-2. The preload layer exposes typed IPC methods to the renderer.
-3. Workspace open flows verify trust before the main process initializes `.fluxion/`.
-4. The main process validates the workflow structure using `src/core`.
-5. The workflow engine checks Codex readiness and approval guardrails before starting execution.
-6. The workflow engine compiles context from global memory plus upstream node outputs.
-7. The selected runner executes the node, currently centered on Codex CLI.
-8. Logs stream back to the renderer while output artifacts and run state are persisted locally.
-9. Review gates either continue automatically or pause for explicit approval, depending on workflow mode and node settings.
+# Architectural Boundaries
 
-### Architectural boundaries
+## `src/core`
 
-- `src/core` is intentionally framework-agnostic and testable without Electron or React.
-- `src/main` owns process execution, filesystem persistence, provider discovery, and workflow orchestration.
-- `src/preload` is the only direct bridge into Electron APIs for the renderer.
-- `src/renderer` is a control surface for workflow editing, status visualization, and terminal inspection.
-- `src/shared` keeps workflow shapes, IPC contracts, and provider metadata consistent across processes.
+Framework-agnostic workflow contracts and DAG logic.
 
-## Contributing
+## `src/main`
 
-Contributions should preserve Fluxion's current direction: Windows-first, local-workspace orchestration, typed contracts, and non-blocking desktop UX.
+Electron orchestration, persistence, runners, filesystem access, and process execution.
 
-Recommended workflow:
+## `src/preload`
 
-1. Open an issue or describe the problem clearly before large changes.
-2. Create a focused branch for one feature or fix.
-3. Keep workflow contracts, IPC payloads, and path handling type-safe and Windows-compatible.
-4. Run the narrowest relevant verification before opening a pull request:
+Secure IPC bridge exposed through Electron `contextBridge`.
+
+## `src/renderer`
+
+React UI, workflow editing surface, terminal inspection, and state visualization.
+
+## `src/shared`
+
+Shared workflow contracts, IPC payloads, schemas, and metadata.
+
+---
+
+# Project Structure
+
+```text
+Fluxion/
+|-- build/
+|-- docs/
+|-- resources/
+|-- scripts/
+|   `-- smoke/
+|-- src/
+|   |-- core/
+|   |-- main/
+|   |-- preload/
+|   |-- renderer/
+|   `-- shared/
+|-- electron-builder.yml
+|-- electron.vite.config.ts
+|-- eslint.config.mjs
+|-- package.json
+|-- tsconfig*.json
+`-- vitest.config.ts
+```
+
+---
+
+# Recommended Repository Practices
+
+Fluxion is most effective when repositories:
+
+* keep AI instructions version-controlled
+* store reusable prompts in `.github/codex/prompts/`
+* use durable AGENTS.md guidance
+* avoid prompt-only workflows
+* treat workflows as executable infrastructure
+* preserve review checkpoints for important changes
+
+---
+
+# Contributing
+
+Contributions should preserve Fluxion's core direction:
+
+* Windows-first desktop orchestration
+* local-workspace persistence
+* typed execution contracts
+* reproducible Codex workflows
+* non-blocking desktop UX
+
+Recommended contributor flow:
+
+1. Open an issue before large changes
+2. Keep changes narrowly scoped
+3. Preserve Windows-safe path handling
+4. Maintain type-safe IPC contracts
+5. Run relevant verification before PRs
+
+Verification:
 
 ```powershell
 npm run typecheck
@@ -328,25 +556,87 @@ npm test
 npm run lint
 ```
 
-5. For packaging or process changes, also run:
+For packaging/process changes:
 
 ```powershell
 npm run smoke:win
 ```
 
-6. In the pull request, include the problem statement, the user-visible flows that changed, screenshots or recordings for UI changes, and any Codex CLI, workspace persistence, or Windows-specific validation notes.
+Pull requests should include:
 
-## Roadmap
+* problem statement
+* affected user flows
+* screenshots/videos for UI changes
+* Codex/runtime implications
+* Windows-specific validation notes
 
-Based on the current source and backlog files, the next major areas are:
+---
 
-- "Explain with AI" diagnostics for failed nodes
-- Broader agent config exporters beyond the ready Codex `AGENTS.md` path
-- Additional execution providers on the main workflow path beyond Codex
-- Stronger CI coverage for Windows packaging and smoke validation
-- Product hardening around retries, attempt lineage, approval protocol UX, and provider configuration
+# Troubleshooting
 
-## License
+## Codex CLI Not Found
+
+Verify installation:
+
+```powershell
+codex --version
+```
+
+Ensure the Codex binary exists in the Windows PATH.
+
+---
+
+## Codex Authentication Issues
+
+Reauthenticate:
+
+```powershell
+codex login
+codex login status
+```
+
+---
+
+## Workflow Execution Blocked
+
+Fluxion may block execution if:
+
+* approval settings are unsafe
+* workspace trust is missing
+* Codex readiness checks fail
+* required models are unavailable
+
+Review the readiness panel and permission prompts.
+
+---
+
+## Packaging Failures
+
+Run:
+
+```powershell
+npm run smoke:win
+```
+
+before reporting Windows packaging issues.
+
+---
+
+# Roadmap
+
+Major next directions:
+
+* Explain-with-AI node diagnostics
+* Additional execution providers
+* Better lineage and retry visualization
+* Expanded workflow templates
+* CI hardening for packaging validation
+* Richer approval protocol UX
+* Multi-agent orchestration improvements
+
+---
+
+# License
 
 This repository does not currently include a `LICENSE` file.
 
