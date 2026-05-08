@@ -26,6 +26,28 @@ Current source state, based on this repository:
 - Codex approval protocol guardrails can block unsafe run configurations until permissions are fixed
 - Secondary provider support and "Explain with AI" diagnostics are still roadmap items, not the main execution path
 
+### Codex workspace setup direction
+
+Fluxion's most relevant Codex setup path is a repo-governed workspace flow: use the local Codex CLI as the runtime, treat the Codex IDE extension as an optional companion surface, and keep repeatable setup artifacts in the project instead of relying on ad hoc terminal history.
+
+For new software projects, Fluxion should help users inspect and prepare these files:
+
+- `.codex/config.toml` for project-scoped Codex defaults such as sandbox and approval policy
+- `AGENTS.md` for durable repository instructions
+- `.github/codex/prompts/*.md` for reusable prompt templates such as brainstorm, planning, developer, and review flows
+- `.fluxion/context.json` and `.fluxion/workflows/*.fluxion.json` for Fluxion's workspace context and executable DAGs
+
+The setup flow should run through workspace trust and Codex readiness checks before applying project-scoped Codex configuration. This keeps Fluxion aligned with Codex's shared CLI/IDE configuration model while preserving the current Windows-first, local-workspace runtime.
+
+Useful official references:
+
+- [Codex configuration reference](https://developers.openai.com/codex/config-reference#configtoml)
+- [Codex IDE extension](https://developers.openai.com/codex/ide#extension-setup)
+- [Codex IDE settings](https://developers.openai.com/codex/ide/settings#change-a-setting)
+- [Codex CLI slash commands](https://developers.openai.com/codex/cli/slash-commands#built-in-slash-commands)
+- [Codex GitHub Action](https://developers.openai.com/codex/github-action#configure-codex-exec)
+- [Codex best practices for repeatable work](https://developers.openai.com/codex/learn/best-practices#turn-repeatable-work-into-skills)
+
 ## Features
 
 ### Workflow authoring
