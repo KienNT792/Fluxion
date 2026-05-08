@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { FlowCanvas } from '../canvas/FlowCanvas';
 import { RightInspector } from './RightInspector';
-import { TerminalViewer } from '../terminal/TerminalViewer';
+import { RuntimeDock } from './RuntimeDock';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ContextInitModal } from './ContextInitModal';
 import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
@@ -315,15 +315,12 @@ export const AppShell: React.FC = () => {
           {/* ── Region 4+6+7: Center column (Canvas + Runtime Dock + StatusBar) ── */}
           <main className="relative flex flex-1 min-w-0 flex-col overflow-hidden">
             {/* ── Region 4: Workflow Canvas ── */}
-            <FlowCanvas />
-            {/* ── TerminalViewer overlay (existing behavior) ── */}
-            <TerminalViewer />
+            <div className="relative flex-1 min-h-0 overflow-hidden">
+              <FlowCanvas />
+            </div>
 
-            {/* ── Region 6: Integrated Runtime Dock (placeholder for Phase 4) ── */}
-            {/* Structural region ready; content will be implemented in Phase 4 */}
-
-            {/* ── Region 7: Status Bar (placeholder for Phase 4) ── */}
-            {/* Structural region ready; content will be implemented in Phase 4 */}
+            {/* ── Region 6: Integrated Runtime Dock ── */}
+            <RuntimeDock />
           </main>
 
           {/* ── Region 5: Right Inspector (persistent) ── */}

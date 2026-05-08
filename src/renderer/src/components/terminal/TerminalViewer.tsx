@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -7,7 +7,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
 import { useThemeStore } from '../../stores/theme.store';
-import { TerminalSquare, X, Trash2, Maximize2, Minimize2, ArrowLeft } from 'lucide-react';
+import { Terminal, Trash2 } from 'lucide-react';
 
 // Status dot palette — using AI Timeline pastels from DESIGN.md
 const STATUS_DOT: Record<string, { color: string; pulse: boolean }> = {
@@ -28,9 +28,16 @@ function writeLogHistory(term: XTerm, logs: string[]): void {
   logs.forEach((entry) => writeLogEntry(term, entry));
 }
 
+/**
+ * TerminalViewer — embedded log viewer for node execution output.
+ *
+ * Designed to be mounted inside the RuntimeDock's "Logs" tab.
+ * No longer a floating overlay; renders inline in its parent's flex container.
+ * Shows an empty state when no node is selected for log viewing.
+ * Preserves all existing xterm.js data flow and log subscription logic.
+ */
 export const TerminalViewer: React.FC = () => {
   const terminalNodeId = useWorkflowStore(state => state.terminalNodeId);
-  const setTerminalNodeId = useWorkflowStore(state => state.setTerminalNodeId);
   const nodes = useWorkflowStore(state => state.nodes);
   const clearLogs = useExecutionStore(state => state.clearLogs);
   const status = useExecutionStore(state =>
@@ -40,7 +47,6 @@ export const TerminalViewer: React.FC = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<XTerm | null>(null);
   const fitAddonInstance = useRef<FitAddon | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   const theme = useThemeStore(state => state.theme);
   const isDark = theme === 'dark';
@@ -164,9 +170,28 @@ export const TerminalViewer: React.FC = () => {
       xtermInstance.current = null;
       fitAddonInstance.current = null;
     };
-  }, [terminalNodeId, isExpanded, theme, isDark, displayName]);
+  }, [terminalNodeId, theme, isDark, displayName]);
 
-  if (!terminalNodeId) return null;
+  // Empty state: no node selected for log viewing
+  if (!terminalNodeId) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-6 py-8">
+        <div className="text-center">
+          <Terminal
+            size={20}
+            className="mx-auto mb-2"
+            style={{ color: 'var(--color-muted-soft)' }}
+          />
+          <p
+            className="text-xs"
+            style={{ color: 'var(--color-muted)', lineHeight: '1.6' }}
+          >
+            Select a node&apos;s &ldquo;Logs&rdquo; to view execution output.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleClear = (): void => {
     clearLogs(terminalNodeId);
@@ -178,126 +203,64 @@ export const TerminalViewer: React.FC = () => {
 
   const dot = STATUS_DOT[status] ?? STATUS_DOT.idle;
 
-  const iconBtnStyle = (): React.CSSProperties => ({
-    color: 'var(--color-muted)',
-    padding: '5px',
-    borderRadius: 'var(--radius-sm)',
-    background: 'transparent',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  });
-
   return (
-    <div
-      className={`absolute bottom-0 left-0 right-0 flex flex-col z-50 transition-all duration-300 ${isExpanded ? 'h-[78%]' : 'h-[38%]'}`}
-      style={{
-        // ide-pane aesthetic per DESIGN.md
-        background: 'var(--color-canvas-soft)',
-        borderTop: '1px solid var(--color-hairline)',
-      }}
-    >
-      {/* ── Header ── */}
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Inline header — node name + actions */}
       <div
-        className="flex items-center justify-between px-4 flex-shrink-0"
+        className="flex h-8 flex-shrink-0 items-center justify-between px-3"
         style={{
-          height: '40px',
-          background: 'var(--color-surface-card)',
+          background: 'var(--color-canvas-soft)',
           borderBottom: '1px solid var(--color-hairline)',
         }}
       >
-        {/* Left: Back + Node info */}
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            aria-label="Back to Workflow"
-            onClick={() => setTerminalNodeId(null)}
-            style={iconBtnStyle()}
-            className="mr-1"
-            title="Back to Workflow"
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-ink)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'transparent';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-muted)';
-            }}
-          >
-            <ArrowLeft size={14} />
-          </button>
-          
-          <TerminalSquare size={13} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className="font-semibold text-xs truncate"
+            className={`h-2 w-2 shrink-0 rounded-full ${dot.pulse ? 'animate-pulse' : ''}`}
+            style={{ background: dot.color }}
+            title={`Status: ${status}`}
+          />
+          <span
+            className="truncate text-[11px] font-medium"
             style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-ink)' }}
           >
             {displayName}
           </span>
           {nodeLabel && nodeModel && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--color-muted)' }}>
+            <span
+              className="shrink-0 text-[10px]"
+              style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}
+            >
               · {nodeModel}
             </span>
           )}
-          {/* Status dot */}
-          <span
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${dot.pulse ? 'animate-pulse' : ''}`}
-            style={{ background: dot.color }}
-            title={`Status: ${status}`}
-          />
         </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label="Clear Terminal"
+            aria-label="Clear logs"
             onClick={handleClear}
-            style={iconBtnStyle()}
+            className="flex items-center justify-center rounded-sm p-1 transition-colors"
+            style={{ color: 'var(--color-muted)' }}
             title="Clear"
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = 'var(--color-surface-strong)';
+              event.currentTarget.style.color = 'var(--color-ink)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = 'transparent';
+              event.currentTarget.style.color = 'var(--color-muted)';
+            }}
           >
             <Trash2 size={12} />
-          </button>
-          <button
-            type="button"
-            aria-label={isExpanded ? 'Collapse Terminal' : 'Expand Terminal'}
-            onClick={() => setIsExpanded(!isExpanded)}
-            style={iconBtnStyle()}
-            title={isExpanded ? 'Collapse' : 'Expand'}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            {isExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-          </button>
-          <div className="w-px h-4 mx-1" style={{ background: 'var(--color-hairline)' }} />
-          <button
-            type="button"
-            aria-label="Close Terminal"
-            onClick={() => setTerminalNodeId(null)}
-            style={iconBtnStyle()}
-            title="Close"
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-strong)';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-semantic-error)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'transparent';
-              (e.currentTarget as HTMLElement).style.color = 'var(--color-muted)';
-            }}
-          >
-            <X size={14} />
           </button>
         </div>
       </div>
 
-      {/* ── xterm.js Terminal Container ── */}
+      {/* xterm.js container */}
       <div
-        className="flex-1 overflow-hidden p-2"
-        style={{ background: 'var(--color-canvas-soft)' }}
+        className="flex-1 overflow-hidden p-1"
+        style={{ background: isDark ? '#161614' : '#fafaf7' }}
         ref={terminalRef}
       />
     </div>
