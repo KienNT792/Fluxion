@@ -31,7 +31,7 @@ import {
   runCurrentWorkflow,
   saveCurrentWorkflow,
 } from '../../lib/workflow-session';
-import { BinarySwitch } from '../ui/BinarySwitch';
+
 import { Button } from '../ui/Button';
 import { splitDisplayPath } from '../ui/FilePathCard';
 import { InputDialog } from '../ui/InputDialog';
@@ -375,7 +375,6 @@ export const Topbar: React.FC = () => {
   const saveStateLabel = saveError ?? formatSavedLabel(lastSavedAt);
   const saveChipState = getSaveChipState(isDirty, isSaving, saveError);
   const contextChipState = getContextChipState(contextStatus);
-  const nodeCountLabel = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
   const activityHasAttention = changeCount > 0 || hasExternalWorkflowChange;
   const reviewNodeLabel =
     reviewNodeIds.length === 1
@@ -618,82 +617,47 @@ export const Topbar: React.FC = () => {
         <div className="min-w-0">
           <Tooltip content={workspacePath || 'No workspace open'}>
             <div className="flex min-w-0 items-center gap-2">
-              <FolderOpen size={14} className="shrink-0" style={{ color: 'var(--color-muted)' }} />
-
               <span
-                className="hidden shrink-0 text-[11px] uppercase tracking-[0.08em] xl:inline"
-                style={{
-                  color: 'var(--color-muted-soft)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                Fluxion
-              </span>
-              <span
-                className="hidden shrink-0 xl:inline"
-                style={{ color: 'var(--color-muted-soft)' }}
-              >
-                /
-              </span>
-              <span
-                className="hidden max-w-[160px] truncate text-[11px] uppercase tracking-[0.08em] lg:inline"
-                style={{
-                  color: 'var(--color-muted)',
-                  fontFamily: 'var(--font-mono)',
-                }}
+                className="shrink-0 text-sm font-semibold"
+                style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
               >
                 {workspaceName}
               </span>
               <span
-                className="hidden shrink-0 lg:inline"
+                className="shrink-0 text-xs"
                 style={{ color: 'var(--color-muted-soft)' }}
               >
                 /
+              </span>
+              <span
+                className="hidden shrink-0 text-xs sm:inline"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Workflow:
               </span>
               <span
                 className="min-w-0 truncate text-sm font-semibold"
                 style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
               >
-                {workflowName}
+                {workflowName || 'Untitled Workflow'}
               </span>
-              <span
-                className="hidden shrink-0 text-[11px] md:inline"
-                style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-              >
-                {nodeCountLabel}
-              </span>
-              <StatusChip
-                tone={saveChipState.tone}
-                label={saveChipState.label}
-                animate={saveChipState.animate}
-                title={saveStateLabel}
-                className="hidden shrink-0 md:inline-flex"
-              />
             </div>
           </Tooltip>
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
           <StatusChip
+            tone={saveChipState.tone}
+            label={saveChipState.label}
+            animate={saveChipState.animate}
+            title={saveStateLabel}
+          />
+          <StatusChip
             tone={workflowChipState.tone}
             label={workflowChipLabel}
             animate={workflowChipState.animate}
             title={statusSubtext ?? workflowChipLabel}
             className="max-w-[170px]"
-          />
-
-          <BinarySwitch
-            checked={executionMode === 'manual'}
-            onChange={(checked) => setExecutionMode(checked ? 'manual' : 'auto')}
-            leftLabel="Auto"
-            rightLabel="Manual"
-            disabled={isBusy}
-            ariaLabel="Execution mode"
-            title={
-              executionMode === 'auto'
-                ? 'Only nodes with review checkpoints pause'
-                : 'Every completed node pauses for review'
-            }
           />
 
           {isPaused && reviewNodeIds.length > 0 && (
@@ -1065,17 +1029,30 @@ export const Topbar: React.FC = () => {
             </ActionIconButton>
           </Tooltip>
 
+          <Tooltip content={executionMode === 'auto' ? 'Auto: Only review-checkpoint nodes pause' : 'Manual: Every completed node pauses for review'}>
+            <ActionIconButton
+              aria-label={`Execution mode: ${executionMode}`}
+              onClick={() => setExecutionMode(executionMode === 'auto' ? 'manual' : 'auto')}
+              disabled={isBusy}
+              dimmed={editingDimmed}
+            >
+              {executionMode === 'manual'
+                ? <span className="text-[10px] font-semibold" style={{ color: 'var(--color-timeline-done)', fontFamily: 'var(--font-mono)' }}>M</span>
+                : <span className="text-[10px] font-semibold" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>A</span>}
+            </ActionIconButton>
+          </Tooltip>
+
           {!isBusy ? (
             <Tooltip content={runTooltip}>
               <Button
                 variant="primary"
                 size="toolbar"
-                className="min-w-[88px] shrink-0"
+                className="min-w-[120px] shrink-0"
                 onClick={handleRun}
                 disabled={!canRun}
               >
                 <Play size={13} fill="currentColor" />
-                Run
+                Run Workflow
               </Button>
             </Tooltip>
           ) : (
@@ -1083,7 +1060,7 @@ export const Topbar: React.FC = () => {
               <Button
                 variant="danger"
                 size="toolbar"
-                className="min-w-[88px] shrink-0"
+                className="min-w-[120px] shrink-0"
                 onClick={handleAbort}
                 disabled={isStopping}
               >

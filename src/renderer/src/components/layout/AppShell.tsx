@@ -32,6 +32,7 @@ export const AppShell: React.FC = () => {
   const setContextState = useWorkflowStore((state) => state.setContextState);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const clearLegacyWorkflowBackup = useWorkflowStore((state) => state.clearLegacyWorkflowBackup);
+  const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
   const [contextBannerError, setContextBannerError] = useState<string | null>(null);
   const [isDismissingIncomplete, setIsDismissingIncomplete] = useState(false);
   const [isKeepingLegacy, setIsKeepingLegacy] = useState(false);
@@ -171,148 +172,162 @@ export const AppShell: React.FC = () => {
   return (
     <TooltipProvider>
       <div
-        className="flex h-screen w-screen overflow-hidden font-sans"
+        className="flex h-screen w-screen flex-col overflow-hidden font-sans"
         style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
       >
-        <Sidebar />
-        <div className="flex flex-1 min-w-0 h-full flex-col relative">
-          <Topbar />
-          {contextBannerError ? (
-            <div
-              className="flex shrink-0 items-center gap-2 px-4 py-2 text-xs"
-              style={{
-                color: 'var(--color-semantic-error)',
-                background: 'var(--color-canvas-soft)',
-                borderBottom: '1px solid var(--color-hairline)',
-              }}
-            >
-              <AlertTriangle size={14} />
-              <span>{contextBannerError}</span>
-            </div>
-          ) : null}
-          {incompleteBannerVisible ? (
-            <div
-              className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
-              style={{
-                background: 'var(--color-canvas-soft)',
-                borderBottom: '1px solid var(--color-hairline)',
-              }}
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <Sparkles size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                    Project context needs review
-                  </p>
-                  <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                    {missingContextItems.length > 0
-                      ? `Missing: ${missingContextItems.join(', ')}.`
-                      : 'Project goal or verification details are still missing.'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={handleDismissIncompleteBanner}
-                  disabled={isDismissingIncomplete}
-                >
-                  Dismiss
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => setContextSetupOpen(true)}
-                >
-                  Review Context
-                </Button>
+        {/* ── Region 1: Topbar (full width) ── */}
+        <Topbar />
+
+        {/* ── Region 2: Context banners (full width, under Topbar) ── */}
+        {contextBannerError ? (
+          <div
+            className="flex shrink-0 items-center gap-2 px-4 py-2 text-xs"
+            style={{
+              color: 'var(--color-semantic-error)',
+              background: 'var(--color-canvas-soft)',
+              borderBottom: '1px solid var(--color-hairline)',
+            }}
+          >
+            <AlertTriangle size={14} />
+            <span>{contextBannerError}</span>
+          </div>
+        ) : null}
+        {incompleteBannerVisible ? (
+          <div
+            className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
+            style={{
+              background: 'var(--color-canvas-soft)',
+              borderBottom: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <Sparkles size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                  Project context needs review
+                </p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                  {missingContextItems.length > 0
+                    ? `Missing: ${missingContextItems.join(', ')}.`
+                    : 'Project goal or verification details are still missing.'}
+                </p>
               </div>
             </div>
-          ) : null}
-          {legacyBannerVisible ? (
-            <div
-              className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
-              style={{
-                background: 'var(--color-canvas-soft)',
-                borderBottom: '1px solid var(--color-hairline)',
-              }}
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <GitBranch size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-timeline-done)' }} />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                    Legacy workflow format detected
-                  </p>
-                  <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                    Migrate `.fluxion/workflow.json` into the workflows folder, or keep it for this workspace.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={handleKeepLegacyWorkflow}
-                  disabled={isKeepingLegacy || isMigratingLegacy}
-                >
-                  {isKeepingLegacy ? 'Saving...' : 'Keep legacy'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={handleMigrateLegacyWorkflow}
-                  disabled={isKeepingLegacy || isMigratingLegacy}
-                >
-                  {isMigratingLegacy ? 'Migrating...' : 'Migrate'}
-                </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={handleDismissIncompleteBanner}
+                disabled={isDismissingIncomplete}
+              >
+                Dismiss
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => setContextSetupOpen(true)}
+              >
+                Review Context
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {legacyBannerVisible ? (
+          <div
+            className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
+            style={{
+              background: 'var(--color-canvas-soft)',
+              borderBottom: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <GitBranch size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-timeline-done)' }} />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                  Legacy workflow format detected
+                </p>
+                <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                  Migrate `.fluxion/workflow.json` into the workflows folder, or keep it for this workspace.
+                </p>
               </div>
             </div>
-          ) : null}
-          {legacyWorkflowBackupFilePath ? (
-            <div
-              className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
-              style={{
-                background: 'var(--color-canvas-soft)',
-                borderBottom: '1px solid var(--color-hairline)',
-              }}
-            >
-              <div className="flex min-w-0 items-start gap-3">
-                <GitBranch size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-semantic-success)' }} />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                    Legacy workflow migrated
-                  </p>
-                  <p className="mt-1 truncate text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                    Backup saved at {legacyWorkflowBackupFilePath}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={clearLegacyWorkflowBackup}
-                >
-                  Dismiss
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={handleRevealLegacyBackup}
-                >
-                  Reveal backup
-                </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={handleKeepLegacyWorkflow}
+                disabled={isKeepingLegacy || isMigratingLegacy}
+              >
+                {isKeepingLegacy ? 'Saving...' : 'Keep legacy'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={handleMigrateLegacyWorkflow}
+                disabled={isKeepingLegacy || isMigratingLegacy}
+              >
+                {isMigratingLegacy ? 'Migrating...' : 'Migrate'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {legacyWorkflowBackupFilePath ? (
+          <div
+            className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3"
+            style={{
+              background: 'var(--color-canvas-soft)',
+              borderBottom: '1px solid var(--color-hairline)',
+            }}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <GitBranch size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-semantic-success)' }} />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                  Legacy workflow migrated
+                </p>
+                <p className="mt-1 truncate text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+                  Backup saved at {legacyWorkflowBackupFilePath}
+                </p>
               </div>
             </div>
-          ) : null}
-          <main className="relative flex flex-1 overflow-hidden">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={clearLegacyWorkflowBackup}
+              >
+                Dismiss
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={handleRevealLegacyBackup}
+              >
+                Reveal backup
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ── Region 3-7: Body (Sidebar | Center | Right Inspector) ── */}
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+          {/* ── Region 3: Left Sidebar ── */}
+          <Sidebar />
+
+          {/* ── Region 4+6+7: Center column (Canvas + future Runtime Dock + StatusBar) ── */}
+          <main className="relative flex flex-1 min-w-0 flex-col overflow-hidden">
+            {/* ── Region 4: Workflow Canvas ── */}
             <FlowCanvas />
+            {/* ── TerminalViewer overlay (existing behavior) ── */}
+            <TerminalViewer />
+          </main>
+
+          {/* ── Region 5: Right Inspector ── */}
+          {selectedNodeId ? (
             <ErrorBoundary fallbackTitle="Config panel crashed">
               <PropertiesPanel />
             </ErrorBoundary>
-            <TerminalViewer />
-          </main>
+          ) : null}
         </div>
       </div>
 
