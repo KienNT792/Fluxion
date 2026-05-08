@@ -173,20 +173,31 @@ describe('translateRunnerEventToChunk', () => {
       expect(result?.content).toBe('\x1b[2m[codex]\x1b[0m editing: src/output.ts\n');
     });
 
-    it('translates error field (string)', () => {
+    it('routes string error field to stderr with red [error] prefix', () => {
       const result = translateRunnerEventToChunk(
         jsonEvent({ type: 'error', error: 'rate limit exceeded' }),
         now
       );
-      expect(result?.content).toBe('\x1b[2m[codex]\x1b[0m error: rate limit exceeded\n');
+      expect(result?.type).toBe('stderr');
+      expect(result?.content).toBe('\x1b[31m[error]\x1b[0m rate limit exceeded\n');
     });
 
-    it('translates error field (object with message)', () => {
+    it('routes object error field to stderr with red [error] prefix', () => {
       const result = translateRunnerEventToChunk(
         jsonEvent({ error: { message: 'timeout' } }),
         now
       );
-      expect(result?.content).toBe('\x1b[2m[codex]\x1b[0m error: timeout\n');
+      expect(result?.type).toBe('stderr');
+      expect(result?.content).toBe('\x1b[31m[error]\x1b[0m timeout\n');
+    });
+
+    it('routes non-error json-event to stdout (not stderr)', () => {
+      const result = translateRunnerEventToChunk(
+        jsonEvent({ type: 'session_started' }),
+        now
+      );
+      expect(result?.type).toBe('stdout');
+      expect(result?.content).toBe('\x1b[2m[codex]\x1b[0m session started\n');
     });
   });
 });

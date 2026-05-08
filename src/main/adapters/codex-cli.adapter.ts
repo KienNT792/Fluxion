@@ -140,6 +140,17 @@ export function translateRunnerEventToChunk(
   if (event.type === 'json-event') {
     const summary = extractJsonEventSummary(event.event);
     if (summary === null) return null;
+
+    // Error summaries are semantically distinct from execution narrative
+    if (summary.startsWith('error:')) {
+      const message = summary.slice('error:'.length).trim();
+      return {
+        type: 'stderr',
+        content: `\x1b[31m[error]\x1b[0m ${message}\n`,
+        timestamp: now(),
+      };
+    }
+
     return {
       type: 'stdout',
       content: `\x1b[2m[codex]\x1b[0m ${summary}\n`,
