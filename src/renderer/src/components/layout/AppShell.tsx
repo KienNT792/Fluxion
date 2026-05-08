@@ -26,6 +26,8 @@ export const AppShell: React.FC = () => {
   const legacyWorkflowBackupFilePath = useWorkflowStore(
     (state) => state.legacyWorkflowBackupFilePath
   );
+  const isNewWorkspace = useWorkflowStore((state) => state.isNewWorkspace);
+  const isDirty = useWorkflowStore((state) => state.isDirty);
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
   const setContextState = useWorkflowStore((state) => state.setContextState);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
@@ -34,7 +36,6 @@ export const AppShell: React.FC = () => {
   const [isDismissingIncomplete, setIsDismissingIncomplete] = useState(false);
   const [isKeepingLegacy, setIsKeepingLegacy] = useState(false);
   const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
-
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
@@ -65,7 +66,8 @@ export const AppShell: React.FC = () => {
     setContextSetupOpen(false);
   }, [setContextSetupOpen]);
 
-  const incompleteBannerVisible = shouldShowIncompleteContextBanner(
+  const hasInteracted = !isNewWorkspace || isDirty;
+  const incompleteBannerVisible = hasInteracted && shouldShowIncompleteContextBanner(
     contextStatus,
     contextSummary,
     isContextSetupOpen

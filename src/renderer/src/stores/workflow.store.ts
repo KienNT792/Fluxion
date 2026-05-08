@@ -69,6 +69,7 @@ interface WorkflowState {
   isContextSetupOpen: boolean;
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
+  isNewWorkspace: boolean;
   legacyWorkflowDetected: boolean;
   legacyWorkflowBackupFilePath: string | null;
   workspaceLoadingEvents: WorkspaceLoadingEvent[];
@@ -185,6 +186,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   isContextSetupOpen: false,
   activeWorkflowFilePath: null,
   workflows: [],
+  isNewWorkspace: false,
   legacyWorkflowDetected: false,
   legacyWorkflowBackupFilePath: null,
   workspaceLoadingEvents: [],
@@ -285,6 +287,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       recentWorkspaceChanges: [],
       activeWorkflowFilePath: payload.activeWorkflowFilePath,
       workflows: payload.workflows,
+      isNewWorkspace: payload.isNewWorkspace,
       legacyWorkflowDetected: payload.legacyWorkflowDetected,
       legacyWorkflowBackupFilePath: payload.legacyWorkflowBackupFilePath ?? null,
       contextStatus: payload.contextStatus,

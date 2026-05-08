@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   Loader2,
   Sparkles,
 } from 'lucide-react';
@@ -851,91 +852,105 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
         ) : null}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div
-          className="rounded-lg px-4 py-4"
-          style={{
-            background: 'var(--color-surface-card)',
-            border: '1px solid var(--color-hairline)',
-          }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span
-              className="text-[11px] uppercase tracking-[0.08em]"
-              style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+      {(scanResult?.scannedFiles ?? []).length > 0 || (scanResult?.discoveredPaths ?? []).length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(scanResult?.scannedFiles ?? []).length > 0 ? (
+            <details
+              className="group rounded-lg"
+              style={{
+                background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-hairline)',
+              }}
             >
-              Scanned files
-            </span>
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Reading workspace signals
-            </span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(scanResult?.scannedFiles ?? []).length > 0 ? (
-              (scanResult?.scannedFiles ?? []).map((filePath) => (
-                <span
-                  key={filePath}
-                  className="rounded-full px-2.5 py-1 text-[11px]"
-                  style={{
-                    background: 'var(--color-canvas-soft)',
-                    border: '1px solid var(--color-hairline)',
-                    color: 'var(--color-ink)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {filePath}
+              <summary
+                className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+                style={{ listStyle: 'none' }}
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    size={14}
+                    className="transition-transform group-open:rotate-180"
+                    style={{ color: 'var(--color-muted)' }}
+                  />
+                  <span
+                    className="text-[11px] uppercase tracking-[0.08em]"
+                    style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                  >
+                    Scanned files
+                  </span>
+                </div>
+                <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                  {(scanResult?.scannedFiles ?? []).length} found
                 </span>
-              ))
-            ) : (
-              <p className="text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                No strong file signals were detected. Fluxion will use manual kickoff mode.
-              </p>
-            )}
-          </div>
-        </div>
+              </summary>
+              <div className="flex flex-wrap gap-2 px-4 pb-4 pt-1">
+                {(scanResult?.scannedFiles ?? []).map((filePath) => (
+                  <span
+                    key={filePath}
+                    className="rounded-full px-2.5 py-1 text-[11px]"
+                    style={{
+                      background: 'var(--color-canvas-soft)',
+                      border: '1px solid var(--color-hairline)',
+                      color: 'var(--color-ink)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {filePath}
+                  </span>
+                ))}
+              </div>
+            </details>
+          ) : <div />}
 
-        <div
-          className="rounded-lg px-4 py-4"
-          style={{
-            background: 'var(--color-surface-card)',
-            border: '1px solid var(--color-hairline)',
-          }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span
-              className="text-[11px] uppercase tracking-[0.08em]"
-              style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          {(scanResult?.discoveredPaths ?? []).length > 0 ? (
+            <details
+              className="group rounded-lg"
+              style={{
+                background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-hairline)',
+              }}
             >
-              Discovered paths
-            </span>
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Needs your confirmation
-            </span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(scanResult?.discoveredPaths ?? []).length > 0 ? (
-              (scanResult?.discoveredPaths ?? []).map((entry) => (
-                <span
-                  key={entry}
-                  className="rounded-full px-2.5 py-1 text-[11px]"
-                  style={{
-                    background: 'var(--color-canvas-soft)',
-                    border: '1px solid var(--color-hairline)',
-                    color: 'var(--color-ink)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {entry}
+              <summary
+                className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+                style={{ listStyle: 'none' }}
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronDown
+                    size={14}
+                    className="transition-transform group-open:rotate-180"
+                    style={{ color: 'var(--color-muted)' }}
+                  />
+                  <span
+                    className="text-[11px] uppercase tracking-[0.08em]"
+                    style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+                  >
+                    Discovered paths
+                  </span>
+                </div>
+                <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                  {(scanResult?.discoveredPaths ?? []).length} found
                 </span>
-              ))
-            ) : (
-              <p className="text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-                Add important paths later if the first milestone only exists in your head.
-              </p>
-            )}
-          </div>
+              </summary>
+              <div className="flex flex-wrap gap-2 px-4 pb-4 pt-1">
+                {(scanResult?.discoveredPaths ?? []).map((entry) => (
+                  <span
+                    key={entry}
+                    className="rounded-full px-2.5 py-1 text-[11px]"
+                    style={{
+                      background: 'var(--color-canvas-soft)',
+                      border: '1px solid var(--color-hairline)',
+                      color: 'var(--color-ink)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {entry}
+                  </span>
+                ))}
+              </div>
+            </details>
+          ) : <div />}
         </div>
-      </div>
+      ) : null}
 
       {scanResult?.sourceEvidence.length ? (
         <div className="space-y-3">
@@ -1203,10 +1218,10 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
             <AlertTriangle size={16} style={{ color: 'var(--color-timeline-done)' }} />
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-                Save Context is still blocked
+                Almost ready
               </p>
               <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
-                Fill these fields before saving the final context:
+                Add these to save as final context:
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {missingRequirements.map((field) => (
@@ -1284,11 +1299,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
           </div>
         </div>
 
-        {!canExportAgentConfig ? (
-          <p className="mt-3 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-            Save a ready Fluxion context before exporting agent configuration.
-          </p>
-        ) : null}
+
 
         {agentConfigExporters.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -1431,7 +1442,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
         }}
       >
         <div
-          className="flex items-start justify-between gap-4 px-6 py-5"
+          className="flex shrink-0 items-start justify-between gap-4 px-6 py-5 relative z-10"
           style={{
             background: 'var(--color-canvas-soft)',
             borderBottom: '1px solid var(--color-hairline)',
@@ -1473,7 +1484,16 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
           ) : null}
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[260px_minmax(0,1fr)_360px]">
+        <div
+          className="grid min-h-0 flex-1 gap-0"
+          style={{
+            gridTemplateColumns:
+              currentStep === 'review'
+                ? '260px minmax(0, 1fr) 360px'
+                : '260px minmax(0, 1fr) 0px',
+            transition: 'grid-template-columns 300ms ease',
+          }}
+        >
           <aside
             className="border-r px-5 py-5"
             style={{ borderColor: 'var(--color-hairline)', background: 'var(--color-canvas)' }}
@@ -1575,8 +1595,16 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
           <aside
             className="flex min-h-0 flex-col border-l"
             style={{
-              borderColor: 'var(--color-hairline)',
+              borderColor:
+                currentStep === 'review'
+                  ? 'var(--color-hairline)'
+                  : 'transparent',
               background: 'var(--color-canvas-soft)',
+              overflow: 'hidden',
+              opacity: currentStep === 'review' ? 1 : 0,
+              transition: 'opacity 300ms ease, border-color 300ms ease',
+              pointerEvents:
+                currentStep === 'review' ? 'auto' : 'none',
             }}
           >
             <div className="flex items-center justify-between gap-3 px-5 py-4">
@@ -1667,8 +1695,11 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
         </div>
 
         <div
-          className="flex flex-wrap items-center justify-between gap-3 px-6 py-4"
-          style={{ borderTop: '1px solid var(--color-hairline)' }}
+          className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 py-4 relative z-10"
+          style={{
+            background: 'var(--color-surface-card)',
+            borderTop: '1px solid var(--color-hairline)'
+          }}
         >
           <div className="flex items-center gap-2">
             {currentStepIndex > 0 ? (
@@ -1691,7 +1722,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
               onClick={() => void handleSave('skip')}
               disabled={isLoading || isSaving}
             >
-              Skip for now
+              Set up later
             </Button>
           </div>
 

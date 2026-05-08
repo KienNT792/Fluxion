@@ -2,17 +2,16 @@ import React from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
   ExternalLink,
   FolderOpen,
   Settings,
+  Terminal,
   Trash2,
   Workflow,
 } from 'lucide-react';
 import type { RecentWorkspaceEntry } from '@shared';
-import {
-  getCodexReadinessBadgeState,
-  getProviderReadinessSummary,
-} from '../../lib/provider-capabilities';
+import { getCodexReadiness, getCodexReadinessBadgeState, getProviderReadinessSummary } from '../../lib/provider-capabilities';
 import { openWorkspaceFromDialog, openWorkspacePath } from '../../lib/workflow-session';
 import { useWorkspaceTrustPrompt } from '../../hooks/useWorkspaceTrustPrompt';
 import { useWorkflowStore } from '../../stores/workflow.store';
@@ -46,6 +45,96 @@ function formatRecentTimestamp(value: string): string {
     minute: '2-digit',
   })}`;
 }
+
+const CopyableCommand: React.FC<{ command: string }> = ({ command }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard may be unavailable in some contexts
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-xs"
+      style={{
+        background: 'var(--color-canvas)',
+        border: '1px solid var(--color-hairline)',
+        color: 'var(--color-ink)',
+      }}
+    >
+      <Terminal size={12} className="shrink-0" style={{ color: 'var(--color-muted)' }} />
+      <code className="flex-1 select-all">{command}</code>
+      <button
+        type="button"
+        onClick={() => { void handleCopy(); }}
+        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-sans transition-colors hover:bg-[var(--color-canvas-soft)]"
+        style={{ color: copied ? 'var(--color-semantic-success)' : 'var(--color-muted)' }}
+        aria-label="Copy command"
+      >
+        {copied ? 'Copied' : <Copy size={11} />}
+      </button>
+    </div>
+  );
+};
+
+interface PrerequisiteBlockProps {
+  code: 'cli_missing' | 'auth_missing';
+  actionCommand?: string;
+}
+
+const PrerequisiteBlock: React.FC<PrerequisiteBlockProps> = ({ code, actionCommand }) => {
+  const isCliMissing = code === 'cli_missing';
+
+  const title = isCliMissing ? 'Codex CLI is not installed' : 'Codex CLI is not logged in';
+  const description = isCliMissing
+    ? 'Fluxion requires Codex CLI to run workflows. Install it with npm, then log in.'
+    : 'Codex CLI is installed but you are not authenticated. Run the command below, then refresh.';
+
+  const installCommand = 'npm install -g @openai/codex';
+  const loginCommand = actionCommand ?? 'codex login';
+
+  return (
+    <div
+      className="w-full rounded-xl px-5 py-5 sm:px-7"
+      style={{
+        background: 'var(--color-canvas-soft)',
+        border: '1px solid var(--color-hairline)',
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle
+          size={16}
+          className="mt-0.5 shrink-0"
+          style={{ color: 'var(--color-semantic-error)' }}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+            {title}
+          </p>
+          <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
+            {description}
+          </p>
+          <div className="mt-3 grid gap-2">
+            {isCliMissing && <CopyableCommand command={installCommand} />}
+            <CopyableCommand command={loginCommand} />
+          </div>
+          {isCliMissing && (
+            <p className="mt-3 text-[11px] leading-5" style={{ color: 'var(--color-muted-soft)' }}>
+              After installation and login, relaunch Fluxion or click{' '}
+              <span style={{ fontFamily: 'var(--font-mono)' }}>Refresh readiness</span> in Settings.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const RecentActionButton: React.FC<{
   label: string;
@@ -153,7 +242,17 @@ export const WelcomeScreen: React.FC = () => {
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt();
   const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, []);
+  const codexRawReadiness = getCodexReadiness(providerCapabilities);
   const providerReadiness = getProviderReadinessSummary(providerCapabilities);
+
+  // Determine if we should show a prerequisite hard-block for Stage 1.
+  // cli_missing and auth_missing are the two distinct states that need separate copy.
+  const prerequisiteCode =
+    !isProviderCapabilitiesLoading && hasFetchedProviderCapabilities
+      ? codexRawReadiness?.code === 'cli_missing' || codexRawReadiness?.code === 'auth_missing'
+        ? codexRawReadiness.code
+        : null
+      : null;
 
   React.useEffect(() => {
     if (!hasFetchedProviderCapabilities) {
@@ -202,12 +301,8 @@ export const WelcomeScreen: React.FC = () => {
   const readinessStatusLabel = isProviderCapabilitiesLoading
     ? 'Checking runtime...'
     : codexReadiness.tone === 'ready'
-      ? `Codex ready · ${providerReadiness.availableCount} provider${
-          providerReadiness.availableCount === 1 ? '' : 's'
-        } available`
-      : `${codexReadiness.summary} · ${providerReadiness.availableCount} provider${
-          providerReadiness.availableCount === 1 ? '' : 's'
-        } available`;
+      ? 'Codex is ready'
+      : codexReadiness.summary;
 
   const handleOpenWorkspace = async (): Promise<void> => {
     setWorkspaceActionError(null);
@@ -390,6 +485,13 @@ export const WelcomeScreen: React.FC = () => {
           </div>
         </section>
 
+        {prerequisiteCode ? (
+          <PrerequisiteBlock
+            code={prerequisiteCode}
+            actionCommand={codexRawReadiness?.actionCommand}
+          />
+        ) : null}
+
         <section
           className="w-full rounded-xl px-5 py-6 text-center transition-colors sm:px-8 sm:py-7"
           style={{
@@ -451,21 +553,35 @@ export const WelcomeScreen: React.FC = () => {
           ) : null}
         </section>
 
-        <section className="flex max-w-full flex-wrap items-center justify-center gap-2 text-xs">
-          {FLOW_STEPS.map((step, index) => (
-            <React.Fragment key={step}>
-              <span
-                className="inline-flex items-center gap-1.5"
-                style={{ color: index === 0 ? 'var(--color-body-strong)' : 'var(--color-muted)' }}
-              >
-                {index === 0 ? <CheckCircle2 size={13} /> : null}
-                {step}
-              </span>
-              {index < FLOW_STEPS.length - 1 ? (
-                <span style={{ color: 'var(--color-muted-soft)' }}>→</span>
-              ) : null}
-            </React.Fragment>
-          ))}
+        <section className="flex max-w-full flex-col items-center gap-2">
+          <p
+            className="text-[11px] uppercase tracking-[0.08em]"
+            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            How Fluxion works
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+            {FLOW_STEPS.map((step, index) => (
+              <React.Fragment key={step}>
+                <span
+                  className="inline-flex items-center gap-1.5 font-medium"
+                  style={{
+                    color: index === 0
+                      ? 'var(--color-primary)'
+                      : index === 1
+                        ? 'var(--color-body-strong)'
+                        : 'var(--color-muted)',
+                  }}
+                >
+                  {index === 0 ? <CheckCircle2 size={13} /> : null}
+                  {step}
+                </span>
+                {index < FLOW_STEPS.length - 1 ? (
+                  <span style={{ color: 'var(--color-hairline-strong)' }}>→</span>
+                ) : null}
+              </React.Fragment>
+            ))}
+          </div>
         </section>
 
         <section className="w-full">
@@ -508,22 +624,9 @@ export const WelcomeScreen: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-              <span style={{ color: 'var(--color-muted)' }}>
-                No recent workspaces yet.
-              </span>
-              <button
-                type="button"
-                onClick={handleOpenWorkspace}
-                disabled={isWorkspaceOpening}
-                className="rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--color-surface-card)] disabled:cursor-not-allowed"
-                style={{
-                  color: isWorkspaceOpening ? 'var(--color-muted-soft)' : 'var(--color-primary)',
-                }}
-              >
-                Browse existing workspace
-              </button>
-            </div>
+            <p className="text-center text-xs" style={{ color: 'var(--color-muted)' }}>
+              No recent workspaces yet. Open a project folder above to get started.
+            </p>
           )}
         </section>
 

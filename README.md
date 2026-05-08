@@ -21,6 +21,9 @@ Current source state, based on this repository:
 - Workflow files, run state, and memory artifacts are persisted locally under `.fluxion/`
 - Auto and Manual execution modes are implemented
 - Review checkpoints, retry from a node, and Windows-oriented packaging scripts are present
+- Workspace trust verification and recent workspace reopening are implemented
+- Context initialization now scans the workspace, records source evidence, and can export Codex project instructions
+- Codex approval protocol guardrails can block unsafe run configurations until permissions are fixed
 - Secondary provider support and "Explain with AI" diagnostics are still roadmap items, not the main execution path
 
 ## Features
@@ -43,21 +46,28 @@ Current source state, based on this repository:
 - Abort flow with Windows process-tree cleanup
 - Retry from a selected node and rerun of paused review nodes
 - Codex readiness checks based on local CLI availability, login status, and model catalog discovery
+- Codex approval protocol guardrail with UI prompts to fix blocked permission settings
+- Text output previews for produced artifacts and runtime output fields
 
 ### Workspace and persistence
 
+- Workspace trust prompt before Fluxion writes `.fluxion/` data into a project folder
+- Recent workspace list on the welcome screen, stored in Electron app user data
 - Workspace bootstrap under `.fluxion/`
-- Context initialization modal that saves `.fluxion/context.json`
+- Context initialization modal that scans project files and saves `.fluxion/context.json`
+- Context scan source evidence, readiness state, detected commands, important paths, and agent instruction sources
 - Markdown memory pipeline with frontmatter under `.fluxion/memory`
 - Persisted run state under `.fluxion/runs/<runId>.json`
 - File watching for external workspace changes
 - Legacy single-workflow compatibility for `.fluxion/workflow.json`
+- Agent config preview/apply flow for exporting ready context to Codex `AGENTS.md` and optional `.codex/config.toml`
 
 ### Configuration and safety
 
 - Typed shared contracts for workflow data, IPC payloads, and run state
 - Secure Electron preload bridge via `contextBridge`
 - Optional OpenAI API key storage in app user data, encrypted with Electron `safeStorage` when available
+- Trusted and recent workspace registries stored in Electron app user data
 - Windows-first path handling and packaging conventions
 
 ## Tech Stack
@@ -86,7 +96,7 @@ Current source state, based on this repository:
 
 - No database server
 - Workflow, run, and memory data are stored as local JSON and Markdown files in the workspace
-- App-level provider settings are stored in Electron user data
+- App-level provider settings, trusted workspaces, and recent workspaces are stored in Electron user data
 
 ### Tooling and packaging
 
@@ -166,13 +176,15 @@ The smoke script executes typecheck, tests, production build, and an unpacked Wi
 
 ### Typical in-app workflow
 
-1. Open a project folder.
-2. Review and complete the workspace context modal.
-3. Add one or more Codex nodes to the canvas.
-4. Configure prompts, model selection, and optional review/artifact settings.
-5. Save the workflow.
-6. Run in `Auto` mode for continuous execution or `Manual` mode to pause every completed node for review.
-7. Inspect terminal logs, output artifacts, and persisted memory files under `.fluxion/`.
+1. Open or reopen a project folder.
+2. Trust the workspace when prompted.
+3. Review the scanned workspace context, then save it as draft/final or skip it for later.
+4. Optionally export ready context to Codex `AGENTS.md`.
+5. Add one or more Codex nodes to the canvas.
+6. Configure prompts, model selection, permissions, and optional review/artifact settings.
+7. Save the workflow.
+8. Run in `Auto` mode for continuous execution or `Manual` mode to pause every completed node for review.
+9. Inspect terminal logs, output previews, output artifacts, and persisted memory files under `.fluxion/`.
 
 ## Project Structure
 
@@ -216,10 +228,20 @@ Fluxion/
     `-- <runId>.json
 ```
 
+Fluxion can also write project-level agent instruction files outside `.fluxion/` when the user applies an agent config preview:
+
+```text
+AGENTS.md
+.codex/
+`-- config.toml                    # Optional advanced Codex project config
+```
+
 ### Important runtime settings
 
 - `OPENAI_API_KEY`: optional; used for OpenAI settings/capability flows and the OpenAI adapter code path
 - Global Settings dialog: can store the OpenAI API key in the app user-data directory
+- Workspace trust registry: app user-data `trusted-workspaces.json`
+- Recent workspace registry: app user-data `recent-workspaces.json`
 - `ELECTRON_RENDERER_URL`: used by `electron-vite` during development; not something you typically set manually
 
 ### Important project config files
@@ -239,9 +261,11 @@ flowchart LR
   Preload --> Main["Electron Main Process"]
   Main --> Core["Core Contracts and DAG Validation"]
   Main --> Workspace["Workspace, Memory, and Run-State Services"]
+  Main --> Context["Context Scout and Agent Config Export"]
   Main --> Runner["Codex CLI Runner"]
   Runner --> Codex["Codex CLI"]
   Workspace --> FluxionData[".fluxion/ JSON + Markdown artifacts"]
+  Context --> AgentFiles["AGENTS.md / .codex config"]
   Main --> Renderer
 ```
 
@@ -249,11 +273,13 @@ flowchart LR
 
 1. The renderer builds or edits a workflow graph.
 2. The preload layer exposes typed IPC methods to the renderer.
-3. The main process validates the workflow structure using `src/core`.
-4. The workflow engine compiles context from global memory plus upstream node outputs.
-5. The selected runner executes the node, currently centered on Codex CLI.
-6. Logs stream back to the renderer while output artifacts and run state are persisted locally.
-7. Review gates either continue automatically or pause for explicit approval, depending on workflow mode and node settings.
+3. Workspace open flows verify trust before the main process initializes `.fluxion/`.
+4. The main process validates the workflow structure using `src/core`.
+5. The workflow engine checks Codex readiness and approval guardrails before starting execution.
+6. The workflow engine compiles context from global memory plus upstream node outputs.
+7. The selected runner executes the node, currently centered on Codex CLI.
+8. Logs stream back to the renderer while output artifacts and run state are persisted locally.
+9. Review gates either continue automatically or pause for explicit approval, depending on workflow mode and node settings.
 
 ### Architectural boundaries
 
@@ -293,11 +319,10 @@ npm run smoke:win
 Based on the current source and backlog files, the next major areas are:
 
 - "Explain with AI" diagnostics for failed nodes
-- Real scout/source-scan context drafting instead of the current heuristic modal autofill
-- Instruction-file generation with frontmatter for agent-specific handoff files
+- Broader agent config exporters beyond the ready Codex `AGENTS.md` path
 - Additional execution providers on the main workflow path beyond Codex
 - Stronger CI coverage for Windows packaging and smoke validation
-- Product hardening around retries, attempt lineage, and provider configuration
+- Product hardening around retries, attempt lineage, approval protocol UX, and provider configuration
 
 ## License
 

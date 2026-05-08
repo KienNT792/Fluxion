@@ -32,6 +32,9 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
     workflowStatus !== 'paused';
   const isSelected = useWorkflowStore((state) => state.selectedNodeId === id);
   const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
+  const isNewWorkspace = useWorkflowStore((state) => state.isNewWorkspace);
+  const isDirty = useWorkflowStore((state) => state.isDirty);
+  const isFreshOnboarding = isNewWorkspace && !isDirty;
 
   return (
     <div
@@ -93,12 +96,14 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
             >
               {displayName}
             </div>
-            <div
-              className="mt-0.5 truncate text-[10px]"
-              style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}
-            >
-              {data.model}
-            </div>
+            {!isFreshOnboarding && (
+              <div
+                className="mt-0.5 truncate text-[10px]"
+                style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}
+              >
+                {data.model}
+              </div>
+            )}
           </div>
         </div>
 

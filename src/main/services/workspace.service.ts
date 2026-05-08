@@ -840,17 +840,67 @@ export class WorkspaceService {
   private createDefaultWorkflow(workspacePath: string): Workflow {
     const workspaceName = path.basename(workspacePath) || 'Fluxion';
     const now = new Date().toISOString();
+
+    // Hello World template — seeded on first workspace open only.
+    // Uses Windows-safe `dir` command. The workflow is immediately
+    // persisted to disk, so isNewWorkspace will be false on all future opens.
+    const nodeA: Workflow['nodes'][number] = {
+      id: 'hello-node-a',
+      type: 'agentNode',
+      label: 'List Files',
+      data: {
+        provider: 'codex',
+        model: CODEX_DEFAULT_MODEL,
+        prompt: 'Run `dir` and summarize the top-level files and folders in this workspace.',
+        systemInstruction: 'You are a workspace scanner. List and briefly describe what you find.',
+        humanReview: false,
+      },
+      position: { x: 100, y: 160 },
+    };
+
+    const nodeB: Workflow['nodes'][number] = {
+      id: 'hello-node-b',
+      type: 'agentNode',
+      label: 'Summarize Structure',
+      data: {
+        provider: 'codex',
+        model: CODEX_DEFAULT_MODEL,
+        prompt: "Based on the previous output, write a one-paragraph description of this project's structure.",
+        humanReview: false,
+      },
+      position: { x: 400, y: 160 },
+    };
+
+    const nodeC: Workflow['nodes'][number] = {
+      id: 'hello-node-c',
+      type: 'agentNode',
+      label: 'Review Gate',
+      data: {
+        provider: 'codex',
+        model: CODEX_DEFAULT_MODEL,
+        prompt: 'Review the previous summary and confirm it is accurate. Output: APPROVED or NEEDS_REVISION.',
+        humanReview: true,
+      },
+      position: { x: 700, y: 160 },
+    };
+
     return {
       id: ulid(),
-      name: `${workspaceName} Workflow`,
-      executionMode: 'auto',
+      name: `${workspaceName} — Hello World`,
+      description:
+        'Your first Fluxion workflow. Run it to see DAG execution, log streaming, and review gates in action. Delete these nodes when ready to build your own.',
+      executionMode: 'manual',
       fluxionVersion: '1.0',
-      nodes: [],
-      edges: [],
+      nodes: [nodeA, nodeB, nodeC],
+      edges: [
+        { id: 'hello-edge-ab', source: 'hello-node-a', target: 'hello-node-b' },
+        { id: 'hello-edge-bc', source: 'hello-node-b', target: 'hello-node-c' },
+      ],
       createdAt: now,
       updatedAt: now,
     };
   }
+
 
   private normalizeWorkflow(workflowFile: WorkflowFile): Workflow {
     return {
