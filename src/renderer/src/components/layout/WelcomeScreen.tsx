@@ -4,16 +4,15 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronRight,
-  Circle,
-  FileText,
   Copy,
   ExternalLink,
+  FileText,
   FolderOpen,
   Layers,
+  MessageCircle,
   Play,
   Settings,
   ShieldCheck,
-  MessageCircle,
   Terminal,
   Trash2,
   Upload,
@@ -30,8 +29,6 @@ import { StatusChip, StatusChipTone } from '../ui/StatusChip';
 import { Tooltip } from '../ui/Tooltip';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
 import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
-
-const FLOW_STEPS = ['Open workspace', 'Review context', 'Configure agents', 'Run workflow'];
 
 function hasFileDrop(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes('Files');
@@ -1026,8 +1023,9 @@ export const WelcomeScreen: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => {
-                if (window.api?.openCodexTerminal) {
-                  void window.api.openCodexTerminal();
+                const api = window.api as unknown as Record<string, () => void> | undefined;
+                if (api?.openCodexTerminal) {
+                  void api.openCodexTerminal();
                 }
               }}
               className="mt-auto w-full"

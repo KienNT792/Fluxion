@@ -51,7 +51,7 @@ function DockTabButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium transition-colors"
+      className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors"
       style={{
         color: active ? 'var(--color-ink)' : 'var(--color-muted)',
         borderBottom: active ? '1.5px solid var(--color-primary)' : '1.5px solid transparent',
@@ -248,6 +248,11 @@ export const RuntimeDock: React.FC = () => {
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
   const terminalNodeId = useWorkflowStore((state) => state.terminalNodeId);
   const reviewNodeIds = useExecutionStore((state) => state.reviewNodeIds);
+  const nodeAttemptCounts = useExecutionStore((state) => state.nodeAttemptCounts);
+  const executionMode = useWorkflowStore((state) => state.executionMode);
+  const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
+
+  const totalRuns = Object.values(nodeAttemptCounts).reduce((acc, val) => acc + (val || 0), 0);
 
   const isActive = workflowStatus !== 'idle';
   const dotColor = STATUS_DOT_COLOR[workflowStatus];
@@ -279,7 +284,7 @@ export const RuntimeDock: React.FC = () => {
       className="flex flex-col"
       style={{
         flexShrink: 0,
-        borderTop: '1px solid var(--color-hairline)',
+        borderTop: '1px solid var(--color-hairline-strong)',
         background: 'var(--color-canvas)',
       }}
     >
@@ -306,29 +311,76 @@ export const RuntimeDock: React.FC = () => {
             className={`h-2 w-2 shrink-0 rounded-full ${shouldPulse ? 'animate-pulse' : ''}`}
             style={{ background: dotColor }}
           />
-          <span
-            className="text-[11px] font-medium"
+          <div className="flex flex-col">
+            <span
+              className="text-xs font-semibold"
+              style={{
+                color: isActive ? 'var(--color-ink)' : 'var(--color-body)',
+                letterSpacing: '-0.1px',
+              }}
+            >
+              {STATUS_LABEL[workflowStatus]}
+              {!isActive && (
+                <span className="ml-1.5 font-normal" style={{ color: 'var(--color-muted)' }}>
+                  · {totalRuns} run{totalRuns !== 1 ? 's' : ''}
+                </span>
+              )}
+            </span>
+            {hasReviewQueue && (
+              <span
+                className="mt-0.5 text-[10px]"
+                style={{
+                  color: 'var(--color-timeline-edit)',
+                  fontFamily: 'var(--font-sans)',
+                  fontWeight: 500,
+                }}
+              >
+                {reviewNodeIds.length} review{reviewNodeIds.length > 1 ? 's' : ''} pending
+              </span>
+            )}
+            {!isActive && !hasReviewQueue && totalRuns === 0 && (
+              <span
+                className="mt-0.5 text-[10px]"
+                style={{ color: 'var(--color-muted-soft)' }}
+              >
+                No execution yet
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-4" style={{ color: 'var(--color-muted)' }}>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setExecutionMode(executionMode === 'auto' ? 'manual' : 'auto');
+            }}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors"
             style={{
-              color: isActive ? 'var(--color-ink)' : 'var(--color-muted)',
-              fontFamily: 'var(--font-mono)',
+              background: executionMode === 'manual' ? 'var(--color-surface-strong)' : 'transparent',
+            }}
+            title={executionMode === 'auto' ? 'Auto mode' : 'Manual mode'}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.color = 'var(--color-ink)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.color = 'var(--color-muted)';
             }}
           >
-            {STATUS_LABEL[workflowStatus]}
-          </span>
-          {hasReviewQueue && (
             <span
-              className="text-[10px]"
+              className="text-[9px] font-semibold uppercase tracking-wider"
               style={{
-                color: 'var(--color-timeline-edit)',
+                color: executionMode === 'manual' ? 'var(--color-timeline-done)' : 'inherit',
                 fontFamily: 'var(--font-mono)',
               }}
             >
-              · {reviewNodeIds.length} review{reviewNodeIds.length > 1 ? 's' : ''}
+              {executionMode === 'auto' ? 'Auto' : 'Manual'}
             </span>
-          )}
-        </div>
-        <div style={{ color: 'var(--color-muted)' }}>
-          {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+          
+          <div>
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </div>
         </div>
       </button>
 

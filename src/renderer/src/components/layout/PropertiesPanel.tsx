@@ -108,13 +108,12 @@ const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { label: string; hint: stri
 };
 
 const LABEL_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 600,
-  color: 'var(--color-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.7px',
+  color: 'var(--color-ink)',
+  letterSpacing: '-0.1px',
   display: 'block',
-  marginBottom: '5px',
+  marginBottom: '6px',
 };
 
 const READONLY_INLINE_STYLE: React.CSSProperties = {
@@ -216,12 +215,12 @@ function buildEditableNodeData(
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
     <div
-      className="px-5 py-2"
-      style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}
+      className="px-5 py-3"
+      style={{ borderBottom: '1px solid var(--color-hairline)' }}
     >
       <span style={LABEL_STYLE}>{title}</span>
     </div>
-    <div className="space-y-4 px-5 py-4">{children}</div>
+    <div className="space-y-4 px-5 py-5">{children}</div>
   </div>
 );
 

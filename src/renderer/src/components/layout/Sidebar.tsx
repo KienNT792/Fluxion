@@ -23,19 +23,7 @@ function formatUpdatedAtLabel(updatedAt: string): string {
   });
 }
 
-function buildMetadataLabel(updatedAtLabel: string, tags?: string[]): string {
-  const pieces: string[] = [];
 
-  if (updatedAtLabel) {
-    pieces.push(`Updated ${updatedAtLabel}`);
-  }
-
-  if (Array.isArray(tags) && tags.length > 0) {
-    pieces.push(tags.slice(0, 2).join(' / '));
-  }
-
-  return pieces.join('  •  ');
-}
 
 function SidebarGlyph(): React.JSX.Element {
   return (
@@ -237,24 +225,44 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        <div className="flex flex-col gap-2">
+        {workflows.length > 0 && (
+          <div className="mb-2 px-2">
+            <span
+              className="text-[10px] uppercase tracking-[0.1em]"
+              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+            >
+              Workflows
+            </span>
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5">
           {workflows.map((workflow) => {
             const isActive = workflow.filePath === activeWorkflowFilePath;
             const updatedAtLabel = formatUpdatedAtLabel(workflow.updatedAt);
-            const metadataLabel = buildMetadataLabel(updatedAtLabel, workflow.tags);
+            const displayWorkflowName = workflow.name.replace(/^\.fluxion\s*—\s*/, '');
+            
+            // Build stronger metadata string
+            const metadataPieces: string[] = [];
+            if (updatedAtLabel) metadataPieces.push(`Updated ${updatedAtLabel}`);
+            if (Array.isArray(workflow.tags) && workflow.tags.length > 0) {
+              metadataPieces.push(workflow.tags.slice(0, 2).join(' / '));
+            }
+            
+            const metadataLabel = metadataPieces.join(' · ');
 
             return (
               <button
                 key={workflow.id}
                 type="button"
                 onClick={() => switchWorkflow(workflow.id)}
-                className="group relative overflow-hidden rounded-xl px-4 py-3 text-left transition-colors"
+                className="group relative overflow-hidden rounded-lg px-3 py-2 text-left transition-colors"
                 style={{
                   background: isActive ? 'var(--color-surface-card)' : 'transparent',
+                  border: isActive ? '1px solid var(--color-hairline)' : '1px solid transparent',
                 }}
                 onMouseEnter={(event) => {
                   if (!isActive) {
-                    event.currentTarget.style.background = 'var(--color-surface-card)';
+                    event.currentTarget.style.background = 'var(--color-surface-strong)';
                   }
                 }}
                 onMouseLeave={(event) => {
@@ -263,22 +271,15 @@ export const Sidebar: React.FC = () => {
                   }
                 }}
               >
-                {isActive && (
-                  <span
-                    className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full"
-                    style={{ background: 'var(--color-primary)' }}
-                  />
-                )}
-
                 {isActive && !workflow.isLegacy && (
                     <button
                       type="button"
-                      aria-label={`Delete ${workflow.name}`}
+                      aria-label={`Delete ${displayWorkflowName}`}
                       onClick={(event) => {
                       event.stopPropagation();
                       setPendingDeleteWorkflowName(workflow.name);
                     }}
-                    className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-all group-hover:opacity-100"
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-all group-hover:opacity-100"
                     style={{ color: 'var(--color-muted)' }}
                     title="Delete workflow"
                     onMouseEnter={(event) => {
@@ -294,20 +295,14 @@ export const Sidebar: React.FC = () => {
                   </button>
                 )}
 
-                <div className="flex min-w-0 items-start gap-2.5 pr-8">
-                  <FileJson
-                    size={14}
-                    className="mt-0.5 shrink-0"
-                    style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-muted)' }}
-                  />
-
+                <div className="flex min-w-0 items-start gap-2.5 pr-6">
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <span
-                        className="truncate text-[13px] font-semibold"
-                        style={{ color: 'var(--color-ink)', letterSpacing: '-0.1px' }}
+                        className="truncate text-xs font-medium"
+                        style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-body)', letterSpacing: '-0.1px' }}
                       >
-                        {workflow.name}
+                        {displayWorkflowName}
                       </span>
 
                       {workflow.isLegacy && (
@@ -324,23 +319,14 @@ export const Sidebar: React.FC = () => {
                       )}
                     </div>
 
-                    {workflow.description && (
-                      <p
-                        className="mt-1 truncate text-[11px]"
-                        style={{ color: 'var(--color-muted-soft)' }}
-                      >
-                        {workflow.description}
-                      </p>
-                    )}
-
                     {metadataLabel && (
                       <p
-                        className={`mt-2 truncate text-[10px] uppercase tracking-[0.08em] transition-opacity ${
+                        className={`mt-1 truncate text-[10px] transition-opacity ${
                           isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         }`}
                         style={{
-                          color: 'var(--color-muted)',
-                          fontFamily: 'var(--font-mono)',
+                          color: isActive ? 'var(--color-muted)' : 'var(--color-muted-soft)',
+                          fontFamily: 'var(--font-sans)',
                         }}
                       >
                         {metadataLabel}

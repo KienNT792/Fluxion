@@ -237,6 +237,8 @@ export const FlowCanvas: React.FC = () => {
         onPaneClick={() => {
           setSelectedNode(null);
         }}
+        fitView
+        fitViewOptions={{ padding: 0.35, maxZoom: 1, minZoom: 0.2 }}
         colorMode={colorMode}
         proOptions={{ hideAttribution: true }}
       >

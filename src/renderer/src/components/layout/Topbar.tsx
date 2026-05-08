@@ -285,7 +285,7 @@ export const Topbar: React.FC = () => {
     (state) => state.isProviderCapabilitiesLoading
   );
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
-  const executionMode = useWorkflowStore((state) => state.executionMode);
+
   const workspacePath = useWorkflowStore((state) => state.workspacePath);
   const workflowName = useWorkflowStore((state) => state.workflowName);
   const isDirty = useWorkflowStore((state) => state.isDirty);
@@ -296,7 +296,7 @@ export const Topbar: React.FC = () => {
     (state) => state.hasExternalWorkflowChange
   );
   const recentWorkspaceChanges = useWorkflowStore((state) => state.recentWorkspaceChanges);
-  const setExecutionMode = useWorkflowStore((state) => state.setExecutionMode);
+
   const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode);
   const contextStatus = useWorkflowStore((state) => state.contextStatus);
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
@@ -307,8 +307,16 @@ export const Topbar: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore();
 
   const workspaceName = workspacePath
-    ? workspacePath.split(/[/\\]/).filter(Boolean).pop() ?? 'Workspace'
+    ? (() => {
+        const parts = workspacePath.split(/[/\\]/).filter(Boolean);
+        const basename = parts.pop() ?? 'Workspace';
+        return basename === '.fluxion' ? (parts.pop() ?? 'Fluxion') : basename;
+      })()
     : 'Workspace';
+
+  const displayWorkflowName = workflowName 
+    ? workflowName.replace(/^\.fluxion\s*—\s*/, '')
+    : 'Untitled Workflow';
 
   const isRunning = workflowStatus === 'running';
   const isStopping = workflowStatus === 'stopping';
@@ -639,19 +647,21 @@ export const Topbar: React.FC = () => {
                 className="min-w-0 truncate text-sm font-semibold"
                 style={{ color: 'var(--color-ink)', letterSpacing: '-0.15px' }}
               >
-                {workflowName || 'Untitled Workflow'}
+                {displayWorkflowName}
               </span>
             </div>
           </Tooltip>
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
-          <StatusChip
-            tone={saveChipState.tone}
-            label={saveChipState.label}
-            animate={saveChipState.animate}
-            title={saveStateLabel}
-          />
+          {(!(!isDirty && !isSaving && !saveError)) && (
+            <StatusChip
+              tone={saveChipState.tone}
+              label={saveChipState.label}
+              animate={saveChipState.animate}
+              title={saveStateLabel}
+            />
+          )}
           <StatusChip
             tone={workflowChipState.tone}
             label={workflowChipLabel}
@@ -1026,19 +1036,6 @@ export const Topbar: React.FC = () => {
               onClick={toggleTheme}
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </ActionIconButton>
-          </Tooltip>
-
-          <Tooltip content={executionMode === 'auto' ? 'Auto: Only review-checkpoint nodes pause' : 'Manual: Every completed node pauses for review'}>
-            <ActionIconButton
-              aria-label={`Execution mode: ${executionMode}`}
-              onClick={() => setExecutionMode(executionMode === 'auto' ? 'manual' : 'auto')}
-              disabled={isBusy}
-              dimmed={editingDimmed}
-            >
-              {executionMode === 'manual'
-                ? <span className="text-[10px] font-semibold" style={{ color: 'var(--color-timeline-done)', fontFamily: 'var(--font-mono)' }}>M</span>
-                : <span className="text-[10px] font-semibold" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>A</span>}
             </ActionIconButton>
           </Tooltip>
 

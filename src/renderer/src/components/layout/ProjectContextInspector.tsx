@@ -31,14 +31,14 @@ function ContextSection({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--color-hairline)' }}>
-      <div className="mb-3 flex items-center gap-2">
+    <div className="px-5 py-6" style={{ borderBottom: '1px solid var(--color-hairline)' }}>
+      <div className="mb-4 flex items-center gap-2">
         <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>
           {icon}
         </span>
         <span
-          className="text-[10px] uppercase tracking-[0.1em]"
-          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          className="text-xs font-semibold"
+          style={{ color: 'var(--color-ink)', letterSpacing: '-0.1px' }}
         >
           {title}
         </span>
@@ -51,12 +51,11 @@ function ContextSection({
 function TagBadge({ label }: { label: string }): React.JSX.Element {
   return (
     <span
-      className="inline-flex rounded-md px-2 py-0.5 text-[10px] font-medium"
+      className="inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium"
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
-        color: 'var(--color-body)',
-        fontFamily: 'var(--font-mono)',
+        color: 'var(--color-ink)',
       }}
     >
       {label}
@@ -219,7 +218,6 @@ export const ProjectContextInspector: React.FC = () => {
                 className="truncate text-[11px]"
                 style={{
                   color: 'var(--color-body)',
-                  fontFamily: 'var(--font-mono)',
                 }}
               >
                 {filePath}
@@ -246,11 +244,9 @@ export const ProjectContextInspector: React.FC = () => {
             {contextSummary.components.slice(0, 5).map((component) => (
               <div key={component.id} className="flex items-start gap-2">
                 <span
-                  className="mt-0.5 shrink-0 text-[9px] uppercase"
+                  className="mt-0.5 shrink-0 rounded bg-[var(--color-canvas-soft)] px-1.5 py-0.5 text-[10px] font-medium"
                   style={{
-                    color: 'var(--color-timeline-done)',
-                    fontFamily: 'var(--font-mono)',
-                    letterSpacing: '0.08em',
+                    color: 'var(--color-muted)',
                   }}
                 >
                   {component.type}

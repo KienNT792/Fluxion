@@ -65,7 +65,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
     if (isPaused) return '1.5px solid var(--color-timeline-edit)';
     if (isExecuting) return '1.5px solid var(--color-timeline-thinking)';
     if (status === 'error') return '1.5px solid var(--color-semantic-error)';
-    if (isSelected) return '1.5px solid var(--color-hairline-strong)';
+    if (isSelected) return '1.5px solid var(--color-primary)';
     return '1px solid var(--color-hairline)';
   };
 
@@ -81,12 +81,13 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
 
   return (
     <div
-      className="flex w-52 flex-col overflow-hidden transition-all duration-200"
+      className="flex w-56 flex-col overflow-hidden transition-all duration-200"
       style={{
         background: 'var(--color-surface-card)',
         border: borderStyle(),
         borderRadius: 'var(--radius-lg)',
         opacity: status === 'idle' && workflowStatus === 'running' ? 0.55 : 1,
+        boxShadow: isSelected ? '0 0 0 1px var(--color-primary)' : 'none',
       }}
     >
       {/* Top accent strip — thin, colored by execution state */}
@@ -172,12 +173,12 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
       {/* Instruction preview — only when meaningful, single-line */}
       {data.prompt && (
         <div
-          className="px-3 py-1.5"
+          className="px-3 py-2"
           style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
         >
           <p
-            className="truncate text-[9px] italic"
-            style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}
+            className="truncate text-[10px]"
+            style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-body)' }}
           >
             {String(data.prompt).slice(0, 72)}
           </p>
