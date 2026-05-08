@@ -1,6 +1,17 @@
 import { BaseEdge, EdgeProps, getBezierPath } from '@xyflow/react';
 import { useExecutionStore } from '../../stores/execution.store';
 
+/**
+ * Orchestration edge — recessive by default, status-aware.
+ *
+ * Design goals (Phase 5):
+ * - Default edges are thin and muted — nodes are the visual focus
+ * - Running edges get subtle dash animation + primary color
+ * - Completed edges shift to a quiet success tone
+ * - Error edges use semantic error but don't dominate
+ * - Paused (review) edges get the timeline-edit accent
+ * - Interaction hit area preserved at 12px for usability
+ */
 export const AnimatedEdge = ({
   id,
   sourceX,
@@ -11,7 +22,7 @@ export const AnimatedEdge = ({
   targetPosition,
   style = {},
   markerEnd,
-  source
+  source,
 }: EdgeProps): React.JSX.Element => {
   const [edgePath] = getBezierPath({
     sourceX,
@@ -22,51 +33,63 @@ export const AnimatedEdge = ({
     targetPosition,
   });
 
-  // Get status of the source node to determine edge appearance
   const sourceNodeStatus = useExecutionStore(state => state.nodeStatuses[source] ?? 'idle');
-  
-  const isRunning   = sourceNodeStatus === 'running';
-  const isCompleted = sourceNodeStatus === 'completed';
-  const isError     = sourceNodeStatus === 'error';
 
-  // Base style based on DESIGN.md
-  let strokeColor = 'var(--color-hairline-strong)';
-  let strokeWidth = 1.5;
+  // Edge appearance hierarchy: recessive default, status-aware accents
+  let strokeColor = 'var(--color-hairline)';
+  let strokeWidth = 1;
+  let strokeOpacity = 0.7;
   let animationClass = '';
 
-  if (isRunning) {
-    strokeColor = 'var(--color-primary)';
-    strokeWidth = 2;
-    animationClass = 'animate-edge-running';
-  } else if (isCompleted) {
-    strokeColor = 'var(--color-semantic-success)';
-    strokeWidth = 1.5;
-  } else if (isError) {
-    strokeColor = 'var(--color-semantic-error)';
-    strokeWidth = 2;
-    animationClass = 'animate-edge-error';
+  switch (sourceNodeStatus) {
+    case 'running':
+    case 'stopping':
+      strokeColor = 'var(--color-timeline-thinking)';
+      strokeWidth = 1.5;
+      strokeOpacity = 0.85;
+      animationClass = 'animate-edge-running';
+      break;
+    case 'completed':
+      strokeColor = 'var(--color-timeline-grep)';
+      strokeWidth = 1;
+      strokeOpacity = 0.6;
+      break;
+    case 'error':
+      strokeColor = 'var(--color-semantic-error)';
+      strokeWidth = 1.5;
+      strokeOpacity = 0.7;
+      animationClass = 'animate-edge-error';
+      break;
+    case 'paused':
+      strokeColor = 'var(--color-timeline-edit)';
+      strokeWidth = 1.5;
+      strokeOpacity = 0.8;
+      break;
+    default:
+      break;
   }
 
   return (
     <>
-      {/* Interaction layer: thicker invisible path for easier hover/click */}
-      <BaseEdge 
-        id={`${id}-interaction`} 
-        path={edgePath} 
-        style={{ ...style, strokeWidth: 15, stroke: 'transparent' }} 
+      {/* Interaction layer — invisible thick path for hover/click */}
+      <BaseEdge
+        id={`${id}-interaction`}
+        path={edgePath}
+        style={{ ...style, strokeWidth: 12, stroke: 'transparent' }}
       />
-      
-      {/* Visual edge */}
-      <BaseEdge 
-        id={id} 
-        path={edgePath} 
-        markerEnd={markerEnd} 
+
+      {/* Visual edge — thin, recessive, status-colored */}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
         style={{
           ...style,
           stroke: strokeColor,
           strokeWidth,
-          transition: 'stroke 0.3s ease, stroke-width 0.3s ease',
-        }} 
+          opacity: strokeOpacity,
+          transition: 'stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease',
+        }}
         className={animationClass}
       />
     </>

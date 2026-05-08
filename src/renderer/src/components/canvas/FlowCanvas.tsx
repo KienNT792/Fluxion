@@ -40,35 +40,35 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
   return (
   <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10">
     <div
-      className="pointer-events-auto flex w-[360px] max-w-[calc(100vw-48px)] flex-col items-center gap-4 rounded-lg px-5 py-5 text-center"
+      className="pointer-events-auto flex w-[340px] max-w-[calc(100vw-48px)] flex-col items-center gap-3 rounded-lg px-5 py-5 text-center"
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
       }}
     >
       <div
-        className="w-12 h-12 flex items-center justify-center rounded-lg"
+        className="w-10 h-10 flex items-center justify-center rounded-md"
         style={{
           border: '1px solid var(--color-hairline)',
           background: 'var(--color-canvas-soft)',
         }}
       >
-        <Workflow size={24} style={{ color: 'var(--color-primary)' }} />
+        <Workflow size={20} style={{ color: 'var(--color-muted)' }} />
       </div>
       <div className="text-center">
         <p
-          className="font-semibold text-sm"
-          style={{ color: 'var(--color-body-strong)', letterSpacing: '-0.1px' }}
+          className="font-semibold text-xs"
+          style={{ color: 'var(--color-ink)', letterSpacing: '-0.1px' }}
         >
-          {shouldReviewContext ? 'Project context needs review' : 'Start building your workflow'}
+          {shouldReviewContext ? 'Review project context first' : 'Add your first orchestration step'}
         </p>
         <p
-          className="text-xs mt-1 leading-5"
+          className="text-[11px] mt-1 leading-5"
           style={{ color: 'var(--color-muted)' }}
         >
           {shouldReviewContext
-            ? 'Review local context before adding agents or running a workflow.'
-            : 'Add a Codex agent, connect nodes into a DAG, then run through the local CLI.'}
+            ? 'Context helps the agent understand your workspace.'
+            : 'Drag a Codex agent from the palette, or use a template.'}
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-2">
@@ -81,7 +81,7 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
           <Plus size={14} />
           Add Agent
         </Button>
-        <Button variant="secondary" size="lg" onClick={onTrySimpleChain}>
+        <Button variant="ghost" size="lg" onClick={onTrySimpleChain}>
           Try Simple Chain
         </Button>
       </div>
@@ -206,7 +206,10 @@ export const FlowCanvas: React.FC = () => {
 
   const theme = useThemeStore(state => state.theme);
   const colorMode = theme === 'dark' ? 'dark' : 'light';
-  const dotColor = theme === 'dark' ? '#2a2925' : '#d0cfc8';
+  // Calm dot grid — barely visible, does not compete with nodes
+  const dotColor = theme === 'dark' ? '#222220' : '#ddddd8';
+  const dotSize = 0.8;
+  const dotGap = 24;
 
   return (
     <div className="flex-1 h-full w-full relative" ref={reactFlowWrapper}>
@@ -237,14 +240,17 @@ export const FlowCanvas: React.FC = () => {
         colorMode={colorMode}
         proOptions={{ hideAttribution: true }}
       >
-        {/* Subtle warm dot grid */}
+        {/* Calm dot grid — minimal, recessive */}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
+          gap={dotGap}
+          size={dotSize}
           color={dotColor}
         />
-        <Controls position="bottom-right" />
+        <Controls
+          position="bottom-right"
+          showInteractive={false}
+        />
         <Panel position="top-left" className="pointer-events-none">
           <AgentPalette />
         </Panel>

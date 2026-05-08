@@ -154,12 +154,12 @@
   }
 
   .animate-edge-running {
-    stroke-dasharray: 10, 5;
-    animation: edge-dash 1s linear infinite;
+    stroke-dasharray: 8, 6;
+    animation: edge-dash 1.5s linear infinite;
   }
 
   .animate-edge-error {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
   @keyframes pulse {
@@ -167,7 +167,26 @@
       opacity: 1;
     }
     50% {
-      opacity: .5;
+      opacity: .6;
     }
+  }
+
+  /* ── React Flow overrides — reduce graph-editor aesthetic ── */
+  .react-flow__controls {
+    border: 1px solid var(--color-hairline) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: none !important;
+    background: var(--color-surface-card) !important;
+  }
+
+  .react-flow__controls-button {
+    border-color: var(--color-hairline) !important;
+    background: var(--color-surface-card) !important;
+    fill: var(--color-muted) !important;
+  }
+
+  .react-flow__controls-button:hover {
+    background: var(--color-canvas-soft) !important;
+    fill: var(--color-ink) !important;
   }
 }
