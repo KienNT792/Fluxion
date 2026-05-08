@@ -4,7 +4,7 @@ import { shouldShowIncompleteContextBanner, WorkspaceContextSavedPayload } from 
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { FlowCanvas } from '../canvas/FlowCanvas';
-import { PropertiesPanel } from './PropertiesPanel';
+import { RightInspector } from './RightInspector';
 import { TerminalViewer } from '../terminal/TerminalViewer';
 import { WelcomeScreen } from './WelcomeScreen';
 import { ContextInitModal } from './ContextInitModal';
@@ -14,7 +14,6 @@ import { useThemeStore, applyTheme } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
 import { Button } from '../ui/Button';
 import { TooltipProvider } from '../ui/Tooltip';
-import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 export const AppShell: React.FC = () => {
   const theme = useThemeStore((state) => state.theme);
@@ -32,7 +31,6 @@ export const AppShell: React.FC = () => {
   const setContextState = useWorkflowStore((state) => state.setContextState);
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
   const clearLegacyWorkflowBackup = useWorkflowStore((state) => state.clearLegacyWorkflowBackup);
-  const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
   const [contextBannerError, setContextBannerError] = useState<string | null>(null);
   const [isDismissingIncomplete, setIsDismissingIncomplete] = useState(false);
   const [isKeepingLegacy, setIsKeepingLegacy] = useState(false);
@@ -314,20 +312,22 @@ export const AppShell: React.FC = () => {
           {/* ── Region 3: Left Sidebar ── */}
           <Sidebar />
 
-          {/* ── Region 4+6+7: Center column (Canvas + future Runtime Dock + StatusBar) ── */}
+          {/* ── Region 4+6+7: Center column (Canvas + Runtime Dock + StatusBar) ── */}
           <main className="relative flex flex-1 min-w-0 flex-col overflow-hidden">
             {/* ── Region 4: Workflow Canvas ── */}
             <FlowCanvas />
             {/* ── TerminalViewer overlay (existing behavior) ── */}
             <TerminalViewer />
+
+            {/* ── Region 6: Integrated Runtime Dock (placeholder for Phase 4) ── */}
+            {/* Structural region ready; content will be implemented in Phase 4 */}
+
+            {/* ── Region 7: Status Bar (placeholder for Phase 4) ── */}
+            {/* Structural region ready; content will be implemented in Phase 4 */}
           </main>
 
-          {/* ── Region 5: Right Inspector ── */}
-          {selectedNodeId ? (
-            <ErrorBoundary fallbackTitle="Config panel crashed">
-              <PropertiesPanel />
-            </ErrorBoundary>
-          ) : null}
+          {/* ── Region 5: Right Inspector (persistent) ── */}
+          <RightInspector />
         </div>
       </div>
 

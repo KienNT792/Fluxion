@@ -495,14 +495,8 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
 
   return (
     <>
-    <aside
-      className="z-40 flex h-full flex-col overflow-hidden"
-      style={{
-        width: 'clamp(340px, 28vw, 420px)',
-        flexShrink: 0,
-        background: 'var(--color-canvas)',
-        borderLeft: '1px solid var(--color-hairline)',
-      }}
+    <div
+      className="flex h-full flex-col overflow-hidden"
     >
       <div className="h-0.5 w-full flex-shrink-0" style={{ background: '#412991' }} />
 
@@ -1028,7 +1022,7 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
           </div>
         </Section>
       </div>
-    </aside>
+    </div>
 
     <TextEditorDialog
       isOpen={activeTextEditor === 'prompt'}
