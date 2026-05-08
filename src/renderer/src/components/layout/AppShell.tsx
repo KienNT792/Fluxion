@@ -12,6 +12,7 @@ import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
 import { hydrateWorkspaceState } from '../../lib/workflow-session';
 import { useThemeStore, applyTheme } from '../../stores/theme.store';
 import { useWorkflowStore } from '../../stores/workflow.store';
+import { useExecutionStore } from '../../stores/execution.store';
 import { Button } from '../ui/Button';
 import { TooltipProvider } from '../ui/Tooltip';
 
@@ -35,6 +36,81 @@ export const AppShell: React.FC = () => {
   const [isDismissingIncomplete, setIsDismissingIncomplete] = useState(false);
   const [isKeepingLegacy, setIsKeepingLegacy] = useState(false);
   const [isMigratingLegacy, setIsMigratingLegacy] = useState(false);
+
+  // ─── DEBUG INSTRUMENTATION START ───
+  const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
+  const terminalNodeId = useWorkflowStore((state) => state.terminalNodeId);
+  const nodes = useWorkflowStore((state) => state.nodes);
+  
+  const workflowStatus = useExecutionStore((state) => state.workflowStatus);
+  const nodeStatuses = useExecutionStore((state) => state.nodeStatuses);
+  const terminalLogs = useExecutionStore((state) => state.terminalLogs);
+  const terminalLogCursors = useExecutionStore((state) => state.terminalLogCursors);
+  const nodeExitCodes = useExecutionStore((state) => state.nodeExitCodes);
+
+  useEffect(() => {
+    const DEBUG_RUNTIME_DOCK = import.meta.env.DEV && true;
+    if (!DEBUG_RUNTIME_DOCK) return;
+
+    console.log('[FluxionRuntimeDebug/AppShell] Mounted. (useIpcListeners is active at App level)', {
+      selectedNodeId,
+      workspacePath,
+    });
+    return () => {
+      console.log('[FluxionRuntimeDebug/AppShell] Unmounted.');
+    };
+  }, [selectedNodeId, workspacePath]);
+
+  useEffect(() => {
+    const DEBUG_RUNTIME_DOCK = import.meta.env.DEV && true;
+    if (!DEBUG_RUNTIME_DOCK) return;
+
+    const node = terminalNodeId ? nodes.find((n) => n.id === terminalNodeId) : null;
+    console.log('[FluxionRuntimeDebug/AppShell] terminalNodeId changed:', {
+      terminalNodeId,
+      nodeLabel: node?.data?.label ?? node?.id,
+      nodeModel: node?.data?.model,
+      activeLogCount: terminalNodeId ? (terminalLogs[terminalNodeId]?.length ?? 0) : 0,
+      activeCursor: terminalNodeId ? (terminalLogCursors[terminalNodeId] ?? 0) : 0,
+      activeExitCode: terminalNodeId ? nodeExitCodes[terminalNodeId] : undefined,
+    });
+  }, [terminalNodeId, nodes, terminalLogs, terminalLogCursors, nodeExitCodes]);
+
+  useEffect(() => {
+    const DEBUG_RUNTIME_DOCK = import.meta.env.DEV && true;
+    if (!DEBUG_RUNTIME_DOCK) return;
+
+    const logsForActive = terminalNodeId ? (terminalLogs[terminalNodeId] ?? []) : [];
+    const lastLog = logsForActive.length > 0 ? logsForActive[logsForActive.length - 1] : '';
+
+    console.log('[FluxionRuntimeDebug/AppShell] Terminal log state changed:', {
+      terminalNodeId,
+      trackedLogKeys: Object.keys(terminalLogs),
+      activeLogCount: logsForActive.length,
+      activeCursor: terminalNodeId ? (terminalLogCursors[terminalNodeId] ?? 0) : 0,
+      lastLogPreview: lastLog.slice(0, 200).replace(/\n/g, '\\n'),
+      exitCode: terminalNodeId ? nodeExitCodes[terminalNodeId] : undefined,
+    });
+  }, [terminalLogs, terminalLogCursors, terminalNodeId, nodeExitCodes]);
+
+  useEffect(() => {
+    const DEBUG_RUNTIME_DOCK = import.meta.env.DEV && true;
+    if (!DEBUG_RUNTIME_DOCK) return;
+
+    const runningIds = Object.keys(nodeStatuses).filter((k) => nodeStatuses[k] === 'running');
+    const completedIds = Object.keys(nodeStatuses).filter((k) => nodeStatuses[k] === 'completed');
+    const errorIds = Object.keys(nodeStatuses).filter((k) => nodeStatuses[k] === 'error');
+
+    console.log('[FluxionRuntimeDebug/AppShell] Workflow status changed:', {
+      workflowStatus,
+      runningIds,
+      completedIds,
+      errorIds,
+      compactNodeStatuses: nodeStatuses,
+    });
+  }, [workflowStatus, nodeStatuses]);
+  // ─── DEBUG INSTRUMENTATION END ───
+
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
