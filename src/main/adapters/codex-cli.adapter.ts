@@ -6,9 +6,11 @@ import {
   AgentResult,
   NodeId,
 } from '@shared';
-import { RunnerContext, WorkflowNodeSchema } from '@core';
+import { RunnerContext, RunnerEvent, WorkflowNodeSchema } from '@core';
 import { BaseAdapter } from './base.adapter';
 import { CodexCliRunner } from '../runners/codex-cli-runner';
+
+// ─── Abort Message ────────────────────────────────────────────────────────────
 
 function buildAbortMessage(reason: AbortReason): string {
   switch (reason) {
@@ -20,6 +22,135 @@ function buildAbortMessage(reason: AbortReason): string {
       return 'Codex CLI execution was cancelled.';
   }
 }
+
+// ─── Event Translation ────────────────────────────────────────────────────────
+
+/**
+ * Attempts to extract a human-readable summary line from a Codex NDJSON event.
+ *
+ * Contract:
+ * - Returns a concise operational string on success.
+ * - Returns null for high-frequency, unknown, or non-observable events.
+ * - NEVER returns raw JSON strings.
+ * - NEVER dumps entire event payloads.
+ * - Defensive: treats the Codex schema as potentially evolving.
+ */
+export function extractJsonEventSummary(event: unknown): string | null {
+  if (typeof event !== 'object' || event === null) {
+    return null;
+  }
+
+  const e = event as Record<string, unknown>;
+
+  // Top-level type discriminator
+  const topType = typeof e['type'] === 'string' ? e['type'] : null;
+
+  if (topType === 'session_started') {
+    return 'session started';
+  }
+
+  if (topType === 'session_stopped' || topType === 'session_completed') {
+    return 'session completed';
+  }
+
+  // Message-level events (e.g. { type: 'message', msg: { type: 'text_delta', delta: '...' } })
+  if (topType === 'message' || topType === 'response') {
+    const msg = e['msg'] as Record<string, unknown> | undefined;
+    const msgType = msg && typeof msg['type'] === 'string' ? msg['type'] : null;
+
+    // text_delta events are high-frequency token streams — suppress for Phase 1
+    if (msgType === 'text_delta') {
+      return null;
+    }
+
+    if (msgType === 'assistant_message' || msgType === 'message_complete') {
+      return 'assistant response received';
+    }
+
+    return null;
+  }
+
+  // Tool / command execution events
+  if (topType === 'function_call' || topType === 'tool_call') {
+    const name = typeof e['name'] === 'string' ? e['name'] : null;
+    const command = typeof e['command'] === 'string' ? e['command'] : null;
+    const label = name ?? command;
+    return label ? `running: ${label}` : 'running command';
+  }
+
+  if (topType === 'function_call_output' || topType === 'tool_result') {
+    return 'command completed';
+  }
+
+  // File system events
+  if (topType === 'file_read') {
+    const path = typeof e['path'] === 'string' ? e['path'] : null;
+    return path ? `reading: ${path}` : 'reading file';
+  }
+
+  if (topType === 'file_write' || topType === 'file_edit') {
+    const path = typeof e['path'] === 'string' ? e['path'] : null;
+    return path ? `editing: ${path}` : 'editing file';
+  }
+
+  // Error events
+  const errorField = e['error'];
+  if (typeof errorField === 'string' && errorField.trim().length > 0) {
+    return `error: ${errorField.trim()}`;
+  }
+  if (typeof errorField === 'object' && errorField !== null) {
+    const errMsg = (errorField as Record<string, unknown>)['message'];
+    if (typeof errMsg === 'string' && errMsg.trim().length > 0) {
+      return `error: ${errMsg.trim()}`;
+    }
+  }
+
+  // Everything else: unknown or high-frequency internal event — suppress
+  return null;
+}
+
+/**
+ * Translates a raw RunnerEvent from CodexCliRunner into an AgentChunk suitable
+ * for WorkflowEngine batching, or null if the event should be suppressed.
+ *
+ * Ownership: This is the ONLY location where json-event/status translation happens.
+ * WorkflowEngine continues to batch stdout/stderr only.
+ */
+export function translateRunnerEventToChunk(
+  event: RunnerEvent,
+  now: () => number = Date.now
+): AgentChunk | null {
+  // stdout/stderr pass through unchanged
+  if (event.type === 'stdout' || event.type === 'stderr') {
+    return { type: event.type, content: event.content, timestamp: now() };
+  }
+
+  // status events: prefix with dim [codex] marker
+  if (event.type === 'status') {
+    const trimmed = event.content.trimEnd();
+    if (trimmed.length === 0) return null;
+    return {
+      type: 'stdout',
+      content: `\x1b[2m[codex]\x1b[0m ${trimmed}\n`,
+      timestamp: now(),
+    };
+  }
+
+  // json-event: extract a meaningful summary or suppress
+  if (event.type === 'json-event') {
+    const summary = extractJsonEventSummary(event.event);
+    if (summary === null) return null;
+    return {
+      type: 'stdout',
+      content: `\x1b[2m[codex]\x1b[0m ${summary}\n`,
+      timestamp: now(),
+    };
+  }
+
+  return null;
+}
+
+// ─── Adapter ──────────────────────────────────────────────────────────────────
 
 export class CodexCliAdapter extends BaseAdapter {
   private readonly runner: CodexCliRunner;
@@ -100,9 +231,9 @@ export class CodexCliAdapter extends BaseAdapter {
           break;
         }
 
-        const event = next.value;
-        if (event.type === 'stdout' || event.type === 'stderr' || event.type === 'status') {
-          yield this.createChunk(event.type, event.content);
+        const chunk = translateRunnerEventToChunk(next.value);
+        if (chunk !== null) {
+          yield chunk;
         }
       }
 
