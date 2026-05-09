@@ -386,6 +386,8 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     });
   } else {
     executionStore.resetExecution(workflow.nodes.map((node) => node.id));
+    workflowStore.setTerminalFollowMode('auto');
+    workflowStore.setTerminalNodeId(null);
   }
 
   executionStore.setWorkflowStatus('running');

@@ -13,6 +13,12 @@ import {
   WorkspaceLoadingEvent
 } from '@shared';
 import { useWorkflowStore } from '../stores/workflow.store';
+import {
+  formatTerminalErrorEntry,
+  formatTerminalExitEntry,
+  formatTerminalStderrEntry,
+} from '../lib/terminal';
+import { logRuntimeDebug } from '../lib/runtime-debug';
 
 export function useIpcListeners(): void {
   const {
@@ -38,6 +44,60 @@ export function useIpcListeners(): void {
       return
     }
 
+    const followRunningNodeIfNeeded = (nodeId: string): void => {
+      const workflowState = useWorkflowStore.getState()
+      if (workflowState.terminalFollowMode !== 'auto') {
+        return
+      }
+
+      const currentTerminalNodeId = workflowState.terminalNodeId
+      const currentTerminalStatus = currentTerminalNodeId
+        ? useExecutionStore.getState().nodeStatuses[currentTerminalNodeId] ?? 'idle'
+        : 'idle'
+
+      if (!currentTerminalNodeId) {
+        workflowState.followTerminalNode(nodeId)
+        logRuntimeDebug('AutoFollow', 'auto-follow switched to first running node', {
+          nextNodeId: nodeId,
+          reason: 'no-followed-node',
+        })
+        return
+      }
+
+      if (currentTerminalNodeId === nodeId) {
+        return
+      }
+
+      if (currentTerminalStatus === 'running') {
+        return
+      }
+
+      workflowState.followTerminalNode(nodeId)
+      logRuntimeDebug('AutoFollow', 'auto-follow switched to newly running node', {
+        previousNodeId: currentTerminalNodeId,
+        previousStatus: currentTerminalStatus,
+        nextNodeId: nodeId,
+      })
+    }
+
+    const followErrorNodeIfNeeded = (nodeId: string, error?: string): void => {
+      const workflowState = useWorkflowStore.getState()
+      if (workflowState.terminalFollowMode !== 'auto') {
+        return
+      }
+
+      if (workflowState.terminalNodeId === nodeId) {
+        return
+      }
+
+      workflowState.followTerminalNode(nodeId)
+      logRuntimeDebug('AutoFollow', 'auto-follow switched to error node', {
+        previousNodeId: workflowState.terminalNodeId,
+        nextNodeId: nodeId,
+        error,
+      })
+    }
+
     const unsubWorkspaceChanges = window.api.onWorkspaceFileChanged(
       (payload: WorkspaceFileChangedPayload) => {
         recordWorkspaceChange(payload)
@@ -53,14 +113,14 @@ export function useIpcListeners(): void {
     const unsubTerminal = window.api.onTerminalDataBatch((payload: TerminalDataBatchPayload) => {
       const formattedBatch =
         payload.sourceType === 'stderr'
-          ? payload.batch.map((chunk) => `\x1b[31m${chunk}\x1b[0m`)
+          ? payload.batch.map((chunk) => formatTerminalStderrEntry(chunk))
           : payload.batch
 
       appendLogs(payload.nodeId, formattedBatch)
     })
 
     const unsubTerminalError = window.api.onTerminalError((payload: TerminalErrorPayload) => {
-      appendLogs(payload.nodeId, [`\x1b[31m[error] ${payload.error}\x1b[0m`])
+      appendLogs(payload.nodeId, [formatTerminalErrorEntry(payload.error)])
       if (payload.nodeId !== 'system') {
         setNodeError(payload.nodeId, payload.error)
       } else {
@@ -70,13 +130,14 @@ export function useIpcListeners(): void {
 
     const unsubTerminalExit = window.api.onTerminalExit((payload: TerminalExitPayload) => {
       setNodeExitCode(payload.nodeId, payload.code)
-      appendLogs(payload.nodeId, [`\x1b[2m[exit] code=${payload.code ?? 'null'}\x1b[0m`])
+      appendLogs(payload.nodeId, [formatTerminalExitEntry(payload.code)])
     })
 
     const unsubStatus = window.api.onWorkflowNodeStatus((payload: WorkflowNodeStatusPayload) => {
       setNodeStatus(payload.nodeId, payload.status)
       if (payload.status === 'running') {
         setWorkflowStatus('running')
+        followRunningNodeIfNeeded(payload.nodeId)
       }
       if (payload.status !== 'paused') {
         removeReviewNode(payload.nodeId)
@@ -86,6 +147,9 @@ export function useIpcListeners(): void {
       }
       if (payload.exitCode !== undefined) {
         setNodeExitCode(payload.nodeId, payload.exitCode)
+      }
+      if (payload.status === 'error') {
+        followErrorNodeIfNeeded(payload.nodeId, payload.error)
       }
     })
 

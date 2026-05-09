@@ -40,6 +40,7 @@ export const AppShell: React.FC = () => {
   // ─── DEBUG INSTRUMENTATION START ───
   const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
   const terminalNodeId = useWorkflowStore((state) => state.terminalNodeId);
+  const terminalFollowMode = useWorkflowStore((state) => state.terminalFollowMode);
   const nodes = useWorkflowStore((state) => state.nodes);
   
   const workflowStatus = useExecutionStore((state) => state.workflowStatus);
@@ -68,13 +69,14 @@ export const AppShell: React.FC = () => {
     const node = terminalNodeId ? nodes.find((n) => n.id === terminalNodeId) : null;
     console.log('[FluxionRuntimeDebug/AppShell] terminalNodeId changed:', {
       terminalNodeId,
+      terminalFollowMode,
       nodeLabel: node?.data?.label ?? node?.id,
       nodeModel: node?.data?.model,
       activeLogCount: terminalNodeId ? (terminalLogs[terminalNodeId]?.length ?? 0) : 0,
       activeCursor: terminalNodeId ? (terminalLogCursors[terminalNodeId] ?? 0) : 0,
       activeExitCode: terminalNodeId ? nodeExitCodes[terminalNodeId] : undefined,
     });
-  }, [terminalNodeId, nodes, terminalLogs, terminalLogCursors, nodeExitCodes]);
+  }, [terminalFollowMode, terminalNodeId, nodes, terminalLogs, terminalLogCursors, nodeExitCodes]);
 
   useEffect(() => {
     const DEBUG_RUNTIME_DOCK = import.meta.env.DEV && true;

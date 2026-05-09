@@ -28,6 +28,7 @@ import {
   getCodexModelById,
   getDefaultCodexModel,
 } from '../lib/provider-capabilities';
+import { logRuntimeDebug } from '../lib/runtime-debug';
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
   receivedAt: number;
@@ -57,6 +58,8 @@ interface WorkflowState {
   workspacePath: string | null;
   selectedNodeId: string | null;
   terminalNodeId: string | null;
+  terminalFollowMode: 'auto' | 'manual';
+  terminalViewRequestId: number;
   reviewFocusRequest: ReviewFocusRequest | null;
   lastSavedAt: string | null;
   isDirty: boolean;
@@ -93,6 +96,8 @@ interface WorkflowState {
   addNode: (preset: Partial<AgentNodeData>, position: { x: number; y: number }) => void;
   setSelectedNode: (id: string | null) => void;
   setTerminalNodeId: (id: string | null) => void;
+  setTerminalFollowMode: (mode: 'auto' | 'manual') => void;
+  followTerminalNode: (id: string | null) => void;
   requestReviewFocus: (id: string) => void;
   updateNodeData: (id: string, newData: Partial<WorkflowNode['data']>) => void;
   deleteNode: (id: string) => void;
@@ -174,6 +179,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workspacePath: null,
   selectedNodeId: null,
   terminalNodeId: null,
+  terminalFollowMode: 'auto',
+  terminalViewRequestId: 0,
   reviewFocusRequest: null,
   lastSavedAt: null,
   isDirty: false,
@@ -278,6 +285,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workspacePath: payload.workspacePath,
       selectedNodeId: null,
       terminalNodeId: null,
+      terminalFollowMode: 'auto',
+      terminalViewRequestId: 0,
       reviewFocusRequest: null,
       lastSavedAt: payload.workflow.updatedAt ?? new Date().toISOString(),
       isDirty: false,
@@ -406,6 +415,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   setTerminalNodeId: (id) => set({ terminalNodeId: id }),
+
+  setTerminalFollowMode: (mode) =>
+    set((state) => {
+      if (state.terminalFollowMode === mode) {
+        return state;
+      }
+
+      logRuntimeDebug('WorkflowStore', 'terminal follow mode changed', {
+        previousMode: state.terminalFollowMode,
+        nextMode: mode,
+        terminalNodeId: state.terminalNodeId,
+      });
+
+      return { terminalFollowMode: mode };
+    }),
+
+  followTerminalNode: (id) =>
+    set((state) => {
+      return {
+        terminalNodeId: id,
+        terminalViewRequestId: state.terminalViewRequestId + 1,
+      };
+    }),
 
   requestReviewFocus: (id) =>
     set((state) => ({

@@ -52,6 +52,8 @@ describe('runCurrentWorkflow approval guardrail', () => {
       lastSavedRevision: 0,
       executionMode: 'auto',
       workspacePath: 'C:\\workspace',
+      terminalNodeId: null,
+      terminalFollowMode: 'auto',
       nodes: [
         {
           id: 'node-a',
@@ -127,6 +129,51 @@ describe('runCurrentWorkflow approval guardrail', () => {
 
     expect(window.api.runWorkflow).toHaveBeenCalledTimes(1);
     expect(useExecutionStore.getState().workflowStatus).toBe('running');
+  });
+
+  it('resets terminal follow mode and active terminal node for a brand-new workflow run', async () => {
+    useWorkflowStore.setState({
+      terminalNodeId: 'node-a',
+      terminalFollowMode: 'manual',
+      providerCapabilities: {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login',
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live',
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: [],
+            },
+          ],
+          parameters: [],
+          approvalProtocol: {
+            status: 'supported',
+            message: 'Probe supported.',
+          },
+        },
+      },
+    });
+
+    await runCurrentWorkflow();
+
+    expect(window.api.runWorkflow).toHaveBeenCalledTimes(1);
+    expect(useWorkflowStore.getState().terminalFollowMode).toBe('auto');
+    expect(useWorkflowStore.getState().terminalNodeId).toBeNull();
   });
 
   it('prompts for trust before opening an untrusted workspace', async () => {

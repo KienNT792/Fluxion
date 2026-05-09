@@ -6,6 +6,7 @@ import { useWorkflowStore } from '../../stores/workflow.store';
 import { useExecutionStore } from '../../stores/execution.store';
 import { retryWorkflowFromNode } from '../../lib/workflow-session';
 import { getCodexModelDisplayName } from '../../lib/provider-capabilities';
+import { logRuntimeDebug } from '../../lib/runtime-debug';
 
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>;
 
@@ -257,7 +258,14 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
           title={status === 'idle' ? 'Run first to see logs' : 'View Logs'}
           onClick={(event) => {
             event.stopPropagation();
-            useWorkflowStore.getState().setTerminalNodeId(id);
+            const workflowStore = useWorkflowStore.getState();
+            workflowStore.setTerminalFollowMode('manual');
+            workflowStore.followTerminalNode(id);
+            logRuntimeDebug('AgentNode', 'manual terminal log inspection activated', {
+              nodeId: id,
+              nodeLabel: displayName,
+              nodeModel: data.model,
+            });
           }}
         />
       </div>
