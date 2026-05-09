@@ -1,29 +1,27 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, FileJson, Plus, Trash2 } from 'lucide-react';
-import { useWorkflowStore } from '../../stores/workflow.store';
+import React, { useState } from 'react'
+import { ChevronLeft, ChevronRight, FileJson, Plus, Trash2 } from 'lucide-react'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import {
   createNewWorkflow,
   deleteCurrentWorkflow,
-  switchWorkflow,
-} from '../../lib/workflow-session';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { InputDialog } from '../ui/InputDialog';
+  switchWorkflow
+} from '@renderer/lib/workflow-session'
+import { ConfirmDialog } from '@renderer/components/ui/ConfirmDialog'
+import { InputDialog } from '@renderer/components/ui/InputDialog'
 
 function formatUpdatedAtLabel(updatedAt: string): string {
-  const parsed = new Date(updatedAt);
+  const parsed = new Date(updatedAt)
   if (Number.isNaN(parsed.getTime())) {
-    return '';
+    return ''
   }
 
   return parsed.toLocaleString([], {
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit'
+  })
 }
-
-
 
 function SidebarGlyph(): React.JSX.Element {
   return (
@@ -31,7 +29,7 @@ function SidebarGlyph(): React.JSX.Element {
       className="relative flex h-8 w-8 items-center justify-center rounded-lg"
       style={{
         border: '1px solid var(--color-hairline-strong)',
-        color: 'var(--color-primary)',
+        color: 'var(--color-primary)'
       }}
     >
       <span
@@ -45,17 +43,17 @@ function SidebarGlyph(): React.JSX.Element {
         style={{ background: 'currentColor', opacity: 0.7 }}
       />
     </div>
-  );
+  )
 }
 
 function CollapseButton({
   onClick,
   icon,
-  ariaLabel,
+  ariaLabel
 }: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  ariaLabel: string;
+  onClick: () => void
+  icon: React.ReactNode
+  ariaLabel: string
 }): React.JSX.Element {
   return (
     <button
@@ -66,65 +64,65 @@ function CollapseButton({
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline-strong)',
-        color: 'var(--color-muted)',
+        color: 'var(--color-muted)'
       }}
       onMouseEnter={(event) => {
-        event.currentTarget.style.color = 'var(--color-ink)';
+        event.currentTarget.style.color = 'var(--color-ink)'
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.color = 'var(--color-muted)';
+        event.currentTarget.style.color = 'var(--color-muted)'
       }}
     >
       {icon}
     </button>
-  );
+  )
 }
 
 export const Sidebar: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false);
-  const [newWorkflowName, setNewWorkflowName] = useState('');
-  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false);
-  const [pendingDeleteWorkflowName, setPendingDeleteWorkflowName] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [collapsed, setCollapsed] = useState(false)
+  const [isCreateWorkflowDialogOpen, setIsCreateWorkflowDialogOpen] = useState(false)
+  const [newWorkflowName, setNewWorkflowName] = useState('')
+  const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false)
+  const [pendingDeleteWorkflowName, setPendingDeleteWorkflowName] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const workflows = useWorkflowStore((state) => state.workflows);
-  const activeWorkflowFilePath = useWorkflowStore((state) => state.activeWorkflowFilePath);
+  const workflows = useWorkflowStore((state) => state.workflows)
+  const activeWorkflowFilePath = useWorkflowStore((state) => state.activeWorkflowFilePath)
 
   const handleOpenCreateWorkflowDialog = (): void => {
-    setNewWorkflowName('');
-    setIsCreateWorkflowDialogOpen(true);
-  };
+    setNewWorkflowName('')
+    setIsCreateWorkflowDialogOpen(true)
+  }
 
   const handleConfirmCreateWorkflow = async (): Promise<void> => {
-    const trimmedName = newWorkflowName.trim();
+    const trimmedName = newWorkflowName.trim()
     if (!trimmedName || isCreatingWorkflow) {
-      return;
+      return
     }
 
-    setIsCreatingWorkflow(true);
+    setIsCreatingWorkflow(true)
     try {
-      await createNewWorkflow(trimmedName);
-      setIsCreateWorkflowDialogOpen(false);
-      setNewWorkflowName('');
+      await createNewWorkflow(trimmedName)
+      setIsCreateWorkflowDialogOpen(false)
+      setNewWorkflowName('')
     } finally {
-      setIsCreatingWorkflow(false);
+      setIsCreatingWorkflow(false)
     }
-  };
+  }
 
   const handleConfirmDelete = async (): Promise<void> => {
     if (!pendingDeleteWorkflowName || isDeleting) {
-      return;
+      return
     }
 
-    setIsDeleting(true);
+    setIsDeleting(true)
     try {
-      await deleteCurrentWorkflow();
-      setPendingDeleteWorkflowName(null);
+      await deleteCurrentWorkflow()
+      setPendingDeleteWorkflowName(null)
     } finally {
-      setIsDeleting(false);
+      setIsDeleting(false)
     }
-  };
+  }
 
   if (collapsed) {
     return (
@@ -132,7 +130,7 @@ export const Sidebar: React.FC = () => {
         className="relative z-50 flex w-14 shrink-0 flex-col items-center py-4"
         style={{
           background: 'var(--color-canvas)',
-          borderRight: '1px solid var(--color-hairline)',
+          borderRight: '1px solid var(--color-hairline)'
         }}
       >
         <CollapseButton
@@ -152,19 +150,19 @@ export const Sidebar: React.FC = () => {
             style={{ color: 'var(--color-muted)' }}
             title="Open Library"
             onMouseEnter={(event) => {
-              event.currentTarget.style.background = 'var(--color-surface-card)';
-              event.currentTarget.style.color = 'var(--color-ink)';
+              event.currentTarget.style.background = 'var(--color-surface-card)'
+              event.currentTarget.style.color = 'var(--color-ink)'
             }}
             onMouseLeave={(event) => {
-              event.currentTarget.style.background = 'transparent';
-              event.currentTarget.style.color = 'var(--color-muted)';
+              event.currentTarget.style.background = 'transparent'
+              event.currentTarget.style.color = 'var(--color-muted)'
             }}
           >
             <FileJson size={18} />
           </button>
         </div>
       </aside>
-    );
+    )
   }
 
   return (
@@ -172,7 +170,7 @@ export const Sidebar: React.FC = () => {
       className="relative z-50 flex w-64 shrink-0 flex-col"
       style={{
         background: 'var(--color-canvas)',
-        borderRight: '1px solid var(--color-hairline)',
+        borderRight: '1px solid var(--color-hairline)'
       }}
     >
       <CollapseButton
@@ -193,7 +191,7 @@ export const Sidebar: React.FC = () => {
               style={{
                 color: 'var(--color-muted-soft)',
                 fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.22em',
+                letterSpacing: '0.22em'
               }}
             >
               Library
@@ -212,12 +210,12 @@ export const Sidebar: React.FC = () => {
           style={{ color: 'var(--color-muted)' }}
           title="New Workflow"
           onMouseEnter={(event) => {
-            event.currentTarget.style.background = 'var(--color-surface-card)';
-            event.currentTarget.style.color = 'var(--color-ink)';
+            event.currentTarget.style.background = 'var(--color-surface-card)'
+            event.currentTarget.style.color = 'var(--color-ink)'
           }}
           onMouseLeave={(event) => {
-            event.currentTarget.style.background = 'transparent';
-            event.currentTarget.style.color = 'var(--color-muted)';
+            event.currentTarget.style.background = 'transparent'
+            event.currentTarget.style.color = 'var(--color-muted)'
           }}
         >
           <Plus size={14} />
@@ -237,18 +235,18 @@ export const Sidebar: React.FC = () => {
         )}
         <div className="flex flex-col gap-1.5">
           {workflows.map((workflow) => {
-            const isActive = workflow.filePath === activeWorkflowFilePath;
-            const updatedAtLabel = formatUpdatedAtLabel(workflow.updatedAt);
-            const displayWorkflowName = workflow.name.replace(/^\.fluxion\s*—\s*/, '');
-            
+            const isActive = workflow.filePath === activeWorkflowFilePath
+            const updatedAtLabel = formatUpdatedAtLabel(workflow.updatedAt)
+            const displayWorkflowName = workflow.name.replace(/^\.fluxion\s*—\s*/, '')
+
             // Build stronger metadata string
-            const metadataPieces: string[] = [];
-            if (updatedAtLabel) metadataPieces.push(`Updated ${updatedAtLabel}`);
+            const metadataPieces: string[] = []
+            if (updatedAtLabel) metadataPieces.push(`Updated ${updatedAtLabel}`)
             if (Array.isArray(workflow.tags) && workflow.tags.length > 0) {
-              metadataPieces.push(workflow.tags.slice(0, 2).join(' / '));
+              metadataPieces.push(workflow.tags.slice(0, 2).join(' / '))
             }
-            
-            const metadataLabel = metadataPieces.join(' · ');
+
+            const metadataLabel = metadataPieces.join(' · ')
 
             return (
               <button
@@ -258,37 +256,37 @@ export const Sidebar: React.FC = () => {
                 className="group relative overflow-hidden rounded-lg px-3 py-2 text-left transition-colors"
                 style={{
                   background: isActive ? 'var(--color-surface-card)' : 'transparent',
-                  border: isActive ? '1px solid var(--color-hairline)' : '1px solid transparent',
+                  border: isActive ? '1px solid var(--color-hairline)' : '1px solid transparent'
                 }}
                 onMouseEnter={(event) => {
                   if (!isActive) {
-                    event.currentTarget.style.background = 'var(--color-surface-strong)';
+                    event.currentTarget.style.background = 'var(--color-surface-strong)'
                   }
                 }}
                 onMouseLeave={(event) => {
                   if (!isActive) {
-                    event.currentTarget.style.background = 'transparent';
+                    event.currentTarget.style.background = 'transparent'
                   }
                 }}
               >
                 {isActive && !workflow.isLegacy && (
-                    <button
-                      type="button"
-                      aria-label={`Delete ${displayWorkflowName}`}
-                      onClick={(event) => {
-                      event.stopPropagation();
-                      setPendingDeleteWorkflowName(workflow.name);
+                  <button
+                    type="button"
+                    aria-label={`Delete ${displayWorkflowName}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setPendingDeleteWorkflowName(workflow.name)
                     }}
                     className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-all group-hover:opacity-100"
                     style={{ color: 'var(--color-muted)' }}
                     title="Delete workflow"
                     onMouseEnter={(event) => {
-                      event.currentTarget.style.background = 'var(--color-canvas)';
-                      event.currentTarget.style.color = 'var(--color-semantic-error)';
+                      event.currentTarget.style.background = 'var(--color-canvas)'
+                      event.currentTarget.style.color = 'var(--color-semantic-error)'
                     }}
                     onMouseLeave={(event) => {
-                      event.currentTarget.style.background = 'transparent';
-                      event.currentTarget.style.color = 'var(--color-muted)';
+                      event.currentTarget.style.background = 'transparent'
+                      event.currentTarget.style.color = 'var(--color-muted)'
                     }}
                   >
                     <Trash2 size={13} />
@@ -300,7 +298,10 @@ export const Sidebar: React.FC = () => {
                     <div className="flex min-w-0 items-center gap-2">
                       <span
                         className="truncate text-xs font-medium"
-                        style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-body)', letterSpacing: '-0.1px' }}
+                        style={{
+                          color: isActive ? 'var(--color-ink)' : 'var(--color-body)',
+                          letterSpacing: '-0.1px'
+                        }}
                       >
                         {displayWorkflowName}
                       </span>
@@ -311,7 +312,7 @@ export const Sidebar: React.FC = () => {
                           style={{
                             color: 'var(--color-timeline-done)',
                             fontFamily: 'var(--font-mono)',
-                            letterSpacing: '0.1em',
+                            letterSpacing: '0.1em'
                           }}
                         >
                           Legacy
@@ -326,7 +327,7 @@ export const Sidebar: React.FC = () => {
                         }`}
                         style={{
                           color: isActive ? 'var(--color-muted)' : 'var(--color-muted-soft)',
-                          fontFamily: 'var(--font-sans)',
+                          fontFamily: 'var(--font-sans)'
                         }}
                       >
                         {metadataLabel}
@@ -335,7 +336,7 @@ export const Sidebar: React.FC = () => {
                   </div>
                 </div>
               </button>
-            );
+            )
           })}
 
           {workflows.length === 0 && (
@@ -343,7 +344,7 @@ export const Sidebar: React.FC = () => {
               className="rounded-xl px-4 py-6 text-center"
               style={{
                 background: 'var(--color-surface-card)',
-                color: 'var(--color-muted)',
+                color: 'var(--color-muted)'
               }}
             >
               <p
@@ -372,11 +373,11 @@ export const Sidebar: React.FC = () => {
         onValueChange={setNewWorkflowName}
         onCancel={() => {
           if (isCreatingWorkflow) {
-            return;
+            return
           }
 
-          setIsCreateWorkflowDialogOpen(false);
-          setNewWorkflowName('');
+          setIsCreateWorkflowDialogOpen(false)
+          setNewWorkflowName('')
         }}
         onConfirm={handleConfirmCreateWorkflow}
       />
@@ -394,13 +395,13 @@ export const Sidebar: React.FC = () => {
         confirmDisabled={isDeleting}
         onCancel={() => {
           if (isDeleting) {
-            return;
+            return
           }
 
-          setPendingDeleteWorkflowName(null);
+          setPendingDeleteWorkflowName(null)
         }}
         onConfirm={handleConfirmDelete}
       />
     </aside>
-  );
-};
+  )
+}

@@ -1,61 +1,63 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, TerminalSquare, X } from 'lucide-react';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import { Tooltip } from '../ui/Tooltip';
+import React, { useEffect, useRef, useState } from 'react'
+import { Plus, TerminalSquare, X } from 'lucide-react'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { Tooltip } from '@renderer/components/ui/Tooltip'
 import {
   getCodexCapabilities,
   getCodexModelDisplayName,
   getCodexReadinessBadgeState,
-  getDefaultCodexModel,
-} from '../../lib/provider-capabilities';
+  getDefaultCodexModel
+} from '@renderer/lib/provider-capabilities'
 
 export const AgentPalette: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
+  const [isOpen, setIsOpen] = useState(false)
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
-  );
-  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
-  const containerRef = useRef<HTMLDivElement>(null);
+  )
+  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!hasFetchedProviderCapabilities) {
-      void fetchProviderCapabilities();
+      void fetchProviderCapabilities()
     }
-  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
+  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        setIsOpen(false)
       }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
     }
 
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
 
-  const codexCapabilities = getCodexCapabilities(providerCapabilities);
-  const paletteModel = getDefaultCodexModel(providerCapabilities);
-  const readiness = getCodexReadinessBadgeState(providerCapabilities, [paletteModel]);
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  const codexCapabilities = getCodexCapabilities(providerCapabilities)
+  const paletteModel = getDefaultCodexModel(providerCapabilities)
+  const readiness = getCodexReadinessBadgeState(providerCapabilities, [paletteModel])
   const paletteHint =
-    codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated' && !readiness.blocking
+    codexCapabilities?.available &&
+    codexCapabilities.auth.status === 'authenticated' &&
+    !readiness.blocking
       ? getCodexModelDisplayName(providerCapabilities, paletteModel)
-      : readiness.summary;
+      : readiness.summary
 
   const handleDragStart = (event: React.DragEvent): void => {
     event.dataTransfer.setData(
       'application/reactflow',
       JSON.stringify({
         provider: 'codex',
-        model: paletteModel,
+        model: paletteModel
       })
-    );
-    event.dataTransfer.effectAllowed = 'move';
-  };
+    )
+    event.dataTransfer.effectAllowed = 'move'
+  }
 
   return (
     <div ref={containerRef} className="pointer-events-auto relative ml-2 mt-2">
@@ -68,16 +70,16 @@ export const AgentPalette: React.FC = () => {
           style={{
             background: isOpen ? 'var(--color-surface-strong)' : 'var(--color-surface-card)',
             border: '1px solid var(--color-hairline-strong)',
-            color: 'var(--color-ink)',
+            color: 'var(--color-ink)'
           }}
           onMouseEnter={(event) => {
             if (!isOpen) {
-              event.currentTarget.style.background = 'var(--color-canvas-soft)';
+              event.currentTarget.style.background = 'var(--color-canvas-soft)'
             }
           }}
           onMouseLeave={(event) => {
             if (!isOpen) {
-              event.currentTarget.style.background = 'var(--color-surface-card)';
+              event.currentTarget.style.background = 'var(--color-surface-card)'
             }
           }}
         >
@@ -90,7 +92,7 @@ export const AgentPalette: React.FC = () => {
           className="animate-in slide-in-from-left-2 absolute left-12 top-0 z-50 w-52 overflow-hidden rounded-xl border fade-in duration-200"
           style={{
             background: 'var(--color-surface-card)',
-            borderColor: 'var(--color-hairline-strong)',
+            borderColor: 'var(--color-hairline-strong)'
           }}
         >
           <div
@@ -98,7 +100,7 @@ export const AgentPalette: React.FC = () => {
             style={{
               borderColor: 'var(--color-hairline)',
               color: 'var(--color-muted)',
-              background: 'var(--color-canvas-soft)',
+              background: 'var(--color-canvas-soft)'
             }}
           >
             Drag to Canvas
@@ -111,10 +113,10 @@ export const AgentPalette: React.FC = () => {
               title={paletteHint}
               onDragStart={handleDragStart}
               onMouseEnter={(event) => {
-                event.currentTarget.style.background = 'var(--color-surface-strong)';
+                event.currentTarget.style.background = 'var(--color-surface-strong)'
               }}
               onMouseLeave={(event) => {
-                event.currentTarget.style.background = 'transparent';
+                event.currentTarget.style.background = 'transparent'
               }}
             >
               <div
@@ -122,27 +124,25 @@ export const AgentPalette: React.FC = () => {
                 style={{
                   background: 'var(--color-canvas-soft)',
                   border: '1px solid var(--color-hairline)',
-                  color: 'var(--color-primary)',
+                  color: 'var(--color-primary)'
                 }}
               >
                 <TerminalSquare size={15} />
               </div>
               <div className="min-w-0">
-                <div
-                  className="truncate text-sm font-medium"
-                  style={{ color: 'var(--color-ink)' }}
-                >
+                <div className="truncate text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
                   Codex
                 </div>
                 <div
                   className="truncate text-[11px]"
                   style={{
                     color:
-                      codexCapabilities?.available && codexCapabilities.auth.status === 'authenticated'
-                      && !readiness.blocking
+                      codexCapabilities?.available &&
+                      codexCapabilities.auth.status === 'authenticated' &&
+                      !readiness.blocking
                         ? 'var(--color-muted)'
                         : 'var(--color-semantic-error)',
-                    fontFamily: 'var(--font-mono)',
+                    fontFamily: 'var(--font-mono)'
                   }}
                 >
                   {paletteHint}
@@ -153,5 +153,5 @@ export const AgentPalette: React.FC = () => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}

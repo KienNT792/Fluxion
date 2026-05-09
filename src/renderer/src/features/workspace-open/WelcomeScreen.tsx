@@ -1,10 +1,9 @@
-import React from 'react';
+import React from 'react'
 import {
   AlertTriangle,
   BookOpen,
   CheckCircle2,
   ChevronRight,
-  Copy,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -14,243 +13,48 @@ import {
   Settings,
   ShieldCheck,
   Terminal,
-  Trash2,
   Upload,
   User,
-  Workflow,
-} from 'lucide-react';
-import type { RecentWorkspaceEntry } from '@shared';
-import { getCodexReadiness, getCodexReadinessBadgeState, getProviderReadinessSummary } from '../../lib/provider-capabilities';
-import { openWorkspaceFromDialog, openWorkspacePath } from '../../lib/workflow-session';
-import { useWorkspaceTrustPrompt } from '../../hooks/useWorkspaceTrustPrompt';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import { Button } from '../ui/Button';
-import { StatusChip, StatusChipTone } from '../ui/StatusChip';
-import { Tooltip } from '../ui/Tooltip';
-import { GlobalSettingsDialog } from './GlobalSettingsDialog';
-import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay';
-
-function hasFileDrop(dataTransfer: DataTransfer): boolean {
-  return Array.from(dataTransfer.types).includes('Files');
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function formatRecentTimestamp(value: string): string {
-  const openedAt = new Date(value);
-
-  if (Number.isNaN(openedAt.getTime())) {
-    return 'Opened recently';
-  }
-
-  return `Opened ${openedAt.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })}`;
-}
-
-const CopyableCommand: React.FC<{ command: string }> = ({ command }) => {
-  const [copied, setCopied] = React.useState(false);
-
-  const handleCopy = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard may be unavailable in some contexts
-    }
-  };
-
-  return (
-    <div
-      className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-xs"
-      style={{
-        background: 'var(--color-canvas)',
-        border: '1px solid var(--color-hairline)',
-        color: 'var(--color-ink)',
-      }}
-    >
-      <Terminal size={12} className="shrink-0" style={{ color: 'var(--color-muted)' }} />
-      <code className="flex-1 select-all">{command}</code>
-      <button
-        type="button"
-        onClick={() => { void handleCopy(); }}
-        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-sans transition-colors hover:bg-[var(--color-canvas-soft)]"
-        style={{ color: copied ? 'var(--color-semantic-success)' : 'var(--color-muted)' }}
-        aria-label="Copy command"
-      >
-        {copied ? 'Copied' : <Copy size={11} />}
-      </button>
-    </div>
-  );
-};
-
-interface PrerequisiteBlockProps {
-  code: 'cli_missing' | 'auth_missing';
-  actionCommand?: string;
-}
-
-const PrerequisiteBlock: React.FC<PrerequisiteBlockProps> = ({ code, actionCommand }) => {
-  const isCliMissing = code === 'cli_missing';
-
-  const title = isCliMissing ? 'Codex CLI is not installed' : 'Codex CLI is not logged in';
-  const description = isCliMissing
-    ? 'Fluxion requires Codex CLI to run workflows. Install it with npm, then log in.'
-    : 'Codex CLI is installed but you are not authenticated. Run the command below, then refresh.';
-
-  const installCommand = 'npm install -g @openai/codex';
-  const loginCommand = actionCommand ?? 'codex login';
-
-  return (
-    <div
-      className="w-full rounded-xl px-5 py-5 sm:px-7"
-      style={{
-        background: 'var(--color-canvas-soft)',
-        border: '1px solid var(--color-hairline)',
-      }}
-    >
-      <div className="flex items-start gap-3">
-        <AlertTriangle
-          size={16}
-          className="mt-0.5 shrink-0"
-          style={{ color: 'var(--color-semantic-error)' }}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
-            {title}
-          </p>
-          <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-muted)' }}>
-            {description}
-          </p>
-          <div className="mt-3 grid gap-2">
-            {isCliMissing && <CopyableCommand command={installCommand} />}
-            <CopyableCommand command={loginCommand} />
-          </div>
-          {isCliMissing && (
-            <p className="mt-3 text-[11px] leading-5" style={{ color: 'var(--color-muted-soft)' }}>
-              After installation and login, relaunch Fluxion or click{' '}
-              <span style={{ fontFamily: 'var(--font-mono)' }}>Refresh readiness</span> in Settings.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const RecentActionButton: React.FC<{
-  label: string;
-  disabled: boolean;
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  children: React.ReactNode;
-}> = ({ label, disabled, onClick, children }) => (
-  <Tooltip content={label}>
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
-      style={{
-        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
-      }}
-    >
-      {children}
-    </button>
-  </Tooltip>
-);
-
-const RecentWorkspaceRow: React.FC<{
-  entry: RecentWorkspaceEntry;
-  disabled: boolean;
-  onOpen: (workspacePath: string) => void;
-  onReveal: (workspacePath: string) => void;
-  onRemove: (workspacePath: string) => void;
-}> = ({ entry, disabled, onOpen, onReveal, onRemove }) => (
-  <div
-    className="flex min-w-0 items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-[var(--color-canvas)]"
-    style={{
-      background: 'var(--color-canvas-soft)',
-      border: '1px solid var(--color-hairline)',
-    }}
-    title={entry.path}
-  >
-    <button
-      type="button"
-      onClick={() => onOpen(entry.path)}
-      disabled={disabled}
-      className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
-      style={{
-        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-ink)',
-      }}
-    >
-      <FolderOpen size={14} className="shrink-0" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold">{entry.name}</span>
-        <span
-          className="mt-0.5 block truncate text-[10px]"
-          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
-        >
-          {entry.path}
-        </span>
-      </span>
-      <span
-        className="hidden shrink-0 text-[10px] md:inline"
-        style={{ color: 'var(--color-muted-soft)' }}
-      >
-        {formatRecentTimestamp(entry.lastOpenedAt)}
-      </span>
-    </button>
-
-    <div className="flex shrink-0 items-center gap-0.5">
-      <RecentActionButton
-        label="Reveal in Explorer"
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          onReveal(entry.path);
-        }}
-      >
-        <ExternalLink size={13} />
-      </RecentActionButton>
-      <RecentActionButton
-        label="Remove from Recent"
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRemove(entry.path);
-        }}
-      >
-        <Trash2 size={13} />
-      </RecentActionButton>
-    </div>
-  </div>
-);
+  Workflow
+} from 'lucide-react'
+import {
+  getCodexReadiness,
+  getCodexReadinessBadgeState,
+  getProviderReadinessSummary
+} from '@renderer/lib/provider-capabilities'
+import { openWorkspaceFromDialog, openWorkspacePath } from '@renderer/lib/workflow-session'
+import { useWorkspaceTrustPrompt } from '@renderer/hooks/useWorkspaceTrustPrompt'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { Button } from '@renderer/components/ui/Button'
+import { StatusChip, StatusChipTone } from '@renderer/components/ui/StatusChip'
+import { Tooltip } from '@renderer/components/ui/Tooltip'
+import { GlobalSettingsDialog } from '@renderer/features/settings/GlobalSettingsDialog'
+import { PrerequisiteBlock } from './components/PrerequisiteBlock'
+import { RecentWorkspaceRow } from './components/RecentWorkspaceRow'
+import { useRecentWorkspaces } from './hooks/useRecentWorkspaces'
+import { getErrorMessage, hasFileDrop } from './lib/workspace-open-helpers'
+import { WorkspaceOpeningOverlay } from './WorkspaceOpeningOverlay'
 
 export const WelcomeScreen: React.FC = () => {
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
-  const [recentWorkspaces, setRecentWorkspaces] = React.useState<RecentWorkspaceEntry[]>([]);
-  const [isDragActive, setIsDragActive] = React.useState(false);
-  const [workspaceActionError, setWorkspaceActionError] = React.useState<string | null>(null);
-  const dragDepthRef = React.useRef(0);
-  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
-  const workspaceOpenState = useWorkflowStore((state) => state.workspaceOpenState);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
+  const [isDragActive, setIsDragActive] = React.useState(false)
+  const [workspaceActionError, setWorkspaceActionError] = React.useState<string | null>(null)
+  const { handleRemoveRecentWorkspace, handleRevealRecentWorkspace, recentWorkspaces } =
+    useRecentWorkspaces(setWorkspaceActionError)
+  const dragDepthRef = React.useRef(0)
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
+  const workspaceOpenState = useWorkflowStore((state) => state.workspaceOpenState)
   const isProviderCapabilitiesLoading = useWorkflowStore(
     (state) => state.isProviderCapabilitiesLoading
-  );
+  )
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
-  );
-  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities);
-  const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt();
-  const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, []);
-  const codexRawReadiness = getCodexReadiness(providerCapabilities);
-  const providerReadiness = getProviderReadinessSummary(providerCapabilities);
+  )
+  const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities)
+  const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt()
+  const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, [])
+  const codexRawReadiness = getCodexReadiness(providerCapabilities)
+  const providerReadiness = getProviderReadinessSummary(providerCapabilities)
 
   // Determine if we should show a prerequisite hard-block for Stage 1.
   // cli_missing and auth_missing are the two distinct states that need separate copy.
@@ -259,44 +63,18 @@ export const WelcomeScreen: React.FC = () => {
       ? codexRawReadiness?.code === 'cli_missing' || codexRawReadiness?.code === 'auth_missing'
         ? codexRawReadiness.code
         : null
-      : null;
+      : null
 
   React.useEffect(() => {
     if (!hasFetchedProviderCapabilities) {
-      void fetchProviderCapabilities();
+      void fetchProviderCapabilities()
     }
-  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities]);
-
-  React.useEffect(() => {
-    let isMounted = true;
-
-    async function loadRecentWorkspaces(): Promise<void> {
-      if (!window.api?.listRecentWorkspaces) {
-        return;
-      }
-
-      try {
-        const entries = await window.api.listRecentWorkspaces();
-        if (isMounted) {
-          setRecentWorkspaces(entries);
-        }
-      } catch {
-        if (isMounted) {
-          setRecentWorkspaces([]);
-        }
-      }
-    }
-
-    void loadRecentWorkspaces();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [fetchProviderCapabilities, hasFetchedProviderCapabilities])
 
   const isWorkspaceOpening =
-    workspaceOpenState.phase === 'selecting'
-    || workspaceOpenState.phase === 'awaitingTrust'
-    || workspaceOpenState.phase === 'opening';
+    workspaceOpenState.phase === 'selecting' ||
+    workspaceOpenState.phase === 'awaitingTrust' ||
+    workspaceOpenState.phase === 'opening'
 
   const readinessChipTone: StatusChipTone = isProviderCapabilitiesLoading
     ? 'running'
@@ -304,149 +82,121 @@ export const WelcomeScreen: React.FC = () => {
       ? 'error'
       : providerReadiness.warningCount > 0 || codexReadiness.tone !== 'ready'
         ? 'warning'
-        : 'success';
+        : 'success'
   const readinessStatusLabel = isProviderCapabilitiesLoading
     ? 'Checking runtime...'
     : codexReadiness.tone === 'ready'
       ? 'Codex is ready'
-      : codexReadiness.summary;
+      : codexReadiness.summary
 
   const handleOpenWorkspace = async (): Promise<void> => {
-    setWorkspaceActionError(null);
+    setWorkspaceActionError(null)
 
     try {
-      await openWorkspaceFromDialog({ requestWorkspaceTrust });
+      await openWorkspaceFromDialog({ requestWorkspaceTrust })
     } catch {
       // The opening overlay owns the visible error state.
     }
-  };
+  }
 
   const handleOpenRecentWorkspace = async (workspacePath: string): Promise<void> => {
-    setWorkspaceActionError(null);
+    setWorkspaceActionError(null)
 
     try {
-      await openWorkspacePath(workspacePath, { requestWorkspaceTrust });
+      await openWorkspacePath(workspacePath, { requestWorkspaceTrust })
     } catch {
       // The opening overlay owns the visible error state.
     }
-  };
+  }
 
   const resetDragState = (): void => {
-    dragDepthRef.current = 0;
-    setIsDragActive(false);
-  };
+    dragDepthRef.current = 0
+    setIsDragActive(false)
+  }
 
   const handleDragEnter = (event: React.DragEvent<HTMLDivElement>): void => {
     if (!hasFileDrop(event.dataTransfer)) {
-      return;
+      return
     }
 
-    event.preventDefault();
+    event.preventDefault()
 
     if (isWorkspaceOpening) {
-      return;
+      return
     }
 
-    dragDepthRef.current += 1;
-    setIsDragActive(true);
-  };
+    dragDepthRef.current += 1
+    setIsDragActive(true)
+  }
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
     if (!hasFileDrop(event.dataTransfer)) {
-      return;
+      return
     }
 
-    event.preventDefault();
-    event.dataTransfer.dropEffect = isWorkspaceOpening ? 'none' : 'copy';
-  };
+    event.preventDefault()
+    event.dataTransfer.dropEffect = isWorkspaceOpening ? 'none' : 'copy'
+  }
 
   const handleDragLeave = (event: React.DragEvent<HTMLDivElement>): void => {
     if (!hasFileDrop(event.dataTransfer)) {
-      return;
+      return
     }
 
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
     if (dragDepthRef.current === 0) {
-      setIsDragActive(false);
+      setIsDragActive(false)
     }
-  };
+  }
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>): Promise<void> => {
     if (!hasFileDrop(event.dataTransfer)) {
-      return;
+      return
     }
 
-    event.preventDefault();
-    resetDragState();
+    event.preventDefault()
+    resetDragState()
 
     if (isWorkspaceOpening) {
-      return;
+      return
     }
 
-    const droppedFile = Array.from(event.dataTransfer.files)[0];
+    const droppedFile = Array.from(event.dataTransfer.files)[0]
     if (!droppedFile) {
-      setWorkspaceActionError('Drop a project folder to open it as a workspace.');
-      return;
+      setWorkspaceActionError('Drop a project folder to open it as a workspace.')
+      return
     }
 
-    let droppedPath = '';
+    let droppedPath = ''
     try {
-      droppedPath = window.api?.getPathForFile?.(droppedFile) ?? '';
+      droppedPath = window.api?.getPathForFile?.(droppedFile) ?? ''
     } catch {
-      droppedPath = '';
+      droppedPath = ''
     }
 
     if (!droppedPath) {
-      setWorkspaceActionError('Fluxion could not read the dropped folder path.');
-      return;
+      setWorkspaceActionError('Fluxion could not read the dropped folder path.')
+      return
     }
 
     if (!window.api?.validateWorkspaceDirectory) {
-      setWorkspaceActionError('Workspace validation is not available.');
-      return;
+      setWorkspaceActionError('Workspace validation is not available.')
+      return
     }
 
     try {
-      const validation = await window.api.validateWorkspaceDirectory(droppedPath);
+      const validation = await window.api.validateWorkspaceDirectory(droppedPath)
       if (!validation.ok) {
-        setWorkspaceActionError(validation.message);
-        return;
+        setWorkspaceActionError(validation.message)
+        return
       }
 
-      setWorkspaceActionError(null);
-      await openWorkspacePath(validation.path, { requestWorkspaceTrust });
+      setWorkspaceActionError(null)
+      await openWorkspacePath(validation.path, { requestWorkspaceTrust })
     } catch (error) {
-      setWorkspaceActionError(getErrorMessage(error, 'Failed to open dropped workspace.'));
+      setWorkspaceActionError(getErrorMessage(error, 'Failed to open dropped workspace.'))
     }
-  };
-
-  const handleRevealRecentWorkspace = async (workspacePath: string): Promise<void> => {
-    if (!window.api?.revealPath) {
-      return;
-    }
-
-    try {
-      await window.api.revealPath(workspacePath);
-    } catch (error) {
-      setWorkspaceActionError(getErrorMessage(error, 'Failed to reveal workspace.'));
-    }
-  };
-
-  const handleRemoveRecentWorkspace = async (workspacePath: string): Promise<void> => {
-    if (!window.api?.removeRecentWorkspace) {
-      return;
-    }
-
-    try {
-      const entries = await window.api.removeRecentWorkspace(workspacePath);
-      setRecentWorkspaces(entries);
-      setWorkspaceActionError(null);
-    } catch (error) {
-      setWorkspaceActionError(
-        getErrorMessage(error, 'Failed to remove workspace from recent list.')
-      );
-    }
-  };
+  }
 
   return (
     <div
@@ -456,7 +206,7 @@ export const WelcomeScreen: React.FC = () => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={(event) => {
-        void handleDrop(event);
+        void handleDrop(event)
       }}
     >
       {/* ── Top Navigation ── */}
@@ -465,7 +215,7 @@ export const WelcomeScreen: React.FC = () => {
         style={{
           maxWidth: '1440px',
           height: '64px',
-          padding: '20px 32px 0 32px',
+          padding: '20px 32px 0 32px'
         }}
       >
         {/* Left: Logo + Wordmark + Tagline */}
@@ -473,7 +223,7 @@ export const WelcomeScreen: React.FC = () => {
           <div
             className="flex h-8 w-8 items-center justify-center rounded-md"
             style={{
-              background: 'var(--color-primary)',
+              background: 'var(--color-primary)'
             }}
           >
             <Workflow size={16} style={{ color: 'var(--color-on-primary)' }} />
@@ -483,26 +233,19 @@ export const WelcomeScreen: React.FC = () => {
             style={{
               color: 'var(--color-ink)',
               fontFamily: "'CursorGothic', sans-serif",
-              letterSpacing: '-0.3px',
+              letterSpacing: '-0.3px'
             }}
           >
             Fluxion
           </span>
-          <span
-            className="hidden text-xs sm:inline"
-            style={{ color: 'var(--color-muted)' }}
-          >
+          <span className="hidden text-xs sm:inline" style={{ color: 'var(--color-muted)' }}>
             Codex orchestration for real repositories
           </span>
         </div>
 
         {/* Right: Settings + Docs */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsSettingsOpen(true)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => setIsSettingsOpen(true)}>
             <Settings size={14} />
             Settings
           </Button>
@@ -510,7 +253,7 @@ export const WelcomeScreen: React.FC = () => {
             variant="secondary"
             size="sm"
             onClick={() => {
-              window.open('https://github.com/nickmilo/Fluxion', '_blank');
+              window.open('https://github.com/nickmilo/Fluxion', '_blank')
             }}
           >
             <BookOpen size={14} />
@@ -521,17 +264,18 @@ export const WelcomeScreen: React.FC = () => {
 
       {/* ── Main Content ── */}
       {/* ── Hero Section: Two-Column Layout ── */}
-      <main className="mx-auto flex w-full max-w-[1440px] flex-1 px-8 py-12" style={{ gap: '48px' }}>
-
+      <main
+        className="mx-auto flex w-full max-w-[1440px] flex-1 px-8 py-12"
+        style={{ gap: '48px' }}
+      >
         {/* ── LEFT COLUMN (40%) ── */}
         <div className="flex flex-col gap-8" style={{ flex: '0 0 40%', maxWidth: '40%' }}>
-
           {/* Welcome Badge */}
           <span
             className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
             style={{
               background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-canvas-soft))',
-              color: 'var(--color-primary)',
+              color: 'var(--color-primary)'
             }}
           >
             👋 Welcome to Fluxion
@@ -540,36 +284,28 @@ export const WelcomeScreen: React.FC = () => {
           {/* Headline */}
           <h1
             style={{
-              fontFamily: "'CursorGothic', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+              fontFamily:
+                "'CursorGothic', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif",
               fontSize: '36px',
               fontWeight: 400,
               lineHeight: 1.2,
               letterSpacing: '-0.72px',
               color: 'var(--color-ink)',
-              margin: 0,
+              margin: 0
             }}
           >
-            Turn your repository into a{' '}
-            <br />
+            Turn your repository into a <br />
             governed Codex workspace.
           </h1>
 
           {/* Supporting Text */}
           <div className="flex flex-col gap-3">
-            <p
-              className="text-base leading-7"
-              style={{ color: 'var(--color-body)', margin: 0 }}
-            >
-              Fluxion helps you initialize durable project context,
-              encode rules, and orchestrate Codex workflows from a
-              single workspace.
+            <p className="text-base leading-7" style={{ color: 'var(--color-body)', margin: 0 }}>
+              Fluxion helps you initialize durable project context, encode rules, and orchestrate
+              Codex workflows from a single workspace.
             </p>
-            <p
-              className="text-sm leading-6"
-              style={{ color: 'var(--color-muted)', margin: 0 }}
-            >
-              Fluxion reads project context, prepares agent workflows,
-              and keeps outputs reviewable.
+            <p className="text-sm leading-6" style={{ color: 'var(--color-muted)', margin: 0 }}>
+              Fluxion reads project context, prepares agent workflows, and keeps outputs reviewable.
             </p>
           </div>
 
@@ -586,27 +322,32 @@ export const WelcomeScreen: React.FC = () => {
             {/* Open Workspace Card */}
             <button
               type="button"
-              onClick={() => { void handleOpenWorkspace(); }}
+              onClick={() => {
+                void handleOpenWorkspace()
+              }}
               disabled={isWorkspaceOpening}
               className="flex flex-col items-start gap-2 rounded-lg px-5 py-4 text-left transition-colors disabled:cursor-not-allowed"
               style={{
                 background: 'var(--color-primary)',
                 color: 'var(--color-on-primary)',
                 border: '1px solid transparent',
-                minHeight: '88px',
+                minHeight: '88px'
               }}
               onMouseEnter={(e) => {
-                if (!isWorkspaceOpening) e.currentTarget.style.background = 'var(--color-primary-active)';
+                if (!isWorkspaceOpening)
+                  e.currentTarget.style.background = 'var(--color-primary-active)'
               }}
               onMouseLeave={(e) => {
-                if (!isWorkspaceOpening) e.currentTarget.style.background = 'var(--color-primary)';
+                if (!isWorkspaceOpening) e.currentTarget.style.background = 'var(--color-primary)'
               }}
             >
               <FolderOpen size={20} />
               <span className="text-sm font-medium">
                 {isWorkspaceOpening ? 'Opening...' : 'Open Workspace'}
               </span>
-              <span className="text-xs" style={{ opacity: 0.8 }}>Open an existing repository</span>
+              <span className="text-xs" style={{ opacity: 0.8 }}>
+                Open an existing repository
+              </span>
             </button>
 
             {/* Drag & Drop Card */}
@@ -621,12 +362,14 @@ export const WelcomeScreen: React.FC = () => {
                 minHeight: '88px',
                 boxShadow: isDragActive
                   ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent)'
-                  : 'none',
+                  : 'none'
               }}
             >
               <Upload size={20} style={{ color: 'var(--color-muted)' }} />
               <span className="text-sm font-medium">Drag & Drop Folder</span>
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Drop a project folder here</span>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Drop a project folder here
+              </span>
             </div>
           </div>
 
@@ -637,7 +380,7 @@ export const WelcomeScreen: React.FC = () => {
               style={{
                 color: 'var(--color-semantic-error)',
                 background: 'var(--color-canvas)',
-                border: '1px solid var(--color-hairline)',
+                border: '1px solid var(--color-hairline)'
               }}
             >
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -650,21 +393,23 @@ export const WelcomeScreen: React.FC = () => {
             className="rounded-lg px-4 py-4"
             style={{
               background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: 'var(--color-ink)' }}
-              >
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
                 Recent Workspaces
               </h2>
               {recentWorkspaces.length > 0 && (
                 <button
                   type="button"
                   className="inline-flex items-center gap-0.5 text-xs font-medium transition-colors hover:opacity-80"
-                  style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                  style={{
+                    color: 'var(--color-muted)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
                 >
                   View all
                   <ChevronRight size={12} />
@@ -679,13 +424,13 @@ export const WelcomeScreen: React.FC = () => {
                     entry={entry}
                     disabled={isWorkspaceOpening}
                     onOpen={(workspacePath) => {
-                      void handleOpenRecentWorkspace(workspacePath);
+                      void handleOpenRecentWorkspace(workspacePath)
                     }}
                     onReveal={(workspacePath) => {
-                      void handleRevealRecentWorkspace(workspacePath);
+                      void handleRevealRecentWorkspace(workspacePath)
                     }}
                     onRemove={(workspacePath) => {
-                      void handleRemoveRecentWorkspace(workspacePath);
+                      void handleRemoveRecentWorkspace(workspacePath)
                     }}
                   />
                 ))}
@@ -706,7 +451,7 @@ export const WelcomeScreen: React.FC = () => {
             maxWidth: '58%',
             background: 'var(--color-surface-card)',
             border: '1px solid var(--color-hairline)',
-            overflow: 'hidden',
+            overflow: 'hidden'
           }}
         >
           {/* Card Header */}
@@ -725,7 +470,10 @@ export const WelcomeScreen: React.FC = () => {
                 className="h-2 w-2 rounded-full"
                 style={{ background: 'var(--color-semantic-success)' }}
               />
-              <span className="text-[11px] font-medium" style={{ color: 'var(--color-semantic-success)' }}>
+              <span
+                className="text-[11px] font-medium"
+                style={{ color: 'var(--color-semantic-success)' }}
+              >
                 Ready
               </span>
             </div>
@@ -733,14 +481,13 @@ export const WelcomeScreen: React.FC = () => {
 
           {/* Card Body: 3-zone layout */}
           <div className="flex flex-1">
-
             {/* Left Mini Sidebar */}
             <div
               className="flex flex-col items-center gap-3 py-4"
               style={{
                 width: '44px',
                 borderRight: '1px solid var(--color-hairline)',
-                background: 'var(--color-canvas-soft)',
+                background: 'var(--color-canvas-soft)'
               }}
             >
               <div
@@ -758,19 +505,25 @@ export const WelcomeScreen: React.FC = () => {
             </div>
 
             {/* Center: Timeline */}
-            <div className="flex flex-1 flex-col" style={{ borderRight: '1px solid var(--color-hairline)' }}>
+            <div
+              className="flex flex-1 flex-col"
+              style={{ borderRight: '1px solid var(--color-hairline)' }}
+            >
               {/* Tabs */}
-              <div className="flex gap-0" style={{ borderBottom: '1px solid var(--color-hairline)' }}>
+              <div
+                className="flex gap-0"
+                style={{ borderBottom: '1px solid var(--color-hairline)' }}
+              >
                 <span
                   className="px-4 py-2 text-xs font-semibold"
-                  style={{ color: 'var(--color-ink)', borderBottom: '2px solid var(--color-primary)' }}
+                  style={{
+                    color: 'var(--color-ink)',
+                    borderBottom: '2px solid var(--color-primary)'
+                  }}
                 >
                   Flow
                 </span>
-                <span
-                  className="px-4 py-2 text-xs"
-                  style={{ color: 'var(--color-muted)' }}
-                >
+                <span className="px-4 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                   Context
                 </span>
               </div>
@@ -778,11 +531,36 @@ export const WelcomeScreen: React.FC = () => {
               {/* Timeline Items */}
               <div className="flex flex-col gap-3 p-4">
                 {[
-                  { label: 'Thinking', desc: 'Analyzing repository structure...', time: '2.1s', bg: 'var(--color-timeline-thinking)' },
-                  { label: 'Reading', desc: 'Scanning key files and configs...', time: '4.3s', bg: 'var(--color-timeline-read)' },
-                  { label: 'Grepping', desc: 'Finding patterns and conventions...', time: '3.7s', bg: 'var(--color-timeline-grep)' },
-                  { label: 'Editing', desc: 'Generating context and rules...', time: '5.2s', bg: 'var(--color-timeline-edit)' },
-                  { label: 'Done', desc: 'Project context is ready', time: '', bg: 'var(--color-timeline-done)' },
+                  {
+                    label: 'Thinking',
+                    desc: 'Analyzing repository structure...',
+                    time: '2.1s',
+                    bg: 'var(--color-timeline-thinking)'
+                  },
+                  {
+                    label: 'Reading',
+                    desc: 'Scanning key files and configs...',
+                    time: '4.3s',
+                    bg: 'var(--color-timeline-read)'
+                  },
+                  {
+                    label: 'Grepping',
+                    desc: 'Finding patterns and conventions...',
+                    time: '3.7s',
+                    bg: 'var(--color-timeline-grep)'
+                  },
+                  {
+                    label: 'Editing',
+                    desc: 'Generating context and rules...',
+                    time: '5.2s',
+                    bg: 'var(--color-timeline-edit)'
+                  },
+                  {
+                    label: 'Done',
+                    desc: 'Project context is ready',
+                    time: '',
+                    bg: 'var(--color-timeline-done)'
+                  }
                 ].map((item) => (
                   <div key={item.label} className="flex items-start gap-3">
                     {/* Pill */}
@@ -790,9 +568,10 @@ export const WelcomeScreen: React.FC = () => {
                       className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase"
                       style={{
                         background: item.bg,
-                        color: item.label === 'Done' ? 'var(--color-on-primary)' : 'var(--color-ink)',
+                        color:
+                          item.label === 'Done' ? 'var(--color-on-primary)' : 'var(--color-ink)',
                         letterSpacing: '0.88px',
-                        lineHeight: '1.4',
+                        lineHeight: '1.4'
                       }}
                     >
                       {item.label}
@@ -805,14 +584,21 @@ export const WelcomeScreen: React.FC = () => {
                       {item.time && (
                         <span
                           className="shrink-0 text-[10px]"
-                          style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+                          style={{
+                            color: 'var(--color-muted-soft)',
+                            fontFamily: 'var(--font-mono)'
+                          }}
                         >
                           {item.time}
                         </span>
                       )}
                     </div>
                     {/* Check icon */}
-                    <CheckCircle2 size={13} className="mt-0.5 shrink-0" style={{ color: 'var(--color-semantic-success)' }} />
+                    <CheckCircle2
+                      size={13}
+                      className="mt-0.5 shrink-0"
+                      style={{ color: 'var(--color-semantic-success)' }}
+                    />
                   </div>
                 ))}
               </div>
@@ -862,7 +648,7 @@ export const WelcomeScreen: React.FC = () => {
                 className="rounded-md p-3"
                 style={{
                   border: '1px solid var(--color-hairline)',
-                  background: 'var(--color-surface-card)',
+                  background: 'var(--color-surface-card)'
                 }}
               >
                 <span
@@ -875,17 +661,22 @@ export const WelcomeScreen: React.FC = () => {
                   className="mt-2 text-[11px] leading-4"
                   style={{ color: 'var(--color-body)', margin: 0, marginTop: '8px' }}
                 >
-                  A React + TypeScript web application with component-based architecture, focusing on developer experience and performance.
+                  A React + TypeScript web application with component-based architecture, focusing
+                  on developer experience and performance.
                 </p>
                 <p
                   className="mt-2 text-[10px] leading-4"
-                  style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)', margin: 0, marginTop: '8px' }}
+                  style={{
+                    color: 'var(--color-muted)',
+                    fontFamily: 'var(--font-mono)',
+                    margin: 0,
+                    marginTop: '8px'
+                  }}
                 >
                   Tech Stack: React, TypeScript, Vite, Tailwind CSS, Vitest
                 </p>
               </div>
             </div>
-
           </div>
 
           {/* Card Bottom Bar */}
@@ -893,40 +684,46 @@ export const WelcomeScreen: React.FC = () => {
             className="flex items-center justify-between px-4 py-2"
             style={{
               borderTop: '1px solid var(--color-hairline)',
-              background: 'var(--color-canvas-soft)',
+              background: 'var(--color-canvas-soft)'
             }}
           >
-            <span className="text-[10px]" style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}>
+            <span
+              className="text-[10px]"
+              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+            >
               Model: codex-1
             </span>
-            <span className="text-[10px]" style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}>
+            <span
+              className="text-[10px]"
+              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+            >
               Mode: Full-Auto
             </span>
-            <span className="text-[10px]" style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}>
+            <span
+              className="text-[10px]"
+              style={{ color: 'var(--color-muted-soft)', fontFamily: 'var(--font-mono)' }}
+            >
               Workspace: ~/Projects/fluxion
             </span>
           </div>
         </div>
-
-
       </main>
 
       {/* ── Workflow Steps Band ── */}
-      <section
-        className="mx-auto w-full px-8 pb-12"
-        style={{ maxWidth: '1440px' }}
-      >
+      <section className="mx-auto w-full px-8 pb-12" style={{ maxWidth: '1440px' }}>
         <div className="mb-5 flex items-center justify-between">
-          <h2
-            className="text-sm font-semibold"
-            style={{ color: 'var(--color-ink)' }}
-          >
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
             Your first steps with Fluxion
           </h2>
           <button
             type="button"
             className="inline-flex items-center gap-0.5 text-xs font-medium transition-colors hover:opacity-80"
-            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{
+              color: 'var(--color-muted)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer'
+            }}
           >
             Learn the workflow
             <ChevronRight size={12} />
@@ -935,24 +732,40 @@ export const WelcomeScreen: React.FC = () => {
 
         <div className="grid grid-cols-4 gap-4">
           {[
-            { step: 1, title: 'Open your repository', body: 'Open an existing project folder to get started.' },
-            { step: 2, title: 'Detect project signals', body: 'Fluxion analyzes structure, configs, and key files.' },
-            { step: 3, title: 'Review generated context', body: 'Review AGENTS.md, config, and project brief.' },
-            { step: 4, title: 'Run your first workflow', body: 'Execute workflows with Codex in a durable context.' },
+            {
+              step: 1,
+              title: 'Open your repository',
+              body: 'Open an existing project folder to get started.'
+            },
+            {
+              step: 2,
+              title: 'Detect project signals',
+              body: 'Fluxion analyzes structure, configs, and key files.'
+            },
+            {
+              step: 3,
+              title: 'Review generated context',
+              body: 'Review AGENTS.md, config, and project brief.'
+            },
+            {
+              step: 4,
+              title: 'Run your first workflow',
+              body: 'Execute workflows with Codex in a durable context.'
+            }
           ].map((card, idx, arr) => (
             <div
               key={card.step}
               className="relative flex flex-col gap-3 rounded-lg px-5 py-5"
               style={{
                 background: 'var(--color-surface-card)',
-                border: '1px solid var(--color-hairline)',
+                border: '1px solid var(--color-hairline)'
               }}
             >
               <span
                 className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold"
                 style={{
                   background: idx === 0 ? 'var(--color-primary)' : 'var(--color-surface-strong)',
-                  color: idx === 0 ? 'var(--color-on-primary)' : 'var(--color-ink)',
+                  color: idx === 0 ? 'var(--color-on-primary)' : 'var(--color-ink)'
                 }}
               >
                 {card.step}
@@ -976,18 +789,14 @@ export const WelcomeScreen: React.FC = () => {
       </section>
 
       {/* ── Bottom Diagnostics Grid ── */}
-      <section
-        className="mx-auto w-full px-8 pb-12"
-        style={{ maxWidth: '1440px' }}
-      >
+      <section className="mx-auto w-full px-8 pb-12" style={{ maxWidth: '1440px' }}>
         <div className="grid grid-cols-3 gap-4">
-
           {/* Column 1: Codex Readiness */}
           <div
             className="flex flex-col gap-4 rounded-lg px-5 py-5"
             style={{
               background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
           >
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
@@ -1015,7 +824,9 @@ export const WelcomeScreen: React.FC = () => {
               <div className="flex justify-between">
                 <span>Authentication</span>
                 <span style={{ color: 'var(--color-muted)' }}>
-                  {codexRawReadiness?.code === 'auth_missing' ? 'Not authenticated' : 'Authenticated'}
+                  {codexRawReadiness?.code === 'auth_missing'
+                    ? 'Not authenticated'
+                    : 'Authenticated'}
                 </span>
               </div>
             </div>
@@ -1023,9 +834,9 @@ export const WelcomeScreen: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => {
-                const api = window.api as unknown as Record<string, () => void> | undefined;
+                const api = window.api as unknown as Record<string, () => void> | undefined
                 if (api?.openCodexTerminal) {
-                  void api.openCodexTerminal();
+                  void api.openCodexTerminal()
                 }
               }}
               className="mt-auto w-full"
@@ -1040,7 +851,7 @@ export const WelcomeScreen: React.FC = () => {
             className="flex flex-col gap-4 rounded-lg px-5 py-5"
             style={{
               background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
           >
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
@@ -1053,7 +864,7 @@ export const WelcomeScreen: React.FC = () => {
                   className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
                   style={{
                     background: 'var(--color-surface-strong)',
-                    color: 'var(--color-ink)',
+                    color: 'var(--color-ink)'
                   }}
                 >
                   {tech}
@@ -1070,7 +881,7 @@ export const WelcomeScreen: React.FC = () => {
             className="flex flex-col gap-4 rounded-lg px-5 py-5"
             style={{
               background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
           >
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
@@ -1082,7 +893,7 @@ export const WelcomeScreen: React.FC = () => {
               style={{
                 color: 'var(--color-ink)',
                 border: '1px solid var(--color-hairline)',
-                background: 'var(--color-surface-card)',
+                background: 'var(--color-surface-card)'
               }}
             >
               <BookOpen size={14} style={{ color: 'var(--color-muted)' }} />
@@ -1095,7 +906,7 @@ export const WelcomeScreen: React.FC = () => {
               style={{
                 color: 'var(--color-ink)',
                 border: '1px solid var(--color-hairline)',
-                background: 'var(--color-surface-card)',
+                background: 'var(--color-surface-card)'
               }}
             >
               <MessageCircle size={14} style={{ color: 'var(--color-muted)' }} />
@@ -1123,12 +934,9 @@ export const WelcomeScreen: React.FC = () => {
         </span>
       </footer>
 
-      <GlobalSettingsDialog
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      <GlobalSettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       {trustDialog}
       <WorkspaceOpeningOverlay />
     </div>
-  );
-};
+  )
+}

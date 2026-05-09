@@ -1,47 +1,47 @@
-import React from 'react';
-import { AlertTriangle, CheckCircle2, Circle, FolderOpen, LoaderCircle } from 'lucide-react';
-import { WorkspaceLoadingEvent } from '@shared';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import { Button } from '../ui/Button';
+import React from 'react'
+import { AlertTriangle, CheckCircle2, Circle, FolderOpen, LoaderCircle } from 'lucide-react'
+import { WorkspaceLoadingEvent } from '@shared'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { Button } from '@renderer/components/ui/Button'
 
 const LOADING_STEPS: Array<{ step: WorkspaceLoadingEvent['step']; label: string }> = [
   { step: 'init', label: 'Initialize workspace' },
   { step: 'loadWorkflows', label: 'Load workflows' },
   { step: 'loadContext', label: 'Prepare context' },
-  { step: 'watcher', label: 'Start watcher' },
-];
+  { step: 'watcher', label: 'Start watcher' }
+]
 
 function getEventForStep(
   events: WorkspaceLoadingEvent[],
   step: WorkspaceLoadingEvent['step']
 ): WorkspaceLoadingEvent | undefined {
-  return events.find((event) => event.step === step);
+  return events.find((event) => event.step === step)
 }
 
 function getWorkspaceDisplayName(workspacePath?: string): string {
   if (!workspacePath) {
-    return 'Workspace';
+    return 'Workspace'
   }
 
-  const segments = workspacePath.split(/[/\\]/).filter(Boolean);
-  return segments[segments.length - 1] ?? workspacePath;
+  const segments = workspacePath.split(/[/\\]/).filter(Boolean)
+  return segments[segments.length - 1] ?? workspacePath
 }
 
 export const WorkspaceOpeningOverlay: React.FC = () => {
-  const openState = useWorkflowStore((state) => state.workspaceOpenState);
-  const loadingEvents = useWorkflowStore((state) => state.workspaceLoadingEvents);
-  const loadingPath = useWorkflowStore((state) => state.workspaceLoadingPath);
-  const loadingError = useWorkflowStore((state) => state.workspaceLoadingError);
-  const setWorkspaceOpenState = useWorkflowStore((state) => state.setWorkspaceOpenState);
-  const resetWorkspaceLoadingEvents = useWorkflowStore((state) => state.resetWorkspaceLoadingEvents);
+  const openState = useWorkflowStore((state) => state.workspaceOpenState)
+  const loadingEvents = useWorkflowStore((state) => state.workspaceLoadingEvents)
+  const loadingPath = useWorkflowStore((state) => state.workspaceLoadingPath)
+  const loadingError = useWorkflowStore((state) => state.workspaceLoadingError)
+  const setWorkspaceOpenState = useWorkflowStore((state) => state.setWorkspaceOpenState)
+  const resetWorkspaceLoadingEvents = useWorkflowStore((state) => state.resetWorkspaceLoadingEvents)
 
   if (openState.phase !== 'opening' && openState.phase !== 'error') {
-    return null;
+    return null
   }
 
-  const workspacePath = openState.workspacePath ?? loadingPath ?? undefined;
-  const errorMessage = openState.error ?? loadingError;
-  const hasProgressEvents = loadingEvents.some((event) => event.step !== 'ready');
+  const workspacePath = openState.workspacePath ?? loadingPath ?? undefined
+  const errorMessage = openState.error ?? loadingError
+  const hasProgressEvents = loadingEvents.some((event) => event.step !== 'ready')
 
   return (
     <div
@@ -54,7 +54,7 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
         className="w-full max-w-lg rounded-lg px-5 py-5 sm:px-6"
         style={{
           background: 'var(--color-surface-card)',
-          border: '1px solid var(--color-hairline)',
+          border: '1px solid var(--color-hairline)'
         }}
       >
         <div className="flex items-start gap-3">
@@ -63,14 +63,10 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
             style={{
               background: 'var(--color-canvas-soft)',
               border: '1px solid var(--color-hairline)',
-              color: errorMessage ? 'var(--color-semantic-error)' : 'var(--color-primary)',
+              color: errorMessage ? 'var(--color-semantic-error)' : 'var(--color-primary)'
             }}
           >
-            {errorMessage ? (
-              <AlertTriangle size={18} />
-            ) : (
-              <FolderOpen size={18} />
-            )}
+            {errorMessage ? <AlertTriangle size={18} /> : <FolderOpen size={18} />}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-ink)' }}>
@@ -87,7 +83,7 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
                   background: 'var(--color-canvas-soft)',
                   border: '1px solid var(--color-hairline)',
                   color: 'var(--color-body)',
-                  fontFamily: 'var(--font-mono)',
+                  fontFamily: 'var(--font-mono)'
                 }}
               >
                 {workspacePath}
@@ -106,8 +102,8 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  resetWorkspaceLoadingEvents();
-                  setWorkspaceOpenState({ phase: 'idle' });
+                  resetWorkspaceLoadingEvents()
+                  setWorkspaceOpenState({ phase: 'idle' })
                 }}
               >
                 Close
@@ -117,11 +113,11 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
         ) : hasProgressEvents ? (
           <div className="mt-5 grid gap-2">
             {LOADING_STEPS.map(({ step, label }) => {
-              const event = getEventForStep(loadingEvents, step);
-              const status = event?.status ?? 'active';
-              const isActive = status === 'active' && event != null;
-              const isDone = status === 'done';
-              const isError = status === 'error';
+              const event = getEventForStep(loadingEvents, step)
+              const status = event?.status ?? 'active'
+              const isActive = status === 'active' && event != null
+              const isDone = status === 'done'
+              const isError = status === 'error'
 
               return (
                 <div
@@ -129,7 +125,7 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
                   className="flex min-w-0 items-center gap-3 rounded-md px-3 py-2"
                   style={{
                     background: 'var(--color-canvas-soft)',
-                    border: '1px solid var(--color-hairline)',
+                    border: '1px solid var(--color-hairline)'
                   }}
                 >
                   <span
@@ -141,7 +137,7 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
                           ? 'var(--color-semantic-success)'
                           : isActive
                             ? 'var(--color-primary)'
-                            : 'var(--color-muted-soft)',
+                            : 'var(--color-muted-soft)'
                     }}
                   >
                     {isError ? (
@@ -158,7 +154,7 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
                     {event?.message ?? label}
                   </span>
                 </div>
-              );
+              )
             })}
           </div>
         ) : (
@@ -168,5 +164,5 @@ export const WorkspaceOpeningOverlay: React.FC = () => {
         )}
       </div>
     </div>
-  );
-};
+  )
+}

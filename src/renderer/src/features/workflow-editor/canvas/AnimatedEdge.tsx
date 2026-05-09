@@ -1,5 +1,5 @@
-import { BaseEdge, EdgeProps, getBezierPath } from '@xyflow/react';
-import { useExecutionStore } from '../../stores/execution.store';
+import { BaseEdge, EdgeProps, getBezierPath } from '@xyflow/react'
+import { useExecutionStore } from '@renderer/stores/execution.store'
 
 /**
  * Orchestration edge — recessive by default, status-aware.
@@ -22,7 +22,7 @@ export const AnimatedEdge = ({
   targetPosition,
   style = {},
   markerEnd,
-  source,
+  source
 }: EdgeProps): React.JSX.Element => {
   const [edgePath] = getBezierPath({
     sourceX,
@@ -30,43 +30,43 @@ export const AnimatedEdge = ({
     sourcePosition,
     targetX,
     targetY,
-    targetPosition,
-  });
+    targetPosition
+  })
 
-  const sourceNodeStatus = useExecutionStore(state => state.nodeStatuses[source] ?? 'idle');
+  const sourceNodeStatus = useExecutionStore((state) => state.nodeStatuses[source] ?? 'idle')
 
   // Edge appearance hierarchy: recessive default, status-aware accents
-  let strokeColor = 'var(--color-hairline)';
-  let strokeWidth = 1;
-  let strokeOpacity = 0.7;
-  let animationClass = '';
+  let strokeColor = 'var(--color-hairline)'
+  let strokeWidth = 1
+  let strokeOpacity = 0.7
+  let animationClass = ''
 
   switch (sourceNodeStatus) {
     case 'running':
     case 'stopping':
-      strokeColor = 'var(--color-timeline-thinking)';
-      strokeWidth = 1.5;
-      strokeOpacity = 0.85;
-      animationClass = 'animate-edge-running';
-      break;
+      strokeColor = 'var(--color-timeline-thinking)'
+      strokeWidth = 1.5
+      strokeOpacity = 0.85
+      animationClass = 'animate-edge-running'
+      break
     case 'completed':
-      strokeColor = 'var(--color-timeline-grep)';
-      strokeWidth = 1;
-      strokeOpacity = 0.6;
-      break;
+      strokeColor = 'var(--color-timeline-grep)'
+      strokeWidth = 1
+      strokeOpacity = 0.6
+      break
     case 'error':
-      strokeColor = 'var(--color-semantic-error)';
-      strokeWidth = 1.5;
-      strokeOpacity = 0.7;
-      animationClass = 'animate-edge-error';
-      break;
+      strokeColor = 'var(--color-semantic-error)'
+      strokeWidth = 1.5
+      strokeOpacity = 0.7
+      animationClass = 'animate-edge-error'
+      break
     case 'paused':
-      strokeColor = 'var(--color-timeline-edit)';
-      strokeWidth = 1.5;
-      strokeOpacity = 0.8;
-      break;
+      strokeColor = 'var(--color-timeline-edit)'
+      strokeWidth = 1.5
+      strokeOpacity = 0.8
+      break
     default:
-      break;
+      break
   }
 
   return (
@@ -88,10 +88,10 @@ export const AnimatedEdge = ({
           stroke: strokeColor,
           strokeWidth,
           opacity: strokeOpacity,
-          transition: 'stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease',
+          transition: 'stroke 0.3s ease, stroke-width 0.3s ease, opacity 0.3s ease'
         }}
         className={animationClass}
       />
     </>
-  );
-};
+  )
+}

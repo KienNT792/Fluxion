@@ -1,34 +1,34 @@
-import React from 'react';
-import { Briefcase, Code2, FolderTree, Heart, Layers, Shield, Sparkles } from 'lucide-react';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import type { WorkspaceContextStatus } from '@shared';
+import React from 'react'
+import { Briefcase, Code2, FolderTree, Heart, Layers, Shield, Sparkles } from 'lucide-react'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import type { WorkspaceContextStatus } from '@shared'
 
 function getHealthLabel(status: WorkspaceContextStatus): {
-  label: string;
-  color: string;
+  label: string
+  color: string
 } {
   switch (status) {
     case 'ready':
-      return { label: 'Ready', color: 'var(--color-semantic-success)' };
+      return { label: 'Ready', color: 'var(--color-semantic-success)' }
     case 'incomplete':
-      return { label: 'Incomplete', color: 'var(--color-primary)' };
+      return { label: 'Incomplete', color: 'var(--color-primary)' }
     case 'missing':
-      return { label: 'Not configured', color: 'var(--color-muted)' };
+      return { label: 'Not configured', color: 'var(--color-muted)' }
     case 'legacy':
-      return { label: 'Legacy format', color: 'var(--color-timeline-done)' };
+      return { label: 'Legacy format', color: 'var(--color-timeline-done)' }
     default:
-      return { label: 'Unknown', color: 'var(--color-muted)' };
+      return { label: 'Unknown', color: 'var(--color-muted)' }
   }
 }
 
 function ContextSection({
   icon,
   title,
-  children,
+  children
 }: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className="px-5 py-6" style={{ borderBottom: '1px solid var(--color-hairline)' }}>
@@ -45,7 +45,7 @@ function ContextSection({
       </div>
       {children}
     </div>
-  );
+  )
 }
 
 function TagBadge({ label }: { label: string }): React.JSX.Element {
@@ -55,53 +55,40 @@ function TagBadge({ label }: { label: string }): React.JSX.Element {
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
-        color: 'var(--color-ink)',
+        color: 'var(--color-ink)'
       }}
     >
       {label}
     </span>
-  );
+  )
 }
 
 function EmptyField({ hint }: { hint: string }): React.JSX.Element {
   return (
-    <p
-      className="text-xs italic"
-      style={{ color: 'var(--color-muted-soft)' }}
-    >
+    <p className="text-xs italic" style={{ color: 'var(--color-muted-soft)' }}>
       {hint}
     </p>
-  );
+  )
 }
 
-function ContextHealthDot({
-  status,
-}: {
-  status: WorkspaceContextStatus;
-}): React.JSX.Element {
-  const { label, color } = getHealthLabel(status);
+function ContextHealthDot({ status }: { status: WorkspaceContextStatus }): React.JSX.Element {
+  const { label, color } = getHealthLabel(status)
 
   return (
     <div className="flex items-center gap-2">
-      <span
-        className="inline-block h-2 w-2 shrink-0 rounded-full"
-        style={{ background: color }}
-      />
-      <span
-        className="text-xs font-medium"
-        style={{ color, fontFamily: 'var(--font-mono)' }}
-      >
+      <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="text-xs font-medium" style={{ color, fontFamily: 'var(--font-mono)' }}>
         {label}
       </span>
     </div>
-  );
+  )
 }
 
 export const ProjectContextInspector: React.FC = () => {
-  const contextStatus = useWorkflowStore((state) => state.contextStatus);
-  const contextSummary = useWorkflowStore((state) => state.contextSummary);
-  const workspacePath = useWorkflowStore((state) => state.workspacePath);
-  const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen);
+  const contextStatus = useWorkflowStore((state) => state.contextStatus)
+  const contextSummary = useWorkflowStore((state) => state.contextSummary)
+  const workspacePath = useWorkflowStore((state) => state.workspacePath)
+  const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen)
 
   if (!contextSummary) {
     return (
@@ -123,20 +110,20 @@ export const ProjectContextInspector: React.FC = () => {
             style={{
               color: 'var(--color-primary)',
               background: 'transparent',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
             onMouseEnter={(event) => {
-              event.currentTarget.style.background = 'var(--color-surface-card)';
+              event.currentTarget.style.background = 'var(--color-surface-card)'
             }}
             onMouseLeave={(event) => {
-              event.currentTarget.style.background = 'transparent';
+              event.currentTarget.style.background = 'transparent'
             }}
           >
             Initialize Context
           </button>
         )}
       </div>
-    );
+    )
   }
 
   return (
@@ -147,11 +134,7 @@ export const ProjectContextInspector: React.FC = () => {
         {contextSummary.readiness.missingItems.length > 0 && (
           <div className="mt-2 space-y-1">
             {contextSummary.readiness.missingItems.slice(0, 4).map((item) => (
-              <p
-                key={item}
-                className="text-[11px]"
-                style={{ color: 'var(--color-muted)' }}
-              >
+              <p key={item} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
                 • {item}
               </p>
             ))}
@@ -162,20 +145,14 @@ export const ProjectContextInspector: React.FC = () => {
       {/* Project Brief */}
       <ContextSection icon={<Briefcase size={13} />} title="Brief">
         {contextSummary.projectGoal ? (
-          <p
-            className="text-xs leading-5"
-            style={{ color: 'var(--color-body)' }}
-          >
+          <p className="text-xs leading-5" style={{ color: 'var(--color-body)' }}>
             {contextSummary.projectGoal}
           </p>
         ) : (
           <EmptyField hint="No project goal set." />
         )}
         {contextSummary.targetUsers && (
-          <p
-            className="mt-2 text-[11px]"
-            style={{ color: 'var(--color-muted)' }}
-          >
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
             Users: {contextSummary.targetUsers}
           </p>
         )}
@@ -196,8 +173,7 @@ export const ProjectContextInspector: React.FC = () => {
             {contextSummary.primaryStack
               .filter(
                 (s) =>
-                  !contextSummary.languages.includes(s) &&
-                  !contextSummary.frameworks.includes(s)
+                  !contextSummary.languages.includes(s) && !contextSummary.frameworks.includes(s)
               )
               .map((s) => (
                 <TagBadge key={`stack-${s}`} label={s} />
@@ -217,17 +193,14 @@ export const ProjectContextInspector: React.FC = () => {
                 key={filePath}
                 className="truncate text-[11px]"
                 style={{
-                  color: 'var(--color-body)',
+                  color: 'var(--color-body)'
                 }}
               >
                 {filePath}
               </p>
             ))}
             {contextSummary.importantPaths.length > 6 && (
-              <p
-                className="text-[10px]"
-                style={{ color: 'var(--color-muted-soft)' }}
-              >
+              <p className="text-[10px]" style={{ color: 'var(--color-muted-soft)' }}>
                 +{contextSummary.importantPaths.length - 6} more
               </p>
             )}
@@ -246,15 +219,12 @@ export const ProjectContextInspector: React.FC = () => {
                 <span
                   className="mt-0.5 shrink-0 rounded bg-[var(--color-canvas-soft)] px-1.5 py-0.5 text-[10px] font-medium"
                   style={{
-                    color: 'var(--color-muted)',
+                    color: 'var(--color-muted)'
                   }}
                 >
                   {component.type}
                 </span>
-                <span
-                  className="truncate text-xs"
-                  style={{ color: 'var(--color-body)' }}
-                >
+                <span className="truncate text-xs" style={{ color: 'var(--color-body)' }}>
                   {component.name}
                 </span>
               </div>
@@ -288,7 +258,7 @@ export const ProjectContextInspector: React.FC = () => {
                   className="truncate text-[10px]"
                   style={{
                     color: 'var(--color-muted)',
-                    fontFamily: 'var(--font-mono)',
+                    fontFamily: 'var(--font-mono)'
                   }}
                 >
                   🔒 {p}
@@ -309,15 +279,15 @@ export const ProjectContextInspector: React.FC = () => {
             style={{
               color: 'var(--color-muted)',
               background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)',
+              border: '1px solid var(--color-hairline)'
             }}
             onMouseEnter={(event) => {
-              event.currentTarget.style.color = 'var(--color-ink)';
-              event.currentTarget.style.borderColor = 'var(--color-hairline-strong)';
+              event.currentTarget.style.color = 'var(--color-ink)'
+              event.currentTarget.style.borderColor = 'var(--color-hairline-strong)'
             }}
             onMouseLeave={(event) => {
-              event.currentTarget.style.color = 'var(--color-muted)';
-              event.currentTarget.style.borderColor = 'var(--color-hairline)';
+              event.currentTarget.style.color = 'var(--color-muted)'
+              event.currentTarget.style.borderColor = 'var(--color-hairline)'
             }}
           >
             Review Context
@@ -325,5 +295,5 @@ export const ProjectContextInspector: React.FC = () => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}

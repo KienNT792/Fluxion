@@ -1,14 +1,14 @@
-import React from 'react';
-import { Handle, Position, NodeProps, Node } from '@xyflow/react';
-import { Eye, RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react';
-import { AgentNodeData } from '@shared';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import { useExecutionStore } from '../../stores/execution.store';
-import { retryWorkflowFromNode } from '../../lib/workflow-session';
-import { getCodexModelDisplayName } from '../../lib/provider-capabilities';
-import { logRuntimeDebug } from '../../lib/runtime-debug';
+import React from 'react'
+import { Handle, Position, NodeProps, Node } from '@xyflow/react'
+import { Eye, RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react'
+import { AgentNodeData } from '@shared'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { useExecutionStore } from '@renderer/stores/execution.store'
+import { retryWorkflowFromNode } from '@renderer/lib/workflow-session'
+import { getCodexModelDisplayName } from '@renderer/lib/provider-capabilities'
+import { logRuntimeDebug } from '@renderer/lib/runtime-debug'
 
-type AgentFlowNode = Node<AgentNodeData, 'agentNode'>;
+type AgentFlowNode = Node<AgentNodeData, 'agentNode'>
 
 /**
  * Orchestration-focused node appearance.
@@ -23,62 +23,61 @@ type AgentFlowNode = Node<AgentNodeData, 'agentNode'>;
 
 // Compact status indicator — just a colored dot + short label in header
 const STATUS_DOT: Record<string, { color: string; pulse: boolean }> = {
-  running:   { color: 'var(--color-timeline-thinking)', pulse: true  },
-  completed: { color: 'var(--color-timeline-grep)',     pulse: false },
-  error:     { color: 'var(--color-semantic-error)',    pulse: false },
-  stopping:  { color: 'var(--color-timeline-read)',     pulse: true  },
-  paused:    { color: 'var(--color-timeline-edit)',     pulse: true  },
-  idle:      { color: 'var(--color-hairline-strong)',   pulse: false },
-};
+  running: { color: 'var(--color-timeline-thinking)', pulse: true },
+  completed: { color: 'var(--color-timeline-grep)', pulse: false },
+  error: { color: 'var(--color-semantic-error)', pulse: false },
+  stopping: { color: 'var(--color-timeline-read)', pulse: true },
+  paused: { color: 'var(--color-timeline-edit)', pulse: true },
+  idle: { color: 'var(--color-hairline-strong)', pulse: false }
+}
 
 const STATUS_LABEL: Record<string, string> = {
   running: 'Running',
   completed: 'Done',
   error: 'Error',
   stopping: 'Stopping',
-  paused: 'Review',
-};
+  paused: 'Review'
+}
 
 export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
-  const status = useExecutionStore((state) => state.nodeStatuses[id] ?? 'idle');
-  const nodeError = useExecutionStore((state) => state.nodeErrors[id]);
-  const workflowStatus = useExecutionStore((state) => state.workflowStatus);
-  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities);
-  const displayName =
-    data.label || getCodexModelDisplayName(providerCapabilities, data.model);
+  const status = useExecutionStore((state) => state.nodeStatuses[id] ?? 'idle')
+  const nodeError = useExecutionStore((state) => state.nodeErrors[id])
+  const workflowStatus = useExecutionStore((state) => state.workflowStatus)
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
+  const displayName = data.label || getCodexModelDisplayName(providerCapabilities, data.model)
   const canRetry =
     status === 'error' &&
     workflowStatus !== 'running' &&
     workflowStatus !== 'stopping' &&
-    workflowStatus !== 'paused';
-  const isSelected = useWorkflowStore((state) => state.selectedNodeId === id);
-  const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus);
-  const isNewWorkspace = useWorkflowStore((state) => state.isNewWorkspace);
-  const isDirty = useWorkflowStore((state) => state.isDirty);
-  const isFreshOnboarding = isNewWorkspace && !isDirty;
+    workflowStatus !== 'paused'
+  const isSelected = useWorkflowStore((state) => state.selectedNodeId === id)
+  const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus)
+  const isNewWorkspace = useWorkflowStore((state) => state.isNewWorkspace)
+  const isDirty = useWorkflowStore((state) => state.isDirty)
+  const isFreshOnboarding = isNewWorkspace && !isDirty
 
-  const dot = STATUS_DOT[status] ?? STATUS_DOT.idle;
-  const isExecuting = status === 'running' || status === 'stopping';
-  const isPaused = status === 'paused';
+  const dot = STATUS_DOT[status] ?? STATUS_DOT.idle
+  const isExecuting = status === 'running' || status === 'stopping'
+  const isPaused = status === 'paused'
 
   // Border hierarchy: review > executing > selected > default
   const borderStyle = (): string => {
-    if (isPaused) return '1.5px solid var(--color-timeline-edit)';
-    if (isExecuting) return '1.5px solid var(--color-timeline-thinking)';
-    if (status === 'error') return '1.5px solid var(--color-semantic-error)';
-    if (isSelected) return '1.5px solid var(--color-primary)';
-    return '1px solid var(--color-hairline)';
-  };
+    if (isPaused) return '1.5px solid var(--color-timeline-edit)'
+    if (isExecuting) return '1.5px solid var(--color-timeline-thinking)'
+    if (status === 'error') return '1.5px solid var(--color-semantic-error)'
+    if (isSelected) return '1.5px solid var(--color-primary)'
+    return '1px solid var(--color-hairline)'
+  }
 
   // Left accent strip color for orchestration reading flow
   const accentColor = (): string => {
-    if (isPaused) return 'var(--color-timeline-edit)';
-    if (isExecuting) return 'var(--color-timeline-thinking)';
-    if (status === 'error') return 'var(--color-semantic-error)';
-    if (status === 'completed') return 'var(--color-timeline-grep)';
-    if (isSelected) return 'var(--color-primary)';
-    return 'var(--color-hairline-strong)';
-  };
+    if (isPaused) return 'var(--color-timeline-edit)'
+    if (isExecuting) return 'var(--color-timeline-thinking)'
+    if (status === 'error') return 'var(--color-semantic-error)'
+    if (status === 'completed') return 'var(--color-timeline-grep)'
+    if (isSelected) return 'var(--color-primary)'
+    return 'var(--color-hairline-strong)'
+  }
 
   return (
     <div
@@ -88,7 +87,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
         border: borderStyle(),
         borderRadius: 'var(--radius-lg)',
         opacity: status === 'idle' && workflowStatus === 'running' ? 0.55 : 1,
-        boxShadow: isSelected ? '0 0 0 1px var(--color-primary)' : 'none',
+        boxShadow: isSelected ? '0 0 0 1px var(--color-primary)' : 'none'
       }}
     >
       {/* Top accent strip — thin, colored by execution state */}
@@ -96,7 +95,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
         className="w-full flex-shrink-0 transition-colors duration-300"
         style={{
           height: '2px',
-          background: accentColor(),
+          background: accentColor()
         }}
       />
 
@@ -126,7 +125,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
           style={{
             background: 'var(--color-surface-card)',
             border: '1px solid var(--color-hairline)',
-            color: isExecuting ? 'var(--color-timeline-thinking)' : 'var(--color-muted)',
+            color: isExecuting ? 'var(--color-timeline-thinking)' : 'var(--color-muted)'
           }}
         >
           <TerminalSquare size={14} />
@@ -157,7 +156,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
               style={{
                 color: dot.color,
                 fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.06em',
+                letterSpacing: '0.06em'
               }}
             >
               {STATUS_LABEL[status] ?? ''}
@@ -173,10 +172,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
 
       {/* Instruction preview — only when meaningful, single-line */}
       {data.prompt && (
-        <div
-          className="px-3 py-2"
-          style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
-        >
+        <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
           <p
             className="truncate text-[10px]"
             style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-body)' }}
@@ -192,7 +188,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
           className="px-3 py-1"
           style={{
             borderTop: '1px solid var(--color-hairline-soft)',
-            background: 'var(--color-canvas-soft)',
+            background: 'var(--color-canvas-soft)'
           }}
         >
           <p
@@ -206,10 +202,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
       )}
 
       {/* Action bar — minimal, context-aware */}
-      <div
-        className="flex"
-        style={{ borderTop: '1px solid var(--color-hairline)' }}
-      >
+      <div className="flex" style={{ borderTop: '1px solid var(--color-hairline)' }}>
         {/* Config — always available */}
         <ActionButton icon={<Settings size={10} />} label="Config" />
 
@@ -223,8 +216,8 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
               label="Review"
               color="var(--color-timeline-edit)"
               onClick={(event) => {
-                event.stopPropagation();
-                requestReviewFocus(id);
+                event.stopPropagation()
+                requestReviewFocus(id)
               }}
             />
             <div className="w-px" style={{ background: 'var(--color-hairline)' }} />
@@ -241,8 +234,8 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
               disabled={!canRetry}
               title={nodeError || 'Retry from this node'}
               onClick={(event) => {
-                event.stopPropagation();
-                if (canRetry) retryWorkflowFromNode(id);
+                event.stopPropagation()
+                if (canRetry) retryWorkflowFromNode(id)
               }}
             />
             <div className="w-px" style={{ background: 'var(--color-hairline)' }} />
@@ -257,21 +250,21 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
           disabled={status === 'idle'}
           title={status === 'idle' ? 'Run first to see logs' : 'View Logs'}
           onClick={(event) => {
-            event.stopPropagation();
-            const workflowStore = useWorkflowStore.getState();
-            workflowStore.setTerminalFollowMode('manual');
-            workflowStore.followTerminalNode(id);
+            event.stopPropagation()
+            const workflowStore = useWorkflowStore.getState()
+            workflowStore.setTerminalFollowMode('manual')
+            workflowStore.followTerminalNode(id)
             logRuntimeDebug('AgentNode', 'manual terminal log inspection activated', {
               nodeId: id,
               nodeLabel: displayName,
-              nodeModel: data.model,
-            });
+              nodeModel: data.model
+            })
           }}
         />
       </div>
     </div>
-  );
-};
+  )
+}
 
 // ── Compact action button ──
 function ActionButton({
@@ -280,14 +273,14 @@ function ActionButton({
   color = 'var(--color-muted)',
   disabled = false,
   title,
-  onClick,
+  onClick
 }: {
-  icon: React.ReactNode;
-  label: string;
-  color?: string;
-  disabled?: boolean;
-  title?: string;
-  onClick?: (event: React.MouseEvent) => void;
+  icon: React.ReactNode
+  label: string
+  color?: string
+  disabled?: boolean
+  title?: string
+  onClick?: (event: React.MouseEvent) => void
 }): React.JSX.Element {
   return (
     <button
@@ -295,20 +288,20 @@ function ActionButton({
       className="nodrag nopan flex-1 py-1.5 text-[10px] transition-colors"
       style={{
         color,
-        cursor: disabled ? 'not-allowed' : 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer'
       }}
       title={title ?? label}
       disabled={disabled}
       onClick={onClick}
       onMouseEnter={(event) => {
         if (!disabled) {
-          event.currentTarget.style.background = 'var(--color-canvas)';
-          event.currentTarget.style.color = 'var(--color-ink)';
+          event.currentTarget.style.background = 'var(--color-canvas)'
+          event.currentTarget.style.color = 'var(--color-ink)'
         }
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.background = 'transparent';
-        event.currentTarget.style.color = color;
+        event.currentTarget.style.background = 'transparent'
+        event.currentTarget.style.color = color
       }}
     >
       <span className="flex items-center justify-center gap-1">
@@ -316,5 +309,5 @@ function ActionButton({
         <span>{label}</span>
       </span>
     </button>
-  );
+  )
 }

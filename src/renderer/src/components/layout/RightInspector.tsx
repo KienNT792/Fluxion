@@ -1,9 +1,9 @@
-import React from 'react';
-import { BookOpen } from 'lucide-react';
-import { useWorkflowStore } from '../../stores/workflow.store';
-import { ProjectContextInspector } from './ProjectContextInspector';
-import { PropertiesPanel } from './PropertiesPanel';
-import { ErrorBoundary } from '../ui/ErrorBoundary';
+import React from 'react'
+import { BookOpen } from 'lucide-react'
+import { useWorkflowStore } from '../../stores/workflow.store'
+import { ProjectContextInspector } from '@renderer/features/project-context/inspector/ProjectContextInspector'
+import { PropertiesPanel } from '@renderer/features/node-inspector/PropertiesPanel'
+import { ErrorBoundary } from '../ui/ErrorBoundary'
 
 /**
  * Persistent right inspector panel.
@@ -15,8 +15,8 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
  * - Independent vertical scrolling.
  */
 export const RightInspector: React.FC = () => {
-  const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId);
-  const hasNodeSelected = selectedNodeId != null;
+  const selectedNodeId = useWorkflowStore((state) => state.selectedNodeId)
+  const hasNodeSelected = selectedNodeId != null
 
   return (
     <aside
@@ -25,7 +25,7 @@ export const RightInspector: React.FC = () => {
         width: 'clamp(340px, 28vw, 420px)',
         flexShrink: 0,
         background: 'var(--color-canvas)',
-        borderLeft: '1px solid var(--color-hairline)',
+        borderLeft: '1px solid var(--color-hairline)'
       }}
     >
       {hasNodeSelected ? (
@@ -39,7 +39,7 @@ export const RightInspector: React.FC = () => {
             className="flex h-12 flex-shrink-0 items-center gap-2.5 px-5"
             style={{
               background: 'var(--color-surface-card)',
-              borderBottom: '1px solid var(--color-hairline)',
+              borderBottom: '1px solid var(--color-hairline)'
             }}
           >
             <div
@@ -47,7 +47,7 @@ export const RightInspector: React.FC = () => {
               style={{
                 background: 'var(--color-canvas)',
                 border: '1px solid var(--color-hairline)',
-                color: 'var(--color-muted)',
+                color: 'var(--color-muted)'
               }}
             >
               <BookOpen size={14} />
@@ -65,5 +65,5 @@ export const RightInspector: React.FC = () => {
         </>
       )}
     </aside>
-  );
-};
+  )
+}
