@@ -5,6 +5,7 @@ import {
   AgentConfigExportPreview,
   AgentConfigFileOperation,
 } from '@shared';
+import { assertWorkspaceBound } from '../workspace-boundary';
 
 const MARKER_PATTERNS = {
   markdown: {
@@ -64,16 +65,6 @@ export async function readExistingFile(filePath: string): Promise<string | null>
     return await fs.readFile(filePath, 'utf-8');
   } catch {
     return null;
-  }
-}
-
-function assertWorkspaceBound(workspacePath: string, absolutePath: string): void {
-  const workspaceRoot = path.resolve(workspacePath);
-  const targetPath = path.resolve(absolutePath);
-  const relativePath = path.relative(workspaceRoot, targetPath);
-
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    throw new Error(`Refusing to write outside the workspace: ${absolutePath}`);
   }
 }
 

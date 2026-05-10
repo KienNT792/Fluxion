@@ -1,8 +1,19 @@
-export const MAX_EVIDENCE_FILES = 16
-export const MAX_FILE_BYTES = 14 * 1024
-export const MAX_TOTAL_TEXT_BYTES = 80 * 1024
+export interface OnboardingConfig {
+  evidence: {
+    maxFiles: number
+    maxFileBytes: number
+    maxTotalTextBytes: number
+    prioritySignalFiles: readonly string[]
+  }
+  codex: {
+    sandboxMode: 'read-only'
+    approvalPolicy: 'never'
+    reasoningLevel: 'medium'
+    timeoutMs: number
+  }
+}
 
-export const PRIORITY_SIGNAL_FILES = [
+const PRIORITY_SIGNAL_FILES = [
   'README.md',
   'AGENTS.md',
   'package.json',
@@ -29,3 +40,18 @@ export const PRIORITY_SIGNAL_FILES = [
   'GEMINI.md',
   '.cursorrules'
 ] as const
+
+export const ONBOARDING_CONFIG = {
+  evidence: {
+    maxFiles: 16,
+    maxFileBytes: 14 * 1024,
+    maxTotalTextBytes: 80 * 1024,
+    prioritySignalFiles: PRIORITY_SIGNAL_FILES
+  },
+  codex: {
+    sandboxMode: 'read-only',
+    approvalPolicy: 'never',
+    reasoningLevel: 'medium',
+    timeoutMs: 120_000
+  }
+} as const satisfies OnboardingConfig

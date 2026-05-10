@@ -119,6 +119,111 @@ describe('onboarding-codex-parser', () => {
     expect(calls.join('\n')).toContain('codex.output-normalized')
   })
 
+  it.each([
+    {
+      category: 'verification',
+      risk: 'low',
+      expectedCategory: 'test',
+      expectedRisk: 'safe'
+    },
+    {
+      category: 'verify',
+      risk: 'medium',
+      expectedCategory: 'test',
+      expectedRisk: 'needs-approval'
+    },
+    {
+      category: 'Type Check',
+      risk: 'needs_approval',
+      expectedCategory: 'typecheck',
+      expectedRisk: 'needs-approval'
+    },
+    {
+      category: 'E2E',
+      risk: 'read only',
+      expectedCategory: 'e2e',
+      expectedRisk: 'safe'
+    }
+  ])(
+    'normalizes command category $category and risk $risk to canonical enums',
+    ({ category, risk, expectedCategory, expectedRisk }) => {
+      const fallbackPacket = createPacket()
+      const rawPacket = createPacket({
+        generationMode: 'codex-assisted',
+        commands: [
+          {
+            id: 'command-1',
+            label: 'Verify',
+            command: 'npm run test',
+            cwd: '.',
+            category: category as never,
+            risk: risk as never,
+            confidence: 'medium',
+            evidenceIds: []
+          }
+        ],
+        diagnostics: {
+          generatedAt: '2026-01-02T00:00:00.000Z',
+          mode: 'codex-assisted',
+          model: 'gpt-5.5',
+          filesRead: 1,
+          truncatedFiles: [],
+          warnings: []
+        }
+      })
+
+      const packet = parseCodexOnboardingOutput(JSON.stringify(rawPacket), fallbackPacket, {
+        generatedAt: '2026-01-03T00:00:00.000Z',
+        mode: 'codex-assisted',
+        model: 'gpt-5.5',
+        filesRead: 1,
+        truncatedFiles: [],
+        warnings: []
+      })
+
+      expect(packet.commands[0]).toMatchObject({
+        category: expectedCategory,
+        risk: expectedRisk
+      })
+      expect(packet.diagnostics.warnings).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Normalized invalid onboarding command category'),
+          expect.stringContaining('Normalized invalid onboarding command risk')
+        ])
+      )
+    }
+  )
+
+  it('rejects command enum values that cannot be normalized', () => {
+    const fallbackPacket = createPacket()
+    const invalidPacket = createPacket({
+      generationMode: 'codex-assisted',
+      commands: [
+        {
+          id: 'command-1',
+          label: 'Mystery',
+          command: 'npm run test',
+          cwd: '.',
+          category: 'quality-gate' as never,
+          risk: 'probably-ok' as never,
+          confidence: 'medium',
+          evidenceIds: []
+        }
+      ]
+    })
+
+    expect(() =>
+      parseCodexOnboardingOutput(JSON.stringify(invalidPacket), fallbackPacket, {
+        generatedAt: '2026-01-03T00:00:00.000Z',
+        mode: 'codex-assisted',
+        model: 'gpt-5.5',
+        filesRead: 1,
+        truncatedFiles: [],
+        warnings: []
+      })
+    ).toThrow(/expected packet shape/)
+  })
+
   it('logs parse failures without raw output content', () => {
     const fallbackPacket = createPacket()
     const { calls, logger } = createLogger()

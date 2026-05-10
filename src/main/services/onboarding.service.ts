@@ -23,6 +23,7 @@ import {
   formatOnboardingPacketMarkdown,
   saveOnboardingPacket
 } from './onboarding/onboarding-artifact-writer'
+import { ONBOARDING_CONFIG } from './onboarding/onboarding-config'
 import { parseCodexOnboardingOutput } from './onboarding/onboarding-codex-parser'
 import { buildEvidencePack } from './onboarding/onboarding-evidence-collector'
 import {
@@ -145,11 +146,11 @@ export class OnboardingService {
           runner: 'codex',
           model,
           prompt,
-          reasoningLevel: 'medium',
+          reasoningLevel: ONBOARDING_CONFIG.codex.reasoningLevel,
           codex: {
             json: true,
-            sandboxMode: 'read-only',
-            approvalPolicy: 'never'
+            sandboxMode: ONBOARDING_CONFIG.codex.sandboxMode,
+            approvalPolicy: ONBOARDING_CONFIG.codex.approvalPolicy
           }
         }
       })

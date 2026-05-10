@@ -20,6 +20,7 @@ import {
 import { readExistingFile } from '../agent-config/agent-config-merge.service'
 import { memoryManager } from '../memory-manager'
 import type { OnboardingLogger } from './onboarding-logger'
+import { ONBOARDING_CONFIG } from './onboarding-config'
 import { assertWorkspaceBound, normalizeWorkspacePath } from './onboarding-paths'
 
 function renderBulletLines(items: string[], fallback = '- Unknown'): string {
@@ -124,12 +125,12 @@ function createWorkflowNode(
       model: CODEX_DEFAULT_MODEL,
       label,
       prompt,
-      reasoningLevel: 'medium',
+      reasoningLevel: ONBOARDING_CONFIG.codex.reasoningLevel,
       humanReview,
       codex: {
         json: false,
-        sandboxMode: 'read-only',
-        approvalPolicy: 'never'
+        sandboxMode: ONBOARDING_CONFIG.codex.sandboxMode,
+        approvalPolicy: ONBOARDING_CONFIG.codex.approvalPolicy
       }
     }
   }

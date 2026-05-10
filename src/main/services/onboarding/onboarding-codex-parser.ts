@@ -46,15 +46,32 @@ const COMMAND_RISK_VALUES = [
 const COMMAND_CATEGORY_SET = new Set<string>(COMMAND_CATEGORY_VALUES)
 const COMMAND_RISK_SET = new Set<string>(COMMAND_RISK_VALUES)
 const COMMAND_CATEGORY_ALIASES: Record<string, OnboardingCommandItem['category']> = {
+  bootstrap: 'setup',
+  dependencies: 'setup',
+  install: 'setup',
+  serve: 'dev',
+  start: 'dev',
+  development: 'dev',
   verify: 'test',
   verification: 'test',
   check: 'test',
   checks: 'test',
   'type-check': 'typecheck',
   typechecking: 'typecheck',
+  format: 'lint',
+  formatting: 'lint',
+  compile: 'build',
+  package: 'build',
+  'end-to-end': 'e2e',
+  database: 'db',
+  migration: 'db',
+  migrations: 'db',
   unit: 'test',
   unittest: 'test',
-  'unit-test': 'test'
+  'unit-test': 'test',
+  'unit-tests': 'test',
+  testing: 'test',
+  tests: 'test'
 }
 const COMMAND_RISK_ALIASES: Record<string, OnboardingCommandItem['risk']> = {
   low: 'safe',
@@ -87,64 +104,33 @@ function normalizeEnumInput(value: unknown): string {
     .replace(/[_\s]+/g, '-')
 }
 
-function inferOnboardingCommandCategory(
-  value: unknown,
-  commandValue: unknown
-): OnboardingCommandItem['category'] {
-  const normalized = normalizeEnumInput(value)
-  if (COMMAND_CATEGORY_SET.has(normalized)) {
-    return normalized as OnboardingCommandItem['category']
-  }
-  if (COMMAND_CATEGORY_ALIASES[normalized]) {
-    return COMMAND_CATEGORY_ALIASES[normalized]
-  }
-
-  const command = textValue(commandValue).toLowerCase()
-  const combined = `${normalized} ${command}`
-  if (/\b(install|bootstrap|restore|dependency|dependencies)\b/.test(combined)) return 'setup'
-  if (/\b(dev|develop|serve|start|watch)\b/.test(combined)) return 'dev'
-  if (/\b(typecheck|type-check|typechecking|tsc)\b/.test(combined)) return 'typecheck'
-  if (/\b(lint|eslint|ruff|checkstyle|format)\b/.test(combined)) return 'lint'
-  if (/\b(test|tests|testing|verify|verification|vitest|jest|pytest|rspec)\b/.test(combined)) {
-    return 'test'
-  }
-  if (/\b(build|compile|package)\b/.test(combined)) return 'build'
-  if (/\b(e2e|end-to-end|playwright|cypress)\b/.test(combined)) return 'e2e'
-  if (/\b(db|database|migrate|migration|prisma)\b/.test(combined)) return 'db'
-  return 'other'
+interface NormalizedCommandEnum {
+  value: unknown
+  normalized: boolean
 }
 
-function inferOnboardingCommandRisk(
-  value: unknown,
-  commandValue: unknown
-): OnboardingCommandItem['risk'] {
+function normalizeOnboardingCommandCategory(value: unknown): NormalizedCommandEnum {
   const normalized = normalizeEnumInput(value)
-  if (COMMAND_RISK_SET.has(normalized)) {
-    return normalized as OnboardingCommandItem['risk']
+  if (COMMAND_CATEGORY_SET.has(normalized)) {
+    return { value: normalized, normalized: textValue(value) !== normalized }
   }
-  if (COMMAND_RISK_ALIASES[normalized]) {
-    return COMMAND_RISK_ALIASES[normalized]
+  if (COMMAND_CATEGORY_ALIASES[normalized]) {
+    return { value: COMMAND_CATEGORY_ALIASES[normalized], normalized: true }
   }
 
-  const command = textValue(commandValue).toLowerCase()
-  if (
-    command.includes(' reset ') ||
-    command.includes(' clean ') ||
-    command.includes('remove-item') ||
-    command.includes('rm -rf') ||
-    command.includes('drop database')
-  ) {
-    return 'destructive'
+  return { value, normalized: false }
+}
+
+function normalizeOnboardingCommandRisk(value: unknown): NormalizedCommandEnum {
+  const normalized = normalizeEnumInput(value)
+  if (COMMAND_RISK_SET.has(normalized)) {
+    return { value: normalized, normalized: textValue(value) !== normalized }
   }
-  if (
-    command.includes('install') ||
-    command.includes('migrate') ||
-    command.includes('deploy') ||
-    command.includes('publish')
-  ) {
-    return 'needs-approval'
+  if (COMMAND_RISK_ALIASES[normalized]) {
+    return { value: COMMAND_RISK_ALIASES[normalized], normalized: true }
   }
-  return 'safe'
+
+  return { value, normalized: false }
 }
 
 function normalizeCodexOnboardingJson(value: unknown): { value: unknown; warnings: string[] } {
@@ -160,16 +146,14 @@ function normalizeCodexOnboardingJson(value: unknown): { value: unknown; warning
       return commandValue
     }
 
-    const category = inferOnboardingCommandCategory(command.category, command.command)
-    const risk = inferOnboardingCommandRisk(command.risk, command.command)
-    const rawCategory = normalizeEnumInput(command.category)
-    const rawRisk = normalizeEnumInput(command.risk)
-    if (rawCategory && !COMMAND_CATEGORY_SET.has(rawCategory)) {
+    const category = normalizeOnboardingCommandCategory(command.category)
+    const risk = normalizeOnboardingCommandRisk(command.risk)
+    if (category.normalized) {
       warnings.push(
         `Normalized invalid onboarding command category "${textValue(command.category)}" at commands[${index}].`
       )
     }
-    if (rawRisk && !COMMAND_RISK_SET.has(rawRisk)) {
+    if (risk.normalized) {
       warnings.push(
         `Normalized invalid onboarding command risk "${textValue(command.risk)}" at commands[${index}].`
       )
@@ -177,8 +161,8 @@ function normalizeCodexOnboardingJson(value: unknown): { value: unknown; warning
 
     return {
       ...command,
-      category,
-      risk
+      category: category.value,
+      risk: risk.value
     }
   })
   const diagnostics = asRecord(root.diagnostics)

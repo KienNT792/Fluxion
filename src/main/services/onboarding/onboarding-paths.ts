@@ -1,4 +1,5 @@
 import * as path from 'path'
+export { assertWorkspaceBound } from '../workspace-boundary'
 
 export function normalizeWorkspacePath(workspacePath: string): string {
   return path.resolve(workspacePath)
@@ -56,14 +57,4 @@ export function shouldSkipOnboardingPath(relativePath: string): boolean {
     segments.includes('build') ||
     segments.includes('coverage')
   )
-}
-
-export function assertWorkspaceBound(workspacePath: string, absolutePath: string): void {
-  const workspaceRoot = path.resolve(workspacePath)
-  const targetPath = path.resolve(absolutePath)
-  const relativePath = path.relative(workspaceRoot, targetPath)
-
-  if (relativePath === '' || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    throw new Error(`Refusing to write outside the workspace: ${absolutePath}`)
-  }
 }

@@ -4,7 +4,11 @@ import {
   ONBOARDING_PACKET_VERSION,
   type OnboardingPacket
 } from '@shared'
-import { buildOnboardingContextPatch, countOnboardingSuggestions } from './onboarding-packet-model'
+import {
+  buildOnboardingContextPatch,
+  countOnboardingSuggestions,
+  getOnboardingGenerationAvailability
+} from './onboarding-packet-model'
 
 function createPacket(): OnboardingPacket {
   return {
@@ -58,6 +62,7 @@ describe('onboarding-packet-model', () => {
 
     expect(patch.projectGoal).toBe('Build visual Codex workflows.')
     expect(patch.importantPaths).toEqual(['src/renderer', 'src/main'])
+    expect(patch.focusAreas).toBeUndefined()
     expect(patch.sourceEvidence).toEqual([
       expect.objectContaining({
         detectorId: 'fluxion-onboarding',
@@ -69,5 +74,20 @@ describe('onboarding-packet-model', () => {
   it('counts non-empty packet suggestions', () => {
     expect(countOnboardingSuggestions(createPacket())).toBe(3)
     expect(countOnboardingSuggestions(null)).toBe(0)
+  })
+
+  it('keeps deterministic onboarding available when Codex is unavailable', () => {
+    expect(
+      getOnboardingGenerationAvailability({ isCodexReady: false, isGenerating: false })
+    ).toEqual({
+      deterministicDisabled: false,
+      codexDisabled: true
+    })
+    expect(getOnboardingGenerationAvailability({ isCodexReady: true, isGenerating: true })).toEqual(
+      {
+        deterministicDisabled: true,
+        codexDisabled: true
+      }
+    )
   })
 })

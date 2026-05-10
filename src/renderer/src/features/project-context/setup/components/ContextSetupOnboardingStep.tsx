@@ -11,7 +11,10 @@ import { Button } from '@renderer/components/ui/Button'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
 import { PreviewTabButton } from './PreviewTabButton'
 import type { OnboardingPacketTab } from '../lib/onboarding-packet-model'
-import { countOnboardingSuggestions } from '../lib/onboarding-packet-model'
+import {
+  countOnboardingSuggestions,
+  getOnboardingGenerationAvailability
+} from '../lib/onboarding-packet-model'
 
 interface ContextSetupOnboardingStepProps {
   applyRepoSkillError: string | null
@@ -104,6 +107,10 @@ function EmptyPacketState({
         : progressStage === 'reading'
           ? 'Reading'
           : 'Ready'
+  const generationAvailability = getOnboardingGenerationAvailability({
+    isCodexReady,
+    isGenerating
+  })
 
   return (
     <BorderedPanel tone="soft">
@@ -129,7 +136,7 @@ function EmptyPacketState({
           <Button
             variant="secondary"
             onClick={() => void onGenerate('deterministic')}
-            disabled={isGenerating}
+            disabled={generationAvailability.deterministicDisabled}
           >
             {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Build From Scan
@@ -137,7 +144,7 @@ function EmptyPacketState({
           <Button
             variant="primary"
             onClick={() => void onGenerate('codex-assisted')}
-            disabled={isGenerating || !isCodexReady}
+            disabled={generationAvailability.codexDisabled}
             title={isCodexReady ? 'Run read-only Codex onboarding' : codexReadinessDetail}
           >
             {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}

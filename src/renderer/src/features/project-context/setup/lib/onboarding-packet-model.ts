@@ -6,6 +6,11 @@ import type {
 
 export type OnboardingPacketTab = 'summary' | 'architecture' | 'commands' | 'risks' | 'evidence'
 
+export interface OnboardingGenerationAvailability {
+  deterministicDisabled: boolean
+  codexDisabled: boolean
+}
+
 const LIST_FIELDS = [
   'stableRules',
   'verificationCommands',
@@ -98,4 +103,17 @@ export function countOnboardingSuggestions(packet: OnboardingPacket | null): num
   return Object.values(packet.suggestedContextPatch).filter((value) =>
     Array.isArray(value) ? value.length > 0 : Boolean(value?.trim())
   ).length
+}
+
+export function getOnboardingGenerationAvailability({
+  isCodexReady,
+  isGenerating
+}: {
+  isCodexReady: boolean
+  isGenerating: boolean
+}): OnboardingGenerationAvailability {
+  return {
+    deterministicDisabled: isGenerating,
+    codexDisabled: isGenerating || !isCodexReady
+  }
 }

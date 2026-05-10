@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -322,5 +322,35 @@ describe('onboarding.service', () => {
     await service.applyRepoSkillPreview(preview)
     const skill = await readFile(skillPath, 'utf8')
     expect(skill).toContain('name: fluxion-onboarding')
+  })
+
+  it('rejects repo-local skill apply when the target escapes through a symlink', async () => {
+    const workspacePath = await createWorkspace()
+    const outsidePath = await createWorkspace()
+    const service = new OnboardingService()
+    const linkPath = join(workspacePath, '.agents')
+    await symlink(outsidePath, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+
+    await expect(
+      service.applyRepoSkillPreview({
+        label: 'Fluxion Onboarding Skill',
+        workspacePath,
+        createdAt: '2026-01-02T00:00:00.000Z',
+        warnings: [],
+        operations: [
+          {
+            action: 'create',
+            relativePath: '.agents/skills/fluxion-onboarding/SKILL.md',
+            absolutePath: join(linkPath, 'skills', 'fluxion-onboarding', 'SKILL.md'),
+            description: 'Escaping repo-local skill write.',
+            content: '# Should not be written'
+          }
+        ]
+      })
+    ).rejects.toThrow(/outside the workspace/)
+
+    await expect(
+      stat(join(outsidePath, 'skills', 'fluxion-onboarding', 'SKILL.md'))
+    ).rejects.toThrow()
   })
 })

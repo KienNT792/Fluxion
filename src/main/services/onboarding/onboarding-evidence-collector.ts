@@ -1,12 +1,7 @@
 import * as path from 'path'
 import type { ContextScanResult, ProjectContextDraft } from '@shared'
 import type { WorkspaceSnapshot, WorkspaceSnapshotFile } from '../context/workspace-snapshot'
-import {
-  MAX_EVIDENCE_FILES,
-  MAX_FILE_BYTES,
-  MAX_TOTAL_TEXT_BYTES,
-  PRIORITY_SIGNAL_FILES
-} from './onboarding-config'
+import { ONBOARDING_CONFIG } from './onboarding-config'
 import type { OnboardingLogger } from './onboarding-logger'
 import { normalizeOnboardingRelativePath, shouldSkipOnboardingPath } from './onboarding-paths'
 import { uniqueList } from './onboarding-utils'
@@ -36,7 +31,7 @@ export function collectOnboardingCandidatePaths(
   scanResult: ContextScanResult
 ): string[] {
   return uniqueList([
-    ...PRIORITY_SIGNAL_FILES,
+    ...ONBOARDING_CONFIG.evidence.prioritySignalFiles,
     ...scanResult.scannedFiles,
     ...scanResult.discoveredPaths,
     ...draft.importantPaths,
@@ -62,7 +57,10 @@ export async function buildEvidencePack(
   let totalBytes = 0
 
   for (const relativePath of collectOnboardingCandidatePaths(draft, scanResult)) {
-    if (files.length >= MAX_EVIDENCE_FILES || totalBytes >= MAX_TOTAL_TEXT_BYTES) {
+    if (
+      files.length >= ONBOARDING_CONFIG.evidence.maxFiles ||
+      totalBytes >= ONBOARDING_CONFIG.evidence.maxTotalTextBytes
+    ) {
       break
     }
     if (!snapshot.hasFile(relativePath)) {
@@ -74,8 +72,8 @@ export async function buildEvidencePack(
       continue
     }
 
-    const remainingBytes = MAX_TOTAL_TEXT_BYTES - totalBytes
-    const maxBytes = Math.min(MAX_FILE_BYTES, remainingBytes)
+    const remainingBytes = ONBOARDING_CONFIG.evidence.maxTotalTextBytes - totalBytes
+    const maxBytes = Math.min(ONBOARDING_CONFIG.evidence.maxFileBytes, remainingBytes)
     const content = await snapshot.readText(relativePath, maxBytes)
     if (!content?.trim()) {
       continue
