@@ -7,7 +7,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = '', variant = 'secondary', size = 'md', isActive, disabled, children, ...props }, ref) => {
+  ({ className = '', variant = 'secondary', size = 'md', isActive, disabled, children, style, ...props }, ref) => {
     // Determine styles based on variant
     const getVariantStyle = (): React.CSSProperties => {
       switch (variant) {
@@ -61,7 +61,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           return { minHeight: '32px', padding: '0 12px', fontSize: '13px' };
         case 'md':
         default:
-          return { minHeight: '36px', padding: '0 14px', fontSize: '14px' };
+          return { height: '40px', minHeight: '40px', padding: '0 17px', fontSize: '14px' };
       }
     };
 
@@ -83,9 +83,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled}
         className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] ${className}`}
         style={{
-          fontFamily: "'CursorGothic', sans-serif",
+          fontFamily: 'var(--font-sans)',
+          lineHeight: 1,
+          letterSpacing: 0,
+          cursor: disabled ? 'not-allowed' : 'pointer',
           ...getSizeStyle(),
           ...getVariantStyle(),
+          ...style,
           ...getDisabledStyle(),
         }}
         onMouseEnter={(e) => {

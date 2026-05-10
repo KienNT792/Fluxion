@@ -58,10 +58,11 @@ export const WelcomeNav: React.FC<WelcomeNavProps> = ({
     <div className="flex items-center gap-2">
       <Tooltip content={codexDetail}>
         <div
-          className="hidden items-center gap-3 rounded-md px-3 py-2 lg:flex"
+          className="hidden h-10 items-center gap-3 rounded-md px-3 lg:flex"
           style={{
             background: 'var(--color-surface-card)',
-            border: '1px solid var(--color-hairline)'
+            border: '1px solid var(--color-hairline)',
+            fontFamily: 'var(--font-sans)'
           }}
         >
           <StatusChip
@@ -70,8 +71,12 @@ export const WelcomeNav: React.FC<WelcomeNavProps> = ({
             animate={isProviderCapabilitiesLoading}
           />
           <div
-            className="flex items-center gap-2 text-[11px]"
-            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+            className="flex items-center gap-2 text-[13px]"
+            style={{
+              color: 'var(--color-muted)',
+              fontFamily: 'var(--font-sans)',
+              lineHeight: 1
+            }}
           >
             <span>{cliLabel}</span>
             <span style={{ color: 'var(--color-muted-soft)' }}>·</span>
@@ -79,19 +84,16 @@ export const WelcomeNav: React.FC<WelcomeNavProps> = ({
           </div>
         </div>
       </Tooltip>
-      <Button variant="secondary" size="sm" onClick={onOpenSettings}>
+      <Button variant="secondary" onClick={onOpenSettings}>
         <Settings size={14} />
-        Settings
       </Button>
       <Button
         variant="secondary"
-        size="sm"
         onClick={() => {
           window.open('https://github.com/nickmilo/Fluxion', '_blank')
         }}
       >
         <BookOpen size={14} />
-        Docs
       </Button>
     </div>
   </nav>
