@@ -16,6 +16,7 @@ export * from './agent.types';
 export * from './agent-config.types';
 export * from './context.types';
 export * from './context.utils';
+export * from './onboarding.types';
 export * from './memory.types';
 export * from './ipc.channels';
 export * from './ipc.payloads';

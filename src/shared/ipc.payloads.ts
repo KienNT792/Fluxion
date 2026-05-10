@@ -16,6 +16,18 @@ import {
   WorkspaceContextStatus
 } from './context.types'
 import {
+  ApplyRepoOnboardingSkillPreviewRequest,
+  ApplyRepoOnboardingSkillPreviewResult,
+  CreateOnboardingWorkflowRequest,
+  CreateOnboardingWorkflowResult,
+  GenerateOnboardingPacketRequest,
+  OnboardingPacket,
+  RepoOnboardingSkillPreview,
+  RepoOnboardingSkillPreviewRequest,
+  SaveOnboardingPacketRequest,
+  SaveOnboardingPacketResult
+} from './onboarding.types'
+import {
   ExecutionMode,
   NodeId,
   NodeStatus,
@@ -111,6 +123,16 @@ export interface WorkflowSavedPayload {
 export type WorkspaceContextScanPayload = ContextScanResult
 export type WorkspaceContextEnrichPayload = ContextEnrichmentRequest
 export type WorkspaceContextEnrichResult = ContextEnrichmentResult
+export type WorkspaceGenerateOnboardingPacketPayload = GenerateOnboardingPacketRequest
+export type WorkspaceGenerateOnboardingPacketResult = OnboardingPacket
+export type WorkspaceSaveOnboardingPacketPayload = SaveOnboardingPacketRequest
+export type WorkspaceSaveOnboardingPacketResult = SaveOnboardingPacketResult
+export type WorkspaceCreateOnboardingWorkflowPayload = CreateOnboardingWorkflowRequest
+export type WorkspaceCreateOnboardingWorkflowResult = CreateOnboardingWorkflowResult
+export type WorkspaceCreateRepoOnboardingSkillPreviewPayload = RepoOnboardingSkillPreviewRequest
+export type WorkspaceCreateRepoOnboardingSkillPreviewResult = RepoOnboardingSkillPreview
+export type WorkspaceApplyRepoOnboardingSkillPreviewPayload = ApplyRepoOnboardingSkillPreviewRequest
+export type WorkspaceApplyRepoOnboardingSkillPreviewResult = ApplyRepoOnboardingSkillPreviewResult
 export type WorkspaceContextPayload = ProjectContextDraft | null
 export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload
 

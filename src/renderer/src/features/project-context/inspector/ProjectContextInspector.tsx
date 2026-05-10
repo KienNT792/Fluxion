@@ -193,14 +193,14 @@ export const ProjectContextInspector: React.FC = () => {
           </ContextActionButton>
           <ContextActionButton
             icon={<Sparkles size={13} />}
-            onClick={() => setContextSetupOpen(true, 'review')}
+            onClick={() => setContextSetupOpen(true, 'onboarding')}
             variant="primary"
           >
-            Enrich with Codex
+            Run Onboarding
           </ContextActionButton>
         </div>
         <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--color-muted)' }}>
-          Enrichment opens Review & Save so suggestions can be merged before saving.
+          Onboarding opens the packet step so evidence and artifacts can be reviewed before saving.
         </p>
       </ContextSection>
 

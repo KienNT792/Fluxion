@@ -7,7 +7,7 @@ import {
 } from '@shared'
 import type { StatusChipTone } from '@renderer/components/ui/StatusChip'
 
-export type ContextStepId = 'detect' | 'rules' | 'brief' | 'focus' | 'review'
+export type ContextStepId = 'detect' | 'onboarding' | 'rules' | 'brief' | 'focus' | 'review'
 export type PreviewTab = 'readable' | 'markdown' | 'json'
 
 export const STEPS: { id: ContextStepId; label: string; description: string }[] = [
@@ -15,6 +15,11 @@ export const STEPS: { id: ContextStepId; label: string; description: string }[] 
     id: 'detect',
     label: 'Detect Workspace',
     description: 'Read workspace signals and choose kickoff mode if needed.'
+  },
+  {
+    id: 'onboarding',
+    label: 'Onboarding Packet',
+    description: 'Generate evidence-backed packet and optional repository artifacts.'
   },
   {
     id: 'rules',
@@ -33,8 +38,8 @@ export const STEPS: { id: ContextStepId; label: string; description: string }[] 
   },
   {
     id: 'review',
-    label: 'Review & Save',
-    description: 'Preview the exact context Fluxion will pass to agent runtime.'
+    label: 'Review & Export',
+    description: 'Preview context and export workspace-local agent artifacts.'
   }
 ] as const
 

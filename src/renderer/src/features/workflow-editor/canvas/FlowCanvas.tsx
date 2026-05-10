@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react'
+import React, { useRef, useCallback, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -14,6 +14,7 @@ import { useThemeStore } from '@renderer/stores/theme.store'
 import { Plus, Workflow } from 'lucide-react'
 import { getDefaultCodexModel } from '@renderer/lib/provider-capabilities'
 import { Button } from '@renderer/components/ui/Button'
+import { switchWorkflow } from '@renderer/lib/workflow-session'
 
 import { AgentNode } from './AgentNode'
 import { AnimatedEdge } from './AnimatedEdge'
@@ -25,6 +26,8 @@ const edgeTypes = { animatedEdge: AnimatedEdge }
 interface CanvasEmptyStateProps {
   contextStatus: 'missing' | 'incomplete' | 'ready' | 'legacy'
   onAddAgent: () => void
+  onCreateOnboardingWorkflow: () => void
+  isCreatingOnboardingWorkflow: boolean
   onReviewContext: () => void
   onTrySimpleChain: () => void
 }
@@ -32,6 +35,8 @@ interface CanvasEmptyStateProps {
 const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
   contextStatus,
   onAddAgent,
+  onCreateOnboardingWorkflow,
+  isCreatingOnboardingWorkflow,
   onReviewContext,
   onTrySimpleChain
 }) => {
@@ -73,7 +78,7 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
         <div className="flex flex-wrap items-center justify-center gap-2">
           {shouldReviewContext ? (
             <Button variant="primary" size="lg" onClick={onReviewContext}>
-              Review Context
+              Review Onboarding
             </Button>
           ) : null}
           <Button
@@ -87,6 +92,14 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
           <Button variant="ghost" size="lg" onClick={onTrySimpleChain}>
             Try Simple Chain
           </Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={onCreateOnboardingWorkflow}
+            disabled={isCreatingOnboardingWorkflow}
+          >
+            {isCreatingOnboardingWorkflow ? 'Creating...' : 'Create onboarding workflow'}
+          </Button>
         </div>
       </div>
     </div>
@@ -96,6 +109,7 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
 export const FlowCanvas: React.FC = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition, fitView } = useReactFlow()
+  const [isCreatingOnboardingWorkflow, setIsCreatingOnboardingWorkflow] = useState(false)
 
   const nodes = useWorkflowStore((state) => state.nodes)
   const edges = useWorkflowStore((state) => state.edges)
@@ -109,6 +123,7 @@ export const FlowCanvas: React.FC = () => {
   const deleteNode = useWorkflowStore((state) => state.deleteNode)
   const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode)
   const contextStatus = useWorkflowStore((state) => state.contextStatus)
+  const workspacePath = useWorkflowStore((state) => state.workspacePath)
   const setContextSetupOpen = useWorkflowStore((state) => state.setContextSetupOpen)
 
   // ── Delete/Backspace key shortcut ──────────────────────────────
@@ -210,6 +225,22 @@ export const FlowCanvas: React.FC = () => {
     window.requestAnimationFrame(() => fitView({ padding: 0.35, duration: 200 }))
   }, [fitView, providerCapabilities, setEdges, setNodes, setSelectedNode])
 
+  const handleCreateOnboardingWorkflow = useCallback(async (): Promise<void> => {
+    if (!workspacePath || isCreatingOnboardingWorkflow) {
+      return
+    }
+
+    setIsCreatingOnboardingWorkflow(true)
+    try {
+      const result = await window.api.createOnboardingWorkflow({ workspacePath })
+      await switchWorkflow(result.workflow.id)
+    } catch (error) {
+      console.error('Failed to create onboarding workflow', error)
+    } finally {
+      setIsCreatingOnboardingWorkflow(false)
+    }
+  }, [isCreatingOnboardingWorkflow, workspacePath])
+
   const theme = useThemeStore((state) => state.theme)
   const colorMode = theme === 'dark' ? 'dark' : 'light'
   // Calm dot grid — barely visible, does not compete with nodes
@@ -222,8 +253,10 @@ export const FlowCanvas: React.FC = () => {
       {nodes.length === 0 && (
         <CanvasEmptyState
           contextStatus={contextStatus}
+          isCreatingOnboardingWorkflow={isCreatingOnboardingWorkflow}
           onAddAgent={handleAddAgentFromEmptyState}
-          onReviewContext={() => setContextSetupOpen(true)}
+          onCreateOnboardingWorkflow={() => void handleCreateOnboardingWorkflow()}
+          onReviewContext={() => setContextSetupOpen(true, 'onboarding')}
           onTrySimpleChain={handleTrySimpleChain}
         />
       )}

@@ -10,13 +10,23 @@ import {
   ContextEnrichmentRequest,
   ContextEnrichmentResult,
   ContextScanResult,
+  ApplyRepoOnboardingSkillPreviewRequest,
+  ApplyRepoOnboardingSkillPreviewResult,
+  CreateOnboardingWorkflowRequest,
+  CreateOnboardingWorkflowResult,
+  GenerateOnboardingPacketRequest,
   ExecutionMode,
   MemoryContextReadyPayload,
   NodeId,
+  OnboardingPacket,
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
   ProjectContextDraft,
+  RepoOnboardingSkillPreview,
+  RepoOnboardingSkillPreviewRequest,
+  SaveOnboardingPacketRequest,
+  SaveOnboardingPacketResult,
   RecentWorkspaceEntry,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
@@ -61,6 +71,19 @@ export interface FluxionAPI {
   ) => Promise<WorkspaceReadTextFileResult>
   scanWorkspaceContext: (workspacePath: string) => Promise<ContextScanResult>
   enrichProjectContext: (payload: ContextEnrichmentRequest) => Promise<ContextEnrichmentResult>
+  generateOnboardingPacket: (payload: GenerateOnboardingPacketRequest) => Promise<OnboardingPacket>
+  saveOnboardingPacket: (
+    payload: SaveOnboardingPacketRequest
+  ) => Promise<SaveOnboardingPacketResult>
+  createOnboardingWorkflow: (
+    payload: CreateOnboardingWorkflowRequest
+  ) => Promise<CreateOnboardingWorkflowResult>
+  createRepoOnboardingSkillPreview: (
+    payload: RepoOnboardingSkillPreviewRequest
+  ) => Promise<RepoOnboardingSkillPreview>
+  applyRepoOnboardingSkillPreview: (
+    payload: ApplyRepoOnboardingSkillPreviewRequest
+  ) => Promise<ApplyRepoOnboardingSkillPreviewResult>
   getContext: (workspacePath: string) => Promise<ProjectContextDraft | null>
   saveProjectContext: (
     workspacePath: string,

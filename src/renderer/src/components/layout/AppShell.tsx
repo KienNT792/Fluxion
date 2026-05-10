@@ -304,8 +304,12 @@ export const AppShell: React.FC = () => {
               >
                 Dismiss
               </Button>
-              <Button variant="secondary" size="lg" onClick={() => setContextSetupOpen(true)}>
-                Review Context
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => setContextSetupOpen(true, 'onboarding')}
+              >
+                Review Onboarding
               </Button>
             </div>
           </div>

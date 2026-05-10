@@ -6,10 +6,16 @@ import {
   AgentConfigApplyPreviewPayload,
   AgentConfigCreatePreviewPayload,
   ContextEnrichmentRequest,
+  GenerateOnboardingPacketRequest,
   getProviderCodexApprovalProtocolStatus,
   getWorkflowCodexApprovalGuardrail,
   IpcChannels,
+  RepoOnboardingSkillPreview,
   ProviderSettingsSummaryPayload,
+  SaveOnboardingPacketRequest,
+  CreateOnboardingWorkflowRequest,
+  RepoOnboardingSkillPreviewRequest,
+  ApplyRepoOnboardingSkillPreviewRequest,
   GetProviderCapabilitiesPayload,
   ProjectContextDraft,
   UpdateOpenAIApiKeyPayload,
@@ -37,6 +43,7 @@ import { settingsService } from '../services/settings.service'
 import { openShellPath, revealShellPath } from '../services/shell-path.service'
 import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service'
 import { contextEnrichmentService } from '../services/context-enrichment.service'
+import { onboardingService } from '../services/onboarding.service'
 import { workspaceService } from '../services/workspace.service'
 import { workspaceTrustService } from '../services/workspace-trust.service'
 import { recentWorkspacesService } from '../services/recent-workspaces.service'
@@ -294,6 +301,41 @@ export function registerWorkflowHandlers(): void {
     IpcChannels.WORKSPACE_ENRICH_CONTEXT,
     async (_event, payload: ContextEnrichmentRequest) => {
       return contextEnrichmentService.enrich(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_GENERATE_ONBOARDING_PACKET,
+    async (_event, payload: GenerateOnboardingPacketRequest) => {
+      return onboardingService.generatePacket(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_SAVE_ONBOARDING_PACKET,
+    async (_event, payload: SaveOnboardingPacketRequest) => {
+      return onboardingService.savePacket(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_CREATE_ONBOARDING_WORKFLOW,
+    async (_event, payload: CreateOnboardingWorkflowRequest) => {
+      return onboardingService.createWorkflow(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_CREATE_REPO_ONBOARDING_SKILL_PREVIEW,
+    async (_event, payload: RepoOnboardingSkillPreviewRequest) => {
+      return onboardingService.createRepoSkillPreview(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_APPLY_REPO_ONBOARDING_SKILL_PREVIEW,
+    async (_event, payload: ApplyRepoOnboardingSkillPreviewRequest) => {
+      return onboardingService.applyRepoSkillPreview(payload.preview as RepoOnboardingSkillPreview)
     }
   )
 

@@ -41,7 +41,7 @@ interface ReviewFocusRequest {
 }
 
 type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
-type ContextSetupInitialStep = 'detect' | 'rules' | 'brief' | 'focus' | 'review';
+type ContextSetupInitialStep = 'detect' | 'onboarding' | 'rules' | 'brief' | 'focus' | 'review';
 
 interface WorkspaceOpenState {
   phase: WorkspaceOpenPhase;

@@ -11,14 +11,24 @@ import {
   ContextEnrichmentRequest,
   ContextEnrichmentResult,
   ContextScanResult,
+  ApplyRepoOnboardingSkillPreviewRequest,
+  ApplyRepoOnboardingSkillPreviewResult,
+  CreateOnboardingWorkflowRequest,
+  CreateOnboardingWorkflowResult,
+  GenerateOnboardingPacketRequest,
   ExecutionMode,
   IpcChannels,
   MemoryContextReadyPayload,
   NodeId,
+  OnboardingPacket,
   GetProviderCapabilitiesPayload,
   ProviderCapabilitiesPayload,
   ProviderSettingsSummaryPayload,
   ProjectContextDraft,
+  RepoOnboardingSkillPreview,
+  RepoOnboardingSkillPreviewRequest,
+  SaveOnboardingPacketRequest,
+  SaveOnboardingPacketResult,
   RecentWorkspaceEntry,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
@@ -129,6 +139,39 @@ const api = {
       IpcChannels.WORKSPACE_ENRICH_CONTEXT,
       payload
     ) as Promise<ContextEnrichmentResult>,
+  generateOnboardingPacket: (payload: GenerateOnboardingPacketRequest): Promise<OnboardingPacket> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_GENERATE_ONBOARDING_PACKET,
+      payload
+    ) as Promise<OnboardingPacket>,
+  saveOnboardingPacket: (
+    payload: SaveOnboardingPacketRequest
+  ): Promise<SaveOnboardingPacketResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_SAVE_ONBOARDING_PACKET,
+      payload
+    ) as Promise<SaveOnboardingPacketResult>,
+  createOnboardingWorkflow: (
+    payload: CreateOnboardingWorkflowRequest
+  ): Promise<CreateOnboardingWorkflowResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_CREATE_ONBOARDING_WORKFLOW,
+      payload
+    ) as Promise<CreateOnboardingWorkflowResult>,
+  createRepoOnboardingSkillPreview: (
+    payload: RepoOnboardingSkillPreviewRequest
+  ): Promise<RepoOnboardingSkillPreview> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_CREATE_REPO_ONBOARDING_SKILL_PREVIEW,
+      payload
+    ) as Promise<RepoOnboardingSkillPreview>,
+  applyRepoOnboardingSkillPreview: (
+    payload: ApplyRepoOnboardingSkillPreviewRequest
+  ): Promise<ApplyRepoOnboardingSkillPreviewResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_APPLY_REPO_ONBOARDING_SKILL_PREVIEW,
+      payload
+    ) as Promise<ApplyRepoOnboardingSkillPreviewResult>,
   getContext: (workspacePath: string): Promise<ProjectContextDraft | null> =>
     ipcRenderer.invoke(
       IpcChannels.WORKSPACE_GET_CONTEXT,

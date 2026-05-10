@@ -36,6 +36,7 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
   const generatedLabel = enrichmentResult
     ? new Date(enrichmentResult.diagnostics.generatedAt).toLocaleString()
     : null
+  const hasPendingMerge = changes.length > 0
 
   return (
     <div
@@ -48,15 +49,23 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip tone="running" label="Codex enrichment" />
+            <StatusChip
+              tone={hasPendingMerge ? 'warning' : 'running'}
+              label={hasPendingMerge ? 'Context merge pending' : 'Codex context pass'}
+            />
             {enrichmentResult ? (
               <StatusChip tone="idle" label={`${enrichmentResult.diagnostics.filesRead} files`} />
             ) : null}
           </div>
           <p className="mt-2 text-sm leading-6" style={{ color: 'var(--color-body)' }}>
-            Run a read-only Codex pass over the scanned evidence, then merge only the context
-            suggestions you want.
+            Run a read-only Codex pass over scanned evidence. Suggestions stay separate until you
+            explicitly merge them into the context draft.
           </p>
+          {hasPendingMerge ? (
+            <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-timeline-done)' }}>
+              Save Context will not apply these suggestions automatically.
+            </p>
+          ) : null}
           {generatedLabel ? (
             <p className="mt-1 text-[11px]" style={{ color: 'var(--color-muted)' }}>
               {enrichmentResult?.diagnostics.model} · {generatedLabel}
@@ -68,7 +77,7 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
           {enrichmentResult ? (
             <Button size="sm" variant="ghost" onClick={onClear} disabled={isEnriching}>
               <X size={14} />
-              Dismiss
+              Discard suggestions
             </Button>
           ) : null}
           <Button
@@ -130,16 +139,21 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
       {changes.length > 0 ? (
         <div className="mt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold" style={{ color: 'var(--color-body-strong)' }}>
-              Suggested context changes
-            </p>
+            <div>
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-body-strong)' }}>
+                Pending merge into context draft
+              </p>
+              <p className="mt-1 text-[11px] leading-5" style={{ color: 'var(--color-muted)' }}>
+                Review the diff below, then merge all or individual fields before saving.
+              </p>
+            </div>
             <Button
               size="sm"
               variant="primary"
               onClick={() => onAccept(CONTEXT_ENRICHMENT_FIELDS)}
               disabled={isEnriching}
             >
-              Merge all
+              Merge all into context
             </Button>
           </div>
 
@@ -167,7 +181,7 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
                   onClick={() => onAccept([change.field])}
                   disabled={isEnriching}
                 >
-                  Merge
+                  Merge field
                 </Button>
               </div>
 

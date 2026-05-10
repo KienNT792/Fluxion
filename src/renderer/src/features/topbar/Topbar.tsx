@@ -166,6 +166,10 @@ export const Topbar: React.FC = () => {
               isWorkspaceOpening={isWorkspaceOpening}
               onCreateWorkflow={handleOpenCreateWorkflowDialog}
               onOpenWorkspace={handleOpenWorkspace}
+              onRunOnboarding={() => {
+                setIsProjectMenuOpen(false)
+                setContextSetupOpen(true, 'onboarding')
+              }}
               onSave={handleSave}
               onToggle={() => setIsProjectMenuOpen((current) => !current)}
               projectMenuRef={projectMenuRef}

@@ -24,6 +24,22 @@ interface ContextSetupDetectStepProps {
   workspaceName: string
 }
 
+function SignalPill({ value, mono = false }: { value: string; mono?: boolean }): React.JSX.Element {
+  return (
+    <span
+      className="rounded-full px-2.5 py-1 text-[11px]"
+      style={{
+        background: 'var(--color-canvas-soft)',
+        border: '1px solid var(--color-hairline)',
+        color: 'var(--color-ink)',
+        fontFamily: mono ? 'var(--font-mono)' : 'inherit'
+      }}
+    >
+      {value}
+    </span>
+  )
+}
+
 export const ContextSetupDetectStep: React.FC<ContextSetupDetectStepProps> = ({
   draft,
   scanResult,
@@ -50,6 +66,88 @@ export const ContextSetupDetectStep: React.FC<ContextSetupDetectStepProps> = ({
         {getWorkspaceTypeDescription(draft.workspaceType)}
       </p>
     </div>
+
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div
+        className="rounded-lg px-4 py-4"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)'
+        }}
+      >
+        <span
+          className="text-[11px] uppercase tracking-[0.08em]"
+          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+        >
+          Stack and tooling
+        </span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            ...draft.primaryStack,
+            ...draft.languages,
+            ...draft.frameworks,
+            ...draft.packageManagers,
+            ...draft.buildSystems,
+            ...draft.testFrameworks
+          ]
+            .slice(0, 16)
+            .map((item) => (
+              <SignalPill key={item} value={item} />
+            ))}
+        </div>
+      </div>
+
+      <div
+        className="rounded-lg px-4 py-4"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)'
+        }}
+      >
+        <span
+          className="text-[11px] uppercase tracking-[0.08em]"
+          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+        >
+          Commands and components
+        </span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {draft.verificationCommands.slice(0, 6).map((item) => (
+            <SignalPill key={item} value={item} mono />
+          ))}
+          {draft.components.slice(0, 6).map((component) => (
+            <SignalPill key={component.id} value={`${component.name}: ${component.type}`} />
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {draft.riskFlags.length > 0 ? (
+      <div className="rounded-lg px-4 py-4" style={{ background: '#fff8f2' }}>
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={16} style={{ color: 'var(--color-timeline-done)' }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+              Scan warnings
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {draft.riskFlags.map((flag) => (
+                <span
+                  key={flag}
+                  className="rounded-full px-2.5 py-1 text-[11px]"
+                  style={{
+                    background: 'var(--color-surface-card)',
+                    border: '1px solid var(--color-hairline)',
+                    color: 'var(--color-body)'
+                  }}
+                >
+                  {flag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null}
 
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-3">

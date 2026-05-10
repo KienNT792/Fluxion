@@ -11,10 +11,13 @@ import {
 import { useModalFocusTrap } from '@renderer/lib/use-modal-focus-trap'
 import { Button } from '@renderer/components/ui/Button'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
+import { getCodexReadinessBadgeState } from '@renderer/lib/provider-capabilities'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { ContextSetupStepContent } from './components/ContextSetupStepContent'
 import { PreviewTabButton } from './components/PreviewTabButton'
 import { useAgentConfigPreview } from './hooks/useAgentConfigPreview'
 import { useContextEnrichment } from './hooks/useContextEnrichment'
+import { useOnboardingPacket } from './hooks/useOnboardingPacket'
 import { useContextSetup } from './hooks/useContextSetup'
 import {
   getContextStatusState,
@@ -44,6 +47,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
 }) => {
   const dialogRef = useRef<HTMLDivElement | null>(null)
   useModalFocusTrap(true, dialogRef)
+  const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
 
   const {
     currentStep,
@@ -89,6 +93,33 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     updateDraft,
     workspacePath
   })
+  const {
+    applyRepoSkillError,
+    createdOnboardingWorkflowPath,
+    clearOnboardingPacket,
+    clearRepoSkillPreview,
+    handleApplyOnboardingSuggestions,
+    handleApplyRepoSkillPreview,
+    handleCreateOnboardingWorkflow,
+    handleCreateRepoSkillPreview,
+    handleGenerateOnboardingPacket,
+    handleSaveOnboardingPacket,
+    isApplyingRepoSkillPreview,
+    isCreatingOnboardingWorkflow,
+    isCreatingRepoSkillPreview,
+    isGeneratingOnboardingPacket,
+    isSavingOnboardingPacket,
+    onboardingPacket,
+    onboardingPacketError,
+    onboardingProgressStage,
+    repoSkillPreview,
+    savedOnboardingPacketPath
+  } = useOnboardingPacket({
+    draft,
+    scanResult,
+    updateDraft,
+    workspacePath
+  })
 
   const statusState = useMemo(
     () => getContextStatusState(draft.contextStatus),
@@ -106,6 +137,16 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
   const previewJson = useMemo(() => JSON.stringify(draft, null, 2), [draft])
   const showCloseAction = initialStatus !== 'missing' && initialStatus !== 'legacy'
   const canExportAgentConfig = draft.contextStatus === 'ready'
+  const saveContextTitle = canSaveFinal
+    ? 'Save final project context'
+    : missingRequirements.length > 0
+      ? `Add ${missingRequirements.join(', ')} before saving final context.`
+      : 'Complete required context before saving final context.'
+  const codexReadiness = useMemo(
+    () => getCodexReadinessBadgeState(providerCapabilities, []),
+    [providerCapabilities]
+  )
+  const isCodexReady = Boolean(providerCapabilities.codex?.available) && !codexReadiness.blocking
 
   return (
     <div
@@ -118,7 +159,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
         aria-modal="true"
         aria-label="Project Context Setup"
         tabIndex={-1}
-        className="flex h-full max-h-[80vh] w-full max-w-[1120px] flex-col overflow-hidden"
+        className="flex h-full max-h-[calc(100vh-40px)] w-full max-w-[1120px] flex-col overflow-hidden"
         style={{
           background: 'var(--color-surface-card)',
           border: '1px solid var(--color-hairline)',
@@ -226,7 +267,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
             </div>
           </aside>
 
-          <section className="min-h-0 overflow-y-auto px-6 py-5">
+          <section className="min-h-0 overflow-y-auto px-6 pb-24 pt-5">
             {isLoading ? (
               <div className="flex h-full flex-col items-center justify-center gap-5 py-10 text-center">
                 <Loader2
@@ -275,23 +316,46 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                   agentConfigError={agentConfigError}
                   agentConfigExporters={agentConfigExporters}
                   agentConfigPreview={agentConfigPreview}
+                  applyRepoSkillError={applyRepoSkillError}
                   canExportAgentConfig={canExportAgentConfig}
                   canSaveFinal={canSaveFinal}
                   clearAgentConfigPreview={clearAgentConfigPreview}
+                  clearOnboardingPacket={clearOnboardingPacket}
+                  clearRepoSkillPreview={clearRepoSkillPreview}
+                  codexReadinessDetail={codexReadiness.detail}
+                  codexReadinessLabel={codexReadiness.label}
                   currentStep={currentStep}
                   draft={draft}
+                  handleApplyOnboardingSuggestions={handleApplyOnboardingSuggestions}
+                  handleApplyRepoSkillPreview={handleApplyRepoSkillPreview}
                   handleApplyAgentConfigPreview={handleApplyAgentConfigPreview}
                   handleAcceptContextEnrichment={handleAcceptContextEnrichment}
                   handleCreateAgentConfigPreview={handleCreateAgentConfigPreview}
+                  handleCreateOnboardingWorkflow={handleCreateOnboardingWorkflow}
+                  handleCreateRepoSkillPreview={handleCreateRepoSkillPreview}
+                  handleGenerateOnboardingPacket={handleGenerateOnboardingPacket}
                   handleRunContextEnrichment={handleRunContextEnrichment}
+                  handleSaveOnboardingPacket={handleSaveOnboardingPacket}
                   clearContextEnrichment={clearContextEnrichment}
                   contextEnrichmentError={contextEnrichmentError}
                   contextEnrichmentResult={contextEnrichmentResult}
+                  createdOnboardingWorkflowPath={createdOnboardingWorkflowPath}
                   isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
+                  isApplyingRepoSkillPreview={isApplyingRepoSkillPreview}
+                  isCodexReady={isCodexReady}
                   isContextEnrichmentAvailable={isContextEnrichmentAvailable}
+                  isCreatingOnboardingWorkflow={isCreatingOnboardingWorkflow}
                   isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
+                  isCreatingRepoSkillPreview={isCreatingRepoSkillPreview}
                   isEnrichingContext={isEnrichingContext}
+                  isGeneratingOnboardingPacket={isGeneratingOnboardingPacket}
+                  isSavingOnboardingPacket={isSavingOnboardingPacket}
                   missingRequirements={missingRequirements}
+                  onboardingPacket={onboardingPacket}
+                  onboardingPacketError={onboardingPacketError}
+                  onboardingProgressStage={onboardingProgressStage}
+                  repoSkillPreview={repoSkillPreview}
+                  savedOnboardingPacketPath={savedOnboardingPacketPath}
                   scanResult={scanResult}
                   statusState={statusState}
                   updateDraft={updateDraft}
@@ -446,6 +510,16 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
               {isSaving ? 'Saving...' : 'Save Draft'}
             </Button>
 
+            <Button
+              variant={currentStep === 'review' ? 'primary' : 'secondary'}
+              onClick={() => void handleSave('final')}
+              disabled={isLoading || isSaving || !canSaveFinal}
+              title={saveContextTitle}
+            >
+              {isSaving ? 'Saving...' : 'Save Context'}
+              {currentStep === 'review' ? <ArrowRight size={14} /> : null}
+            </Button>
+
             {currentStep !== 'review' ? (
               <Button
                 variant="primary"
@@ -455,16 +529,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                 Next
                 <ArrowRight size={14} />
               </Button>
-            ) : (
-              <Button
-                variant="primary"
-                onClick={() => void handleSave('final')}
-                disabled={isLoading || isSaving || !canSaveFinal}
-              >
-                {isSaving ? 'Saving...' : 'Save Context'}
-                <ArrowRight size={14} />
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

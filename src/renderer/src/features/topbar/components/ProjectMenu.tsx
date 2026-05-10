@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, FolderOpen, Plus, Save } from 'lucide-react'
+import { ChevronDown, FolderOpen, Plus, Save, Sparkles } from 'lucide-react'
 import { ActionTextButton } from './TopbarButtons'
 import { POPOVER_SURFACE_STYLE } from '../lib/topbar-styles'
 
@@ -11,6 +11,7 @@ interface ProjectMenuProps {
   isWorkspaceOpening: boolean
   onCreateWorkflow: () => void
   onOpenWorkspace: () => void
+  onRunOnboarding: () => void
   onSave: () => void
   onToggle: () => void
   projectMenuRef: React.RefObject<HTMLDivElement | null>
@@ -25,6 +26,7 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
   isWorkspaceOpening,
   onCreateWorkflow,
   onOpenWorkspace,
+  onRunOnboarding,
   onSave,
   onToggle,
   projectMenuRef,
@@ -71,6 +73,19 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
         >
           <Plus size={14} />
           New Workflow
+        </button>
+
+        <button
+          type="button"
+          onClick={onRunOnboarding}
+          disabled={!workspacePath || disabled}
+          className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
+          style={{
+            color: !workspacePath || disabled ? 'var(--color-muted-soft)' : 'var(--color-ink)'
+          }}
+        >
+          <Sparkles size={14} />
+          Run Onboarding
         </button>
 
         <button

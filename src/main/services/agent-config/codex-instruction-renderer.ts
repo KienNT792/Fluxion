@@ -12,23 +12,6 @@ function codeBullet(items: string[], fallback = 'Unknown'): string {
   return bullet(items.map((item) => `\`${item}\``), fallback);
 }
 
-function renderComponents(context: ProjectContextDraft): string {
-  if (context.components.length === 0) {
-    return '- Unknown';
-  }
-
-  return context.components
-    .map((component) => {
-      const details = [
-        component.type,
-        component.languages.join(', '),
-        component.frameworks.join(', '),
-      ].filter(Boolean);
-      return `- ${component.name}: \`${component.rootPath}\`${details.length ? ` (${details.join(' / ')})` : ''}`;
-    })
-    .join('\n');
-}
-
 function renderCommands(context: ProjectContextDraft): string {
   const commands = context.commandCatalog.length > 0
     ? context.commandCatalog
@@ -62,10 +45,21 @@ function renderAgentInstructionSources(context: ProjectContextDraft): string {
     .join('\n');
 }
 
+function renderArchitectureBoundaries(context: ProjectContextDraft): string {
+  const boundaries = [
+    context.architectureSummary.trim(),
+    ...context.moduleBoundaries,
+    ...context.components.slice(0, 6).map(
+      (component) => `${component.name}: \`${component.rootPath}\` (${component.type})`
+    ),
+  ].filter(Boolean);
+
+  return bullet(boundaries, 'Unknown');
+}
+
 export function renderCodexInstructions(context: ProjectContextDraft): string {
   const projectGoal = context.projectGoal.trim() || 'Unknown';
   const targetUsers = context.targetUsers.trim() || 'Unknown';
-  const architectureSummary = context.architectureSummary.trim() || 'Unknown';
   const primaryStack = context.primaryStack.length > 0 ? context.primaryStack.join(', ') : 'Unknown';
 
   return [
@@ -75,41 +69,24 @@ export function renderCodexInstructions(context: ProjectContextDraft): string {
     `- Project: ${context.projectName || 'Workspace'}`,
     `- Goal: ${projectGoal}`,
     `- Users: ${targetUsers}`,
-    `- Workspace type: ${context.workspaceType}`,
-    `- Context status: ${context.contextStatus}`,
     `- Primary stack: ${primaryStack}`,
     '',
-    '## Architecture',
-    architectureSummary,
-    '',
-    '## Components',
-    renderComponents(context),
+    '## Architecture Boundaries',
+    renderArchitectureBoundaries(context),
     '',
     '## Commands',
     renderCommands(context),
     '',
-    '## Editing Rules',
+    '## Durable Rules',
     bullet(context.stableRules, 'Follow existing code style and keep changes scoped.'),
-    '',
-    '## Verification',
-    codeBullet(context.verificationCommands, 'No verification command detected; inspect the project before claiming completion.'),
     '',
     '## Important Paths',
     codeBullet(context.importantPaths),
     '',
-    '## Entrypoints',
-    codeBullet(context.entrypoints),
-    '',
-    '## Generated Or Ignored Paths',
-    codeBullet(context.generatedOrIgnoredPaths),
-    '',
     '## Risk Flags',
     bullet(context.riskFlags, 'No known risk flags.'),
     '',
-    '## Recommended First Actions',
-    bullet(context.recommendedFirstActions, 'Inspect the relevant files before editing.'),
-    '',
-    '## Existing Agent Instruction Sources',
+    '## Existing Instruction Sources',
     renderAgentInstructionSources(context),
     '',
   ].join('\n');
