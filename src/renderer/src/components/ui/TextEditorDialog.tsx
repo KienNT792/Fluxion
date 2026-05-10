@@ -1,27 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { RotateCcw } from 'lucide-react';
-import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
-import { Button } from './Button';
-import { Textarea } from './Textarea';
+import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { RotateCcw } from 'lucide-react'
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap'
+import { Button } from './Button'
+import { Textarea } from './Textarea'
 
 interface TextEditorDialogProps {
-  isOpen: boolean;
-  title: string;
-  helperText?: string;
-  value: string;
-  defaultValue?: string;
-  placeholder?: string;
-  saveLabel?: string;
-  cancelLabel?: string;
-  resetLabel?: string;
-  showReset?: boolean;
-  onSave: (value: string) => void;
-  onCancel: () => void;
+  isOpen: boolean
+  title: string
+  helperText?: string
+  value: string
+  defaultValue?: string
+  placeholder?: string
+  saveLabel?: string
+  cancelLabel?: string
+  resetLabel?: string
+  showReset?: boolean
+  onSave: (value: string) => void
+  onCancel: () => void
 }
 
-export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({
-  isOpen,
+type TextEditorDialogContentProps = Omit<TextEditorDialogProps, 'isOpen'>
+
+export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({ isOpen, ...props }) => {
+  if (!isOpen || typeof document === 'undefined') {
+    return null
+  }
+
+  return <TextEditorDialogContent key={props.value} {...props} />
+}
+
+const TextEditorDialogContent: React.FC<TextEditorDialogContentProps> = ({
   title,
   helperText,
   value,
@@ -32,60 +41,45 @@ export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({
   resetLabel = 'Reset to Default',
   showReset = false,
   onSave,
-  onCancel,
+  onCancel
 }) => {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [draft, setDraft] = useState(value);
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [draft, setDraft] = useState(value)
 
-  useModalFocusTrap(isOpen, dialogRef);
-
-  useEffect(() => {
-    if (isOpen) {
-      setDraft(value);
-      window.setTimeout(() => textareaRef.current?.focus(), 0);
-    }
-  }, [isOpen, value]);
+  useModalFocusTrap(true, dialogRef)
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+    window.setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [])
 
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        onCancel();
+        onCancel()
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault();
-        onSave(draft);
+        event.preventDefault()
+        onSave(draft)
       }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [draft, isOpen, onCancel, onSave]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
     }
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [draft, onCancel, onSave])
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
+      document.body.style.overflow = originalOverflow
+    }
+  }, [])
 
-  if (!isOpen || typeof document === 'undefined') {
-    return null;
-  }
-
-  const characterCount = draft.length;
-  const lineCount = draft ? draft.split(/\r\n|\r|\n/).length : 0;
-  const canReset = showReset && draft !== defaultValue;
+  const characterCount = draft.length
+  const lineCount = draft ? draft.split(/\r\n|\r|\n/).length : 0
+  const canReset = showReset && draft !== defaultValue
 
   return createPortal(
     <div
@@ -104,7 +98,7 @@ export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({
         style={{
           background: 'var(--color-surface-card)',
           border: '1px solid var(--color-hairline)',
-          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.24)',
+          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.24)'
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -154,8 +148,8 @@ export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({
                 size="sm"
                 disabled={!canReset}
                 onClick={() => {
-                  setDraft(defaultValue);
-                  textareaRef.current?.focus();
+                  setDraft(defaultValue)
+                  textareaRef.current?.focus()
                 }}
               >
                 <RotateCcw size={13} />
@@ -175,5 +169,5 @@ export const TextEditorDialog: React.FC<TextEditorDialogProps> = ({
       </div>
     </div>,
     document.body
-  );
-};
+  )
+}

@@ -1,51 +1,24 @@
-import React, { useMemo, useState } from 'react';
-import { Copy, ExternalLink, FileText, FolderOpen } from 'lucide-react';
-import { Tooltip } from './Tooltip';
-
-export interface DisplayPathParts {
-  basename: string;
-  parentPath: string;
-  fullPath: string;
-}
+import React, { useMemo, useState } from 'react'
+import { Copy, ExternalLink, FileText, FolderOpen } from 'lucide-react'
+import { Tooltip } from './Tooltip'
+import { splitDisplayPath } from './file-path-card.helpers'
 
 interface FilePathCardProps {
-  path?: string | null;
-  emptyLabel?: string;
-  disabled?: boolean;
-  onOpen?: (path: string) => void | Promise<void>;
-  onReveal?: (path: string) => void | Promise<void>;
-  onCopy?: (path: string) => void | Promise<void>;
-  onError?: (message: string) => void;
-  className?: string;
-}
-
-export function splitDisplayPath(pathValue?: string | null): DisplayPathParts {
-  const fullPath = pathValue?.trim() ?? '';
-  if (!fullPath) {
-    return {
-      basename: 'No file',
-      parentPath: 'No path available',
-      fullPath: '',
-    };
-  }
-
-  const normalizedPath = fullPath.replace(/[\\/]+$/, '');
-  const match = /^(.*[\\/])?([^\\/]+)$/.exec(normalizedPath);
-  const basename = match?.[2] ?? normalizedPath;
-  const parentPath = (match?.[1] ?? '').replace(/[\\/]$/, '');
-
-  return {
-    basename,
-    parentPath: parentPath || 'Current folder',
-    fullPath,
-  };
+  path?: string | null
+  emptyLabel?: string
+  disabled?: boolean
+  onOpen?: (path: string) => void | Promise<void>
+  onReveal?: (path: string) => void | Promise<void>
+  onCopy?: (path: string) => void | Promise<void>
+  onError?: (message: string) => void
+  className?: string
 }
 
 const FileActionButton: React.FC<{
-  label: string;
-  disabled: boolean;
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
-  children: React.ReactNode;
+  label: string
+  disabled: boolean
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
+  children: React.ReactNode
 }> = ({ label, disabled, onClick, children }) => (
   <Tooltip content={label}>
     <button
@@ -55,13 +28,13 @@ const FileActionButton: React.FC<{
       onClick={onClick}
       className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-[var(--color-canvas)] disabled:cursor-not-allowed"
       style={{
-        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
+        color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)'
       }}
     >
       {children}
     </button>
   </Tooltip>
-);
+)
 
 export const FilePathCard: React.FC<FilePathCardProps> = ({
   path,
@@ -71,47 +44,47 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
   onReveal,
   onCopy,
   onError,
-  className = '',
+  className = ''
 }) => {
-  const [copyLabel, setCopyLabel] = useState('Copy path');
-  const parts = useMemo(() => splitDisplayPath(path), [path]);
-  const hasPath = Boolean(parts.fullPath);
-  const isDisabled = disabled || !hasPath;
+  const [copyLabel, setCopyLabel] = useState('Copy path')
+  const parts = useMemo(() => splitDisplayPath(path), [path])
+  const hasPath = Boolean(parts.fullPath)
+  const isDisabled = disabled || !hasPath
 
   const runAction = async (
     action: ((path: string) => void | Promise<void>) | undefined,
     fallback: ((path: string) => void | Promise<void>) | undefined
   ): Promise<void> => {
     if (isDisabled || !parts.fullPath) {
-      return;
+      return
     }
 
     try {
-      await (action ?? fallback)?.(parts.fullPath);
+      await (action ?? fallback)?.(parts.fullPath)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'File action failed.';
-      onError?.(message);
+      const message = error instanceof Error ? error.message : 'File action failed.'
+      onError?.(message)
     }
-  };
+  }
 
   const handleCopy = async (): Promise<void> => {
     if (isDisabled || !parts.fullPath) {
-      return;
+      return
     }
 
     try {
       if (onCopy) {
-        await onCopy(parts.fullPath);
+        await onCopy(parts.fullPath)
       } else {
-        await navigator.clipboard.writeText(parts.fullPath);
+        await navigator.clipboard.writeText(parts.fullPath)
       }
-      setCopyLabel('Copied');
-      window.setTimeout(() => setCopyLabel('Copy path'), 1200);
+      setCopyLabel('Copied')
+      window.setTimeout(() => setCopyLabel('Copy path'), 1200)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to copy path.';
-      onError?.(message);
+      const message = error instanceof Error ? error.message : 'Failed to copy path.'
+      onError?.(message)
     }
-  };
+  }
 
   return (
     <div
@@ -119,7 +92,7 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
       style={{
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
-        opacity: disabled ? 0.75 : 1,
+        opacity: disabled ? 0.75 : 1
       }}
       title={parts.fullPath || emptyLabel}
     >
@@ -128,7 +101,7 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
         style={{
           background: 'var(--color-canvas)',
           border: '1px solid var(--color-hairline)',
-          color: hasPath ? 'var(--color-primary)' : 'var(--color-muted-soft)',
+          color: hasPath ? 'var(--color-primary)' : 'var(--color-muted-soft)'
         }}
       >
         <FileText size={15} />
@@ -157,8 +130,8 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
           label="Open"
           disabled={isDisabled}
           onClick={(event) => {
-            event.stopPropagation();
-            void runAction(onOpen, window.api?.openPath);
+            event.stopPropagation()
+            void runAction(onOpen, window.api?.openPath)
           }}
         >
           <ExternalLink size={13} />
@@ -167,8 +140,8 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
           label="Reveal"
           disabled={isDisabled}
           onClick={(event) => {
-            event.stopPropagation();
-            void runAction(onReveal, window.api?.revealPath);
+            event.stopPropagation()
+            void runAction(onReveal, window.api?.revealPath)
           }}
         >
           <FolderOpen size={13} />
@@ -177,13 +150,13 @@ export const FilePathCard: React.FC<FilePathCardProps> = ({
           label={copyLabel}
           disabled={isDisabled}
           onClick={(event) => {
-            event.stopPropagation();
-            void handleCopy();
+            event.stopPropagation()
+            void handleCopy()
           }}
         >
           <Copy size={13} />
         </FileActionButton>
       </div>
     </div>
-  );
-};
+  )
+}

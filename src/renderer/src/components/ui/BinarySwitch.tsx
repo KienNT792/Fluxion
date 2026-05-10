@@ -1,33 +1,15 @@
-import React from 'react';
+import React from 'react'
+import { getNextBinarySwitchValueFromKey } from './binary-switch.helpers'
 
 interface BinarySwitchProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  leftLabel: string;
-  rightLabel: string;
-  disabled?: boolean;
-  ariaLabel?: string;
-  className?: string;
-  title?: string;
-}
-
-export function getNextBinarySwitchValueFromKey(
-  key: string,
-  currentValue: boolean
-): boolean | null {
-  if (key === 'Enter' || key === ' ') {
-    return !currentValue;
-  }
-
-  if (key === 'ArrowLeft') {
-    return false;
-  }
-
-  if (key === 'ArrowRight') {
-    return true;
-  }
-
-  return null;
+  checked: boolean
+  onChange: (checked: boolean) => void
+  leftLabel: string
+  rightLabel: string
+  disabled?: boolean
+  ariaLabel?: string
+  className?: string
+  title?: string
 }
 
 export const BinarySwitch: React.FC<BinarySwitchProps> = ({
@@ -38,21 +20,21 @@ export const BinarySwitch: React.FC<BinarySwitchProps> = ({
   disabled = false,
   ariaLabel,
   className = '',
-  title,
+  title
 }) => {
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
-    const nextValue = getNextBinarySwitchValueFromKey(event.key, checked);
+    const nextValue = getNextBinarySwitchValueFromKey(event.key, checked)
     if (nextValue == null) {
-      return;
+      return
     }
 
-    event.preventDefault();
+    event.preventDefault()
     if (!disabled && nextValue !== checked) {
-      onChange(nextValue);
+      onChange(nextValue)
     } else if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
-      onChange(nextValue);
+      onChange(nextValue)
     }
-  };
+  }
 
   return (
     <button
@@ -64,7 +46,7 @@ export const BinarySwitch: React.FC<BinarySwitchProps> = ({
       title={title}
       onClick={() => {
         if (!disabled) {
-          onChange(!checked);
+          onChange(!checked)
         }
       }}
       onKeyDown={handleKeyDown}
@@ -74,7 +56,7 @@ export const BinarySwitch: React.FC<BinarySwitchProps> = ({
         border: '1px solid var(--color-hairline)',
         color: disabled ? 'var(--color-muted-soft)' : 'var(--color-muted)',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.72 : 1,
+        opacity: disabled ? 0.72 : 1
       }}
     >
       <span
@@ -83,7 +65,7 @@ export const BinarySwitch: React.FC<BinarySwitchProps> = ({
         style={{
           background: 'var(--color-primary)',
           transform: checked ? 'translateX(calc(100% + 0px))' : 'translateX(0)',
-          left: '2px',
+          left: '2px'
         }}
       />
       <span
@@ -99,5 +81,5 @@ export const BinarySwitch: React.FC<BinarySwitchProps> = ({
         {rightLabel}
       </span>
     </button>
-  );
-};
+  )
+}

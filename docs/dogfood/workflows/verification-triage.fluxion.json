@@ -1,0 +1,53 @@
+{
+  "id": "dogfood-verification-triage",
+  "name": "Dogfood: Verification Triage",
+  "description": "Run or inspect verification commands and summarize actionable failures.",
+  "tags": ["dogfood", "verification", "qa"],
+  "executionMode": "auto",
+  "fluxionVersion": "1.0",
+  "createdAt": "2026-05-10T00:00:00.000Z",
+  "updatedAt": "2026-05-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "collect-checks",
+      "type": "agentNode",
+      "label": "Collect Checks",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Collect Checks",
+        "prompt": "Identify the relevant Fluxion verification commands from package.json and AGENTS.md. Prefer npm run typecheck, npm test, npm run build, and npm run lint. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "triage-results",
+      "type": "agentNode",
+      "label": "Triage Results",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Triage Results",
+        "prompt": "Run safe verification commands when the read-only sandbox permits them. If a command cannot run because it writes build artifacts or caches, explain that limitation and inspect existing logs or source instead. Summarize failures by likely owner and next fix. Do not edit files.",
+        "reasoningLevel": "high",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    }
+  ],
+  "edges": [{ "id": "edge-collect-triage", "source": "collect-checks", "target": "triage-results" }]
+}

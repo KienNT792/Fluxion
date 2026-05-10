@@ -1,0 +1,76 @@
+{
+  "id": "dogfood-current-diff-review",
+  "name": "Dogfood: Current Diff Review",
+  "description": "Review the current Fluxion worktree and summarize risks before handoff.",
+  "tags": ["dogfood", "review", "codex"],
+  "executionMode": "auto",
+  "fluxionVersion": "1.0",
+  "createdAt": "2026-05-10T00:00:00.000Z",
+  "updatedAt": "2026-05-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "inspect-worktree",
+      "type": "agentNode",
+      "label": "Inspect Worktree",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Inspect Worktree",
+        "prompt": "Inspect the current Fluxion worktree. Summarize git status, key changed files, and the intent of the changes. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "review-risks",
+      "type": "agentNode",
+      "label": "Review Risks",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Review Risks",
+        "prompt": "Review the changed code as a senior engineer. Prioritize behavioral regressions, type/contract risks, missing tests, and Windows-specific breakage. Return findings with file references where possible. Do not edit files.",
+        "reasoningLevel": "high",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "handoff-summary",
+      "type": "agentNode",
+      "label": "Handoff Summary",
+      "position": { "x": 640, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Handoff Summary",
+        "prompt": "Write a concise handoff summary for the current diff. Include what changed, verification status, known risks, and recommended next action. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge-inspect-review", "source": "inspect-worktree", "target": "review-risks" },
+    { "id": "edge-review-summary", "source": "review-risks", "target": "handoff-summary" }
+  ]
+}

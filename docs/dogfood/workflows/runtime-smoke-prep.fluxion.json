@@ -1,0 +1,59 @@
+{
+  "id": "dogfood-runtime-smoke-prep",
+  "name": "Dogfood: Runtime Smoke Prep",
+  "description": "Prepare a run-specific smoke plan for the Codex CLI runtime path.",
+  "tags": ["dogfood", "runtime", "smoke"],
+  "executionMode": "auto",
+  "fluxionVersion": "1.0",
+  "createdAt": "2026-05-10T00:00:00.000Z",
+  "updatedAt": "2026-05-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "read-smoke-checklist",
+      "type": "agentNode",
+      "label": "Read Smoke Checklist",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Read Smoke Checklist",
+        "prompt": "Read docs/qa/internal-alpha-smoke.md and summarize the required smoke scenarios for the current Fluxion build. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "prepare-run-sheet",
+      "type": "agentNode",
+      "label": "Prepare Run Sheet",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Prepare Run Sheet",
+        "prompt": "Create a concise smoke run sheet in the response. Include environment metadata to capture, pass/fail rows, and blocker criteria. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-read-prepare",
+      "source": "read-smoke-checklist",
+      "target": "prepare-run-sheet"
+    }
+  ]
+}

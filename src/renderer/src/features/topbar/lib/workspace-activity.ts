@@ -1,4 +1,4 @@
-import { splitDisplayPath } from '@renderer/components/ui/FilePathCard'
+import { splitDisplayPath } from '@renderer/components/ui/file-path-card.helpers'
 
 export type WorkspaceChangeType = 'add' | 'change' | 'unlink'
 

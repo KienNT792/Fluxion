@@ -1,0 +1,84 @@
+{
+  "id": "dogfood-plan-to-implementation",
+  "name": "Dogfood: Plan To Implementation",
+  "description": "Convert an approved plan into implementation work with a review checkpoint.",
+  "tags": ["dogfood", "implementation", "planning"],
+  "executionMode": "auto",
+  "fluxionVersion": "1.0",
+  "createdAt": "2026-05-10T00:00:00.000Z",
+  "updatedAt": "2026-05-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "parse-approved-plan",
+      "type": "agentNode",
+      "label": "Parse Approved Plan",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Parse Approved Plan",
+        "prompt": "Read the approved implementation plan supplied by the user or present in the current thread. Convert it into ordered implementation batches, identifying public contract boundaries and verification gates. Do not edit files in this node.",
+        "reasoningLevel": "high",
+        "codex": {
+          "json": true,
+          "sandboxMode": "workspace-write",
+          "approvalPolicy": "never"
+        },
+        "humanReview": true
+      }
+    },
+    {
+      "id": "implement-approved-batch",
+      "type": "agentNode",
+      "label": "Implement Approved Batch",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Implement Approved Batch",
+        "prompt": "After the human review checkpoint approves the parsed plan, implement the first approved batch only. Keep changes scoped, preserve Fluxion runtime contracts, and update the nearest tests when behavior changes.",
+        "reasoningLevel": "high",
+        "codex": {
+          "json": true,
+          "sandboxMode": "workspace-write",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "verify-and-summarize",
+      "type": "agentNode",
+      "label": "Verify And Summarize",
+      "position": { "x": 640, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Verify And Summarize",
+        "prompt": "Run the relevant verification commands for the implemented batch. Summarize changes, tests, skipped checks, and any follow-up risks.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "workspace-write",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-parse-implement",
+      "source": "parse-approved-plan",
+      "target": "implement-approved-batch"
+    },
+    {
+      "id": "edge-implement-verify",
+      "source": "implement-approved-batch",
+      "target": "verify-and-summarize"
+    }
+  ]
+}

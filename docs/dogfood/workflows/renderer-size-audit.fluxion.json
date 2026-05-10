@@ -1,0 +1,55 @@
+{
+  "id": "dogfood-renderer-size-audit",
+  "name": "Dogfood: Renderer Size Audit",
+  "description": "Find oversized renderer TSX files and propose component extraction targets.",
+  "tags": ["dogfood", "renderer", "refactor"],
+  "executionMode": "auto",
+  "fluxionVersion": "1.0",
+  "createdAt": "2026-05-10T00:00:00.000Z",
+  "updatedAt": "2026-05-10T00:00:00.000Z",
+  "nodes": [
+    {
+      "id": "scan-tsx-sizes",
+      "type": "agentNode",
+      "label": "Scan TSX Sizes",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Scan TSX Sizes",
+        "prompt": "Scan src/renderer/src for TSX files by line count. Identify the largest files, their feature area, and whether they are containers, presentational components, or mixed. Do not edit files.",
+        "reasoningLevel": "medium",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    },
+    {
+      "id": "recommend-extractions",
+      "type": "agentNode",
+      "label": "Recommend Extractions",
+      "position": { "x": 320, "y": 0 },
+      "data": {
+        "provider": "codex",
+        "runner": "codex",
+        "model": "gpt-5.5",
+        "label": "Recommend Extractions",
+        "prompt": "Using the renderer size scan, propose the next component or hook extractions. Keep recommendations scoped to renderer UI and preserve behavior. Include expected file structure and verification commands. Do not edit files.",
+        "reasoningLevel": "high",
+        "codex": {
+          "json": true,
+          "sandboxMode": "read-only",
+          "approvalPolicy": "never"
+        },
+        "humanReview": false
+      }
+    }
+  ],
+  "edges": [
+    { "id": "edge-scan-recommend", "source": "scan-tsx-sizes", "target": "recommend-extractions" }
+  ]
+}
