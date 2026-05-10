@@ -1,5 +1,5 @@
 import React from 'react'
-import { Briefcase, Code2, FolderTree, Heart, Layers, Shield, Sparkles } from 'lucide-react'
+import { Briefcase, Code2, FolderTree, Heart, Layers, Pencil, Shield, Sparkles } from 'lucide-react'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import type { WorkspaceContextStatus } from '@shared'
 
@@ -84,6 +84,46 @@ function ContextHealthDot({ status }: { status: WorkspaceContextStatus }): React
   )
 }
 
+function ContextActionButton({
+  children,
+  icon,
+  onClick,
+  variant = 'secondary'
+}: {
+  children: React.ReactNode
+  icon: React.ReactNode
+  onClick: () => void
+  variant?: 'primary' | 'secondary'
+}): React.JSX.Element {
+  const isPrimary = variant === 'primary'
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+      style={{
+        color: isPrimary ? 'var(--color-on-primary)' : 'var(--color-ink)',
+        background: isPrimary ? 'var(--color-primary)' : 'var(--color-surface-card)',
+        border: `1px solid ${isPrimary ? 'transparent' : 'var(--color-hairline)'}`
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.background = isPrimary
+          ? 'var(--color-primary-active)'
+          : 'var(--color-canvas-soft)'
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.background = isPrimary
+          ? 'var(--color-primary)'
+          : 'var(--color-surface-card)'
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  )
+}
+
 export const ProjectContextInspector: React.FC = () => {
   const contextStatus = useWorkflowStore((state) => state.contextStatus)
   const contextSummary = useWorkflowStore((state) => state.contextSummary)
@@ -140,6 +180,28 @@ export const ProjectContextInspector: React.FC = () => {
             ))}
           </div>
         )}
+      </ContextSection>
+
+      {/* Actions */}
+      <ContextSection icon={<Sparkles size={13} />} title="Actions">
+        <div className="grid gap-2">
+          <ContextActionButton
+            icon={<Pencil size={13} />}
+            onClick={() => setContextSetupOpen(true)}
+          >
+            Edit Context
+          </ContextActionButton>
+          <ContextActionButton
+            icon={<Sparkles size={13} />}
+            onClick={() => setContextSetupOpen(true, 'review')}
+            variant="primary"
+          >
+            Enrich with Codex
+          </ContextActionButton>
+        </div>
+        <p className="mt-2 text-[11px] leading-5" style={{ color: 'var(--color-muted)' }}>
+          Enrichment opens Review & Save so suggestions can be merged before saving.
+        </p>
       </ContextSection>
 
       {/* Project Brief */}
@@ -267,32 +329,6 @@ export const ProjectContextInspector: React.FC = () => {
             </div>
           )}
         </ContextSection>
-      )}
-
-      {/* Review CTA — subtle, not prominent per plan rule */}
-      {contextStatus !== 'ready' && (
-        <div className="px-5 py-4">
-          <button
-            type="button"
-            onClick={() => setContextSetupOpen(true)}
-            className="w-full rounded-lg px-3 py-2 text-xs font-medium transition-colors"
-            style={{
-              color: 'var(--color-muted)',
-              background: 'var(--color-surface-card)',
-              border: '1px solid var(--color-hairline)'
-            }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.color = 'var(--color-ink)'
-              event.currentTarget.style.borderColor = 'var(--color-hairline-strong)'
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.color = 'var(--color-muted)'
-              event.currentTarget.style.borderColor = 'var(--color-hairline)'
-            }}
-          >
-            Review Context
-          </button>
-        </div>
       )}
     </div>
   )

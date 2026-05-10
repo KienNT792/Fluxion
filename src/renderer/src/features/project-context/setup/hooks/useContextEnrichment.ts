@@ -24,7 +24,18 @@ interface UseContextEnrichmentResult {
   contextEnrichmentResult: ContextEnrichmentResult | null
   handleAcceptContextEnrichment: (fields?: ContextEnrichmentField[]) => void
   handleRunContextEnrichment: () => Promise<void>
+  isContextEnrichmentAvailable: boolean
   isEnrichingContext: boolean
+}
+
+const PRELOAD_BRIDGE_MISSING_MESSAGE =
+  'Codex enrichment is not available in the current app session. Restart Fluxion to load the updated preload bridge.'
+
+function hasContextEnrichmentBridge(): boolean {
+  return (
+    typeof (window.api as { enrichProjectContext?: unknown } | undefined)?.enrichProjectContext ===
+    'function'
+  )
 }
 
 export function useContextEnrichment({
@@ -43,7 +54,14 @@ export function useContextEnrichment({
     setContextEnrichmentError(null)
   }, [])
 
+  const isContextEnrichmentAvailable = hasContextEnrichmentBridge()
+
   const handleRunContextEnrichment = useCallback(async () => {
+    if (!hasContextEnrichmentBridge()) {
+      setContextEnrichmentError(PRELOAD_BRIDGE_MISSING_MESSAGE)
+      return
+    }
+
     setIsEnrichingContext(true)
     setContextEnrichmentError(null)
 
@@ -79,6 +97,7 @@ export function useContextEnrichment({
     contextEnrichmentResult,
     handleAcceptContextEnrichment,
     handleRunContextEnrichment,
+    isContextEnrichmentAvailable,
     isEnrichingContext
   }
 }

@@ -41,6 +41,7 @@ interface ReviewFocusRequest {
 }
 
 type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
+type ContextSetupInitialStep = 'detect' | 'rules' | 'brief' | 'focus' | 'review';
 
 interface WorkspaceOpenState {
   phase: WorkspaceOpenPhase;
@@ -71,6 +72,7 @@ interface WorkflowState {
   contextStatus: WorkspaceContextStatus;
   contextSummary: ProjectContextDraft | null;
   isContextSetupOpen: boolean;
+  contextSetupInitialStep: ContextSetupInitialStep;
   activeWorkflowFilePath: string | null;
   workflows: WorkflowMetadata[];
   isNewWorkspace: boolean;
@@ -107,7 +109,7 @@ interface WorkflowState {
   markSaveFailed: (error: string) => void;
   recordWorkspaceChange: (change: WorkspaceFileChangedPayload) => void;
   clearExternalWorkflowChange: () => void;
-  setContextSetupOpen: (isOpen: boolean) => void;
+  setContextSetupOpen: (isOpen: boolean, initialStep?: ContextSetupInitialStep) => void;
   setContextState: (
     status: WorkspaceContextStatus,
     contextSummary: ProjectContextDraft | null
@@ -192,6 +194,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   contextStatus: 'missing',
   contextSummary: null,
   isContextSetupOpen: false,
+  contextSetupInitialStep: 'detect',
   activeWorkflowFilePath: null,
   workflows: [],
   isNewWorkspace: false,
@@ -539,7 +542,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   clearExternalWorkflowChange: () => set({ hasExternalWorkflowChange: false }),
-  setContextSetupOpen: (isContextSetupOpen) => set({ isContextSetupOpen }),
+  setContextSetupOpen: (isContextSetupOpen, contextSetupInitialStep = 'detect') =>
+    set({ isContextSetupOpen, contextSetupInitialStep }),
   setContextState: (contextStatus, contextSummary) =>
     set({ contextStatus, contextSummary }),
   recordWorkspaceLoadingEvent: (event) =>

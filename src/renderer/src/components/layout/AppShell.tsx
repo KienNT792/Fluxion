@@ -22,6 +22,7 @@ export const AppShell: React.FC = () => {
   const contextStatus = useWorkflowStore((state) => state.contextStatus)
   const contextSummary = useWorkflowStore((state) => state.contextSummary)
   const isContextSetupOpen = useWorkflowStore((state) => state.isContextSetupOpen)
+  const contextSetupInitialStep = useWorkflowStore((state) => state.contextSetupInitialStep)
   const legacyWorkflowDetected = useWorkflowStore((state) => state.legacyWorkflowDetected)
   const legacyWorkflowBackupFilePath = useWorkflowStore(
     (state) => state.legacyWorkflowBackupFilePath
@@ -416,6 +417,7 @@ export const AppShell: React.FC = () => {
           workspacePath={workspacePath}
           initialContext={contextSummary}
           initialStatus={contextStatus}
+          initialStep={contextSetupInitialStep}
           onSaved={handleContextSaved}
           onClose={handleContextClose}
         />

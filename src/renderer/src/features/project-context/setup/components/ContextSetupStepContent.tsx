@@ -36,6 +36,7 @@ interface ContextSetupStepContentProps {
   ) => Promise<void>
   handleRunContextEnrichment: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
+  isContextEnrichmentAvailable: boolean
   isCreatingAgentConfigPreview: boolean
   isEnrichingContext: boolean
   missingRequirements: string[]
@@ -66,6 +67,7 @@ export function ContextSetupStepContent({
   handleCreateAgentConfigPreview,
   handleRunContextEnrichment,
   isApplyingAgentConfigPreview,
+  isContextEnrichmentAvailable,
   isCreatingAgentConfigPreview,
   isEnrichingContext,
   missingRequirements,
@@ -103,6 +105,7 @@ export function ContextSetupStepContent({
           handleCreateAgentConfigPreview={handleCreateAgentConfigPreview}
           handleRunContextEnrichment={handleRunContextEnrichment}
           isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
+          isContextEnrichmentAvailable={isContextEnrichmentAvailable}
           isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
           isEnrichingContext={isEnrichingContext}
           missingRequirements={missingRequirements}

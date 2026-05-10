@@ -12,6 +12,7 @@ import { ContextStepId, mergeScanIntoDraft, PreviewTab } from '../lib/context-se
 
 interface UseContextSetupOptions {
   initialContext: ProjectContextDraft | null
+  initialStep?: ContextStepId
   initialStatus: WorkspaceContextStatus
   onSaved: (payload: WorkspaceContextSavedPayload) => void
   workspacePath: string
@@ -19,6 +20,7 @@ interface UseContextSetupOptions {
 
 export function useContextSetup({
   initialContext,
+  initialStep = 'detect',
   initialStatus,
   onSaved,
   workspacePath
@@ -36,7 +38,7 @@ export function useContextSetup({
   setPreviewTab: Dispatch<SetStateAction<PreviewTab>>
   updateDraft: (patch: Partial<ProjectContextDraft>) => void
 } {
-  const [currentStep, setCurrentStep] = useState<ContextStepId>('detect')
+  const [currentStep, setCurrentStep] = useState<ContextStepId>(initialStep)
   const [previewTab, setPreviewTab] = useState<PreviewTab>('readable')
   const [scanResult, setScanResult] = useState<ContextScanResult | null>(null)
   const [draft, setDraft] = useState<ProjectContextDraft>(() =>
@@ -51,7 +53,7 @@ export function useContextSetup({
     let isCancelled = false
 
     const loadContext = async (): Promise<void> => {
-      setCurrentStep('detect')
+      setCurrentStep(initialStep)
       setPreviewTab('readable')
       setIsLoading(true)
       setLoadError(null)
@@ -100,7 +102,7 @@ export function useContextSetup({
     return () => {
       isCancelled = true
     }
-  }, [initialContext, initialStatus, workspacePath])
+  }, [initialContext, initialStatus, initialStep, workspacePath])
 
   const updateDraft = useCallback((patch: Partial<ProjectContextDraft>) => {
     setDraft((current) => normalizeProjectContextDraft({ ...current, ...patch }))

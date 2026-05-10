@@ -18,6 +18,7 @@ import { useContextEnrichment } from './hooks/useContextEnrichment'
 import { useContextSetup } from './hooks/useContextSetup'
 import {
   getContextStatusState,
+  ContextStepId,
   getMissingRequirements,
   getStepState,
   getWorkspaceName,
@@ -29,6 +30,7 @@ interface ContextInitModalProps {
   workspacePath: string
   initialContext: ProjectContextDraft | null
   initialStatus: WorkspaceContextStatus
+  initialStep?: ContextStepId
   onSaved: (payload: WorkspaceContextSavedPayload) => void
   onClose: () => void
 }
@@ -36,6 +38,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
   workspacePath,
   initialContext,
   initialStatus,
+  initialStep = 'detect',
   onSaved,
   onClose
 }) => {
@@ -57,6 +60,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     updateDraft
   } = useContextSetup({
     initialContext,
+    initialStep,
     initialStatus,
     onSaved,
     workspacePath
@@ -77,6 +81,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     contextEnrichmentResult,
     handleAcceptContextEnrichment,
     handleRunContextEnrichment,
+    isContextEnrichmentAvailable,
     isEnrichingContext
   } = useContextEnrichment({
     draft,
@@ -283,6 +288,7 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                   contextEnrichmentError={contextEnrichmentError}
                   contextEnrichmentResult={contextEnrichmentResult}
                   isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
+                  isContextEnrichmentAvailable={isContextEnrichmentAvailable}
                   isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
                   isEnrichingContext={isEnrichingContext}
                   missingRequirements={missingRequirements}

@@ -12,6 +12,7 @@ interface ContextEnrichmentPanelProps {
   draft: ProjectContextDraft
   enrichmentError: string | null
   enrichmentResult: ContextEnrichmentResult | null
+  isAvailable: boolean
   isEnriching: boolean
   onAccept: (fields?: ContextEnrichmentField[]) => void
   onClear: () => void
@@ -22,6 +23,7 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
   draft,
   enrichmentError,
   enrichmentResult,
+  isAvailable,
   isEnriching,
   onAccept,
   onClear,
@@ -73,7 +75,12 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
             size="sm"
             variant="secondary"
             onClick={() => void onEnrich()}
-            disabled={isEnriching}
+            disabled={isEnriching || !isAvailable}
+            title={
+              isAvailable
+                ? 'Run read-only Codex enrichment'
+                : 'Restart Fluxion to load the enrichment preload bridge'
+            }
           >
             {isEnriching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             {isEnriching ? 'Enriching...' : 'Enrich with Codex'}
@@ -81,12 +88,13 @@ export const ContextEnrichmentPanel: React.FC<ContextEnrichmentPanelProps> = ({
         </div>
       </div>
 
-      {enrichmentError ? (
+      {!isAvailable || enrichmentError ? (
         <div className="mt-4 rounded-lg px-3 py-3" style={{ background: '#fff8f2' }}>
           <div className="flex items-start gap-2">
             <AlertTriangle size={15} style={{ color: 'var(--color-timeline-done)' }} />
             <p className="text-xs leading-5" style={{ color: 'var(--color-body)' }}>
-              {enrichmentError}
+              {enrichmentError ??
+                'Codex enrichment needs the updated preload bridge. Restart Fluxion and open this panel again.'}
             </p>
           </div>
         </div>

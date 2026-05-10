@@ -32,6 +32,7 @@ interface ContextSetupReviewStepProps {
   ) => Promise<void>
   handleRunContextEnrichment: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
+  isContextEnrichmentAvailable: boolean
   isCreatingAgentConfigPreview: boolean
   isEnrichingContext: boolean
   missingRequirements: string[]
@@ -58,6 +59,7 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
   handleCreateAgentConfigPreview,
   handleRunContextEnrichment,
   isApplyingAgentConfigPreview,
+  isContextEnrichmentAvailable,
   isCreatingAgentConfigPreview,
   isEnrichingContext,
   missingRequirements,
@@ -135,6 +137,7 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
       draft={draft}
       enrichmentError={contextEnrichmentError}
       enrichmentResult={contextEnrichmentResult}
+      isAvailable={isContextEnrichmentAvailable}
       isEnriching={isEnrichingContext}
       onAccept={handleAcceptContextEnrichment}
       onClear={clearContextEnrichment}
