@@ -1,5 +1,4 @@
 import React from 'react'
-import { ChevronRight } from 'lucide-react'
 import type { RecentWorkspaceEntry } from '@shared'
 import { RecentWorkspaceRow } from './RecentWorkspaceRow'
 
@@ -29,21 +28,6 @@ export const RecentWorkspacesPanel: React.FC<RecentWorkspacesPanelProps> = ({
       <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
         Recent Workspaces
       </h2>
-      {entries.length > 0 && (
-        <button
-          type="button"
-          className="inline-flex items-center gap-0.5 text-xs font-medium transition-colors hover:opacity-80"
-          style={{
-            color: 'var(--color-muted)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          View all
-          <ChevronRight size={12} />
-        </button>
-      )}
     </div>
     {entries.length > 0 ? (
       <div className="grid gap-1.5">

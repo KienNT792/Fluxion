@@ -9,11 +9,7 @@ import { useWorkspaceTrustPrompt } from '@renderer/hooks/useWorkspaceTrustPrompt
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { StatusChipTone } from '@renderer/components/ui/StatusChip'
 import { GlobalSettingsDialog } from '@renderer/features/settings/GlobalSettingsDialog'
-import { FirstStepsBand } from './components/FirstStepsBand'
-import { FluxionPreviewPanel } from './components/FluxionPreviewPanel'
-import { ReadinessSummaryPanel } from './components/ReadinessSummaryPanel'
 import { RecentWorkspacesPanel } from './components/RecentWorkspacesPanel'
-import { WelcomeFooter } from './components/WelcomeFooter'
 import { WelcomeNav } from './components/WelcomeNav'
 import { WorkspaceOpenActions } from './components/WorkspaceOpenActions'
 import { useRecentWorkspaces } from './hooks/useRecentWorkspaces'
@@ -87,20 +83,30 @@ export const WelcomeScreen: React.FC = () => {
         : codexCapabilities?.version
           ? `v${codexCapabilities.version}`
           : 'Version unknown'
+  const authLabel =
+    codexRawReadiness?.code === 'auth_missing' ? 'Not authenticated' : 'Authenticated'
 
   return (
     <div
-      className="flex h-screen w-full flex-1 select-none flex-col overflow-auto"
+      className="flex min-h-screen w-full flex-1 select-none flex-col overflow-auto"
       style={{ background: 'var(--color-canvas)' }}
       {...dropHandlers}
     >
-      <WelcomeNav onOpenSettings={() => setIsSettingsOpen(true)} />
+      <WelcomeNav
+        authLabel={authLabel}
+        cliLabel={codexCliLabel}
+        codexDetail={codexReadiness.detail}
+        isProviderCapabilitiesLoading={isProviderCapabilitiesLoading}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        readinessChipTone={readinessChipTone}
+        readinessStatusLabel={readinessStatusLabel}
+      />
 
       <main
-        className="mx-auto flex w-full max-w-[1440px] flex-1 px-8 py-12"
-        style={{ gap: '48px' }}
+        className="mx-auto grid w-full flex-1 gap-8 px-8 py-10 lg:grid-cols-[minmax(0,1fr)_340px]"
+        style={{ maxWidth: '1180px' }}
       >
-        <div className="flex flex-col gap-8" style={{ flex: '0 0 40%', maxWidth: '40%' }}>
+        <div className="flex min-w-0 flex-col gap-6">
           <WorkspaceOpenActions
             actionCommand={codexRawReadiness?.actionCommand}
             isDragActive={isDragActive}
@@ -127,23 +133,66 @@ export const WelcomeScreen: React.FC = () => {
           />
         </div>
 
-        <FluxionPreviewPanel />
+        <aside className="flex min-w-0 flex-col gap-4">
+          <section
+            className="rounded-lg px-5 py-5"
+            style={{
+              background: 'var(--color-surface-card)',
+              border: '1px solid var(--color-hairline)'
+            }}
+          >
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+              What Fluxion prepares
+            </h2>
+            <div className="mt-4 grid gap-3">
+              {[
+                ['Detect repository', 'Read stack, commands, paths, and existing instructions.'],
+                ['Build context', 'Create a durable project brief and agent boundaries.'],
+                ['Run workflows', 'Start Codex DAGs with local logs and reviewable artifacts.']
+              ].map(([title, body], index) => (
+                <div key={title} className="flex gap-3">
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                    style={{
+                      background:
+                        index === 0 ? 'var(--color-primary)' : 'var(--color-surface-strong)',
+                      color: index === 0 ? 'var(--color-on-primary)' : 'var(--color-ink)'
+                    }}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className="block text-xs font-semibold"
+                      style={{ color: 'var(--color-ink)' }}
+                    >
+                      {title}
+                    </span>
+                    <span
+                      className="mt-1 block text-xs leading-5"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      {body}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section
+            className="rounded-lg px-5 py-4 text-xs leading-5"
+            style={{
+              background: 'var(--color-canvas-soft)',
+              border: '1px solid var(--color-hairline)',
+              color: 'var(--color-muted)'
+            }}
+          >
+            Everything stays local. Fluxion writes workspace metadata only after you approve trust
+            and actions.
+          </section>
+        </aside>
       </main>
-
-      <FirstStepsBand />
-
-      <ReadinessSummaryPanel
-        authLabel={
-          codexRawReadiness?.code === 'auth_missing' ? 'Not authenticated' : 'Authenticated'
-        }
-        cliLabel={codexCliLabel}
-        codexDetail={codexReadiness.detail}
-        isProviderCapabilitiesLoading={isProviderCapabilitiesLoading}
-        readinessChipTone={readinessChipTone}
-        readinessStatusLabel={readinessStatusLabel}
-      />
-
-      <WelcomeFooter />
 
       <GlobalSettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       {trustDialog}

@@ -20,38 +20,36 @@ export const WorkspaceOpenActions: React.FC<WorkspaceOpenActionsProps> = ({
   workspaceActionError
 }) => (
   <>
-    <span
-      className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-      style={{
-        background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-canvas-soft))',
-        color: 'var(--color-primary)'
-      }}
-    >
-      👋 Welcome to Fluxion
-    </span>
-
-    <h1
-      style={{
-        fontFamily: "'CursorGothic', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif",
-        fontSize: '36px',
-        fontWeight: 400,
-        lineHeight: 1.2,
-        letterSpacing: '-0.72px',
-        color: 'var(--color-ink)',
-        margin: 0
-      }}
-    >
-      Turn your repository into a <br />
-      governed Codex workspace.
-    </h1>
-
     <div className="flex flex-col gap-3">
-      <p className="text-base leading-7" style={{ color: 'var(--color-body)', margin: 0 }}>
-        Fluxion helps you initialize durable project context, encode rules, and orchestrate Codex
-        workflows from a single workspace.
-      </p>
-      <p className="text-sm leading-6" style={{ color: 'var(--color-muted)', margin: 0 }}>
-        Fluxion reads project context, prepares agent workflows, and keeps outputs reviewable.
+      <span
+        className="inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+        style={{
+          background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-canvas-soft))',
+          color: 'var(--color-primary)'
+        }}
+      >
+        Workspace launcher
+      </span>
+
+      <h1
+        style={{
+          fontFamily: "'CursorGothic', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+          fontSize: '32px',
+          fontWeight: 400,
+          lineHeight: 1.15,
+          color: 'var(--color-ink)',
+          margin: 0
+        }}
+      >
+        Open a repository to start.
+      </h1>
+
+      <p
+        className="max-w-[620px] text-sm leading-6"
+        style={{ color: 'var(--color-muted)', margin: 0 }}
+      >
+        Fluxion prepares project context, workflow scaffolds, and reviewable Codex runs from a local
+        workspace.
       </p>
     </div>
 
@@ -59,7 +57,7 @@ export const WorkspaceOpenActions: React.FC<WorkspaceOpenActionsProps> = ({
       <PrerequisiteBlock code={prerequisiteCode} actionCommand={actionCommand} />
     ) : null}
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       <button
         type="button"
         onClick={onOpenWorkspace}
@@ -69,7 +67,7 @@ export const WorkspaceOpenActions: React.FC<WorkspaceOpenActionsProps> = ({
           background: 'var(--color-primary)',
           color: 'var(--color-on-primary)',
           border: '1px solid transparent',
-          minHeight: '88px'
+          minHeight: '104px'
         }}
         onMouseEnter={(event) => {
           if (!isWorkspaceOpening) {
@@ -99,7 +97,7 @@ export const WorkspaceOpenActions: React.FC<WorkspaceOpenActionsProps> = ({
           border: isDragActive
             ? '1px solid var(--color-primary)'
             : '1px solid var(--color-hairline)',
-          minHeight: '88px',
+          minHeight: '104px',
           boxShadow: isDragActive
             ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent)'
             : 'none'
