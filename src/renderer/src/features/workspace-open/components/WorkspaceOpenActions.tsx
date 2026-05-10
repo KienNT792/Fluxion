@@ -7,7 +7,7 @@ interface WorkspaceOpenActionsProps {
   isDragActive: boolean
   isWorkspaceOpening: boolean
   onOpenWorkspace: () => void
-  prerequisiteCode: 'cli_missing' | 'auth_missing' | null
+  prerequisiteCode: 'cli_missing' | 'windowsapps_alias_blocked' | 'auth_missing' | null
   workspaceActionError: string | null
 }
 

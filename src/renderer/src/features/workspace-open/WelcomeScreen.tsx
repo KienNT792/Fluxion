@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  getCodexCapabilities,
   getCodexReadiness,
   getCodexReadinessBadgeState,
   getProviderReadinessSummary
@@ -35,12 +36,15 @@ export const WelcomeScreen: React.FC = () => {
   const fetchProviderCapabilities = useWorkflowStore((state) => state.fetchProviderCapabilities)
   const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt()
   const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, [])
+  const codexCapabilities = getCodexCapabilities(providerCapabilities)
   const codexRawReadiness = getCodexReadiness(providerCapabilities)
   const providerReadiness = getProviderReadinessSummary(providerCapabilities)
 
   const prerequisiteCode =
     !isProviderCapabilitiesLoading && hasFetchedProviderCapabilities
-      ? codexRawReadiness?.code === 'cli_missing' || codexRawReadiness?.code === 'auth_missing'
+      ? codexRawReadiness?.code === 'cli_missing' ||
+        codexRawReadiness?.code === 'windowsapps_alias_blocked' ||
+        codexRawReadiness?.code === 'auth_missing'
         ? codexRawReadiness.code
         : null
       : null
@@ -74,6 +78,15 @@ export const WelcomeScreen: React.FC = () => {
     : codexReadiness.tone === 'ready'
       ? 'Codex is ready'
       : codexReadiness.summary
+  const codexCliLabel = isProviderCapabilitiesLoading
+    ? 'Checking...'
+    : codexRawReadiness?.code === 'cli_missing'
+      ? 'Not found'
+      : codexRawReadiness?.code === 'windowsapps_alias_blocked'
+        ? 'Alias blocked'
+        : codexCapabilities?.version
+          ? `v${codexCapabilities.version}`
+          : 'Version unknown'
 
   return (
     <div
@@ -123,7 +136,7 @@ export const WelcomeScreen: React.FC = () => {
         authLabel={
           codexRawReadiness?.code === 'auth_missing' ? 'Not authenticated' : 'Authenticated'
         }
-        cliLabel={codexRawReadiness?.code === 'cli_missing' ? 'Not found' : '1.0.7'}
+        cliLabel={codexCliLabel}
         codexDetail={codexReadiness.detail}
         isProviderCapabilitiesLoading={isProviderCapabilitiesLoading}
         readinessChipTone={readinessChipTone}

@@ -3,17 +3,24 @@ import { AlertTriangle } from 'lucide-react'
 import { CopyableCommand } from './CopyableCommand'
 
 interface PrerequisiteBlockProps {
-  code: 'cli_missing' | 'auth_missing'
+  code: 'cli_missing' | 'windowsapps_alias_blocked' | 'auth_missing'
   actionCommand?: string
 }
 
 export const PrerequisiteBlock: React.FC<PrerequisiteBlockProps> = ({ code, actionCommand }) => {
   const isCliMissing = code === 'cli_missing'
+  const isAliasBlocked = code === 'windowsapps_alias_blocked'
 
-  const title = isCliMissing ? 'Codex CLI is not installed' : 'Codex CLI is not logged in'
-  const description = isCliMissing
-    ? 'Fluxion requires Codex CLI to run workflows. Install it with npm, then log in.'
-    : 'Codex CLI is installed but you are not authenticated. Run the command below, then refresh.'
+  const title = isAliasBlocked
+    ? 'Codex WindowsApps alias is blocking Fluxion'
+    : isCliMissing
+      ? 'Codex CLI is not installed'
+      : 'Codex CLI is not logged in'
+  const description = isAliasBlocked
+    ? 'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn. Install or update the npm CLI, then put it ahead of WindowsApps in PATH or disable the alias.'
+    : isCliMissing
+      ? 'Fluxion requires Codex CLI to run workflows. Install it with npm, then log in.'
+      : 'Codex CLI is installed but you are not authenticated. Run the command below, then refresh.'
 
   const installCommand = 'npm install -g @openai/codex'
   const loginCommand = actionCommand ?? 'codex login'
@@ -40,12 +47,12 @@ export const PrerequisiteBlock: React.FC<PrerequisiteBlockProps> = ({ code, acti
             {description}
           </p>
           <div className="mt-3 grid gap-2">
-            {isCliMissing && <CopyableCommand command={installCommand} />}
-            <CopyableCommand command={loginCommand} />
+            {(isCliMissing || isAliasBlocked) && <CopyableCommand command={installCommand} />}
+            {!isAliasBlocked && <CopyableCommand command={loginCommand} />}
           </div>
-          {isCliMissing && (
+          {(isCliMissing || isAliasBlocked) && (
             <p className="mt-3 text-[11px] leading-5" style={{ color: 'var(--color-muted-soft)' }}>
-              After installation and login, relaunch Fluxion or click{' '}
+              After installation and PATH or alias changes, relaunch Fluxion or click{' '}
               <span style={{ fontFamily: 'var(--font-mono)' }}>Refresh readiness</span> in Settings.
             </p>
           )}

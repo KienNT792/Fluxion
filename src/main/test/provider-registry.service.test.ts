@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   getCodexCapabilities,
   parseCodexDebugModelsOutput,
+  parseCodexVersionOutput,
 } from '../services/provider-registry.service';
 
 vi.mock('electron', () => ({
@@ -105,6 +106,10 @@ describe('provider-registry.service', () => {
         },
       ],
       runCommand: async (_command, args) => {
+        if (args.join(' ') === '--version') {
+          return { stdout: 'codex-cli 0.128.0', stderr: '' };
+        }
+
         if (args.join(' ') === 'login status') {
           return { stdout: 'Logged in', stderr: '' };
         }
@@ -134,6 +139,7 @@ describe('provider-registry.service', () => {
 
     expect(capabilities.available).toBe(true);
     expect(capabilities.auth.status).toBe('authenticated');
+    expect(capabilities.version).toBe('0.128.0');
     expect(capabilities.readiness).toMatchObject({
       code: 'ready',
       blocking: false,
@@ -192,10 +198,103 @@ describe('provider-registry.service', () => {
       blocking: false,
     });
     expect(calls).toEqual([
-      'blocked-codex login status',
+      'blocked-codex --version',
+      'working-codex --version',
       'working-codex login status',
       'working-codex debug models',
     ]);
+  });
+
+  it('parses Codex CLI version output', () => {
+    expect(parseCodexVersionOutput('codex-cli 0.128.0')).toBe('0.128.0');
+    expect(parseCodexVersionOutput('codex v1.2.3-beta.1')).toBe('1.2.3-beta.1');
+  });
+
+  it('falls back from a blocked WindowsApps alias to a working Codex CLI candidate', async () => {
+    const calls: string[] = [];
+    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe';
+
+    const capabilities = await getCodexCapabilities({
+      resolveCli: async () => [
+        {
+          command: windowsAppsCodex,
+          argsPrefix: [],
+          displayCommand: windowsAppsCodex,
+          source: 'direct',
+        },
+        {
+          command: 'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe',
+          argsPrefix: ['C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js'],
+          displayCommand:
+            'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
+          source: 'node-script',
+        },
+      ],
+      runCommand: async (command, args) => {
+        calls.push(`${command} ${args.join(' ')}`);
+
+        if (command === windowsAppsCodex) {
+          throw Object.assign(new Error('operation not permitted'), {
+            code: 'EPERM',
+            stderr: '',
+            stdout: '',
+          });
+        }
+
+        if (args.slice(-2).join(' ') === 'login status') {
+          return { stdout: 'Logged in', stderr: '' };
+        }
+
+        return {
+          stdout: JSON.stringify({
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }],
+          }),
+          stderr: '',
+        };
+      },
+    });
+
+    expect(capabilities.readiness).toMatchObject({
+      code: 'ready',
+      blocking: false,
+    });
+    expect(calls).toEqual([
+      `${windowsAppsCodex} --version`,
+      'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js --version',
+      'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js login status',
+      'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js debug models',
+    ]);
+  });
+
+  it('returns a dedicated readiness state when every Codex candidate is a blocked WindowsApps alias', async () => {
+    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe';
+    const capabilities = await getCodexCapabilities({
+      resolveCli: async () => [
+        {
+          command: windowsAppsCodex,
+          argsPrefix: [],
+          displayCommand: windowsAppsCodex,
+          source: 'direct',
+        },
+      ],
+      runCommand: async () => {
+        throw Object.assign(new Error('operation not permitted'), {
+          code: 'EPERM',
+          stderr: '',
+          stdout: '',
+        });
+      },
+    });
+
+    expect(capabilities.available).toBe(false);
+    expect(capabilities.auth.status).toBe('unknown');
+    expect(capabilities.readiness).toMatchObject({
+      code: 'windowsapps_alias_blocked',
+      blocking: true,
+      actionCommand: 'npm i -g @openai/codex',
+      catalogSource: 'none',
+    });
+    expect(capabilities.refreshHint).toContain('App Execution Alias');
   });
 
   it('keeps running non-blocking when auth status is unknown but catalog loads', async () => {

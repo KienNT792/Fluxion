@@ -74,6 +74,7 @@ export type ProviderAuthStatus =
 export type ProviderReadinessCode =
   | 'ready'
   | 'cli_missing'
+  | 'windowsapps_alias_blocked'
   | 'auth_missing'
   | 'auth_unknown'
   | 'catalog_failed';

@@ -40,8 +40,11 @@ work.
 
 ## Context And Settings
 
+- Run the Context Init smoke checklist in `docs/qa/context-init-smoke.md` for blank, existing,
+  legacy/incomplete, Codex unavailable, and Codex-assisted onboarding cases.
 - Open context setup, save a draft, reopen it, and confirm values persist.
 - Complete required fields and save final context.
+- Save the onboarding packet and create the onboarding workflow from Review & Export.
 - Create an AGENTS.md preview, clear it, recreate it, and apply the export in a disposable
   workspace.
 - Open Global Settings, refresh Codex readiness, add an OpenAI key, clear it, and confirm Codex CLI
@@ -51,6 +54,7 @@ work.
 
 - Record the Fluxion commit SHA, Windows version, Node/npm versions, Codex CLI version, and build
   command used.
+- Record the Context Init smoke result and link any screenshots or artifact diffs used for review.
 - Mark each item as pass, fail, or blocked.
 - Runtime-path failures block the alpha. Visual polish issues only block if they prevent completing
   the workflow.

@@ -135,6 +135,13 @@ interface CodexCapabilitiesDependencies {
 interface CodexCommandAttemptResult {
   result?: ExecFileResult;
   error?: unknown;
+  attempts: CodexCommandAttempt[];
+}
+
+interface CodexCommandAttempt {
+  candidate: ResolvedCodexCli;
+  error?: unknown;
+  result?: ExecFileResult;
 }
 
 interface CodexDiscoveryContext {
@@ -198,6 +205,44 @@ function shouldTryNextCandidate(error: unknown): boolean {
   return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOENT';
 }
 
+function isWindowsAppsAliasCandidate(candidate: ResolvedCodexCli): boolean {
+  const commandLine = [candidate.command, ...candidate.argsPrefix]
+    .join(' ')
+    .replace(/\//g, '\\')
+    .toLowerCase();
+
+  return commandLine.includes('\\windowsapps\\');
+}
+
+function isWindowsAppsAliasPermissionError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  if (code === 'EPERM' || code === 'EACCES' || code === 'EINVAL') {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : '';
+  return /(operation not permitted|permission denied|access is denied|invalid argument)/i.test(
+    message
+  );
+}
+
+function hasWindowsAppsAliasBlock(attemptResult: CodexCommandAttemptResult): boolean {
+  const failedAttempts = attemptResult.attempts.filter((attempt) => attempt.error);
+  if (failedAttempts.length === 0) {
+    return false;
+  }
+
+  return (
+    failedAttempts.every((attempt) => shouldTryNextCandidate(attempt.error))
+    && failedAttempts.some(
+      (attempt) =>
+        attempt.error
+        && isWindowsAppsAliasCandidate(attempt.candidate)
+        && isWindowsAppsAliasPermissionError(attempt.error)
+    )
+  );
+}
+
 function getCliCandidateKey(candidate: ResolvedCodexCli): string {
   return [candidate.command, ...candidate.argsPrefix].join('\u0000');
 }
@@ -232,6 +277,15 @@ function buildCodexReadiness(
       title: 'Codex CLI not found.',
       message:
         'Install @openai/codex in Windows and make sure the codex command is visible to this app.',
+      actionCommand: 'npm i -g @openai/codex',
+      catalogSource: 'none',
+    },
+    windowsapps_alias_blocked: {
+      code: 'windowsapps_alias_blocked',
+      blocking: true,
+      title: 'Codex WindowsApps alias is blocking execution.',
+      message:
+        'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn. Install or update @openai/codex globally, then put that npm command ahead of WindowsApps in PATH or disable the alias.',
       actionCommand: 'npm i -g @openai/codex',
       catalogSource: 'none',
     },
@@ -344,6 +398,11 @@ export function parseCodexDebugModelsOutput(output: string): ProviderModel[] {
     .map(mapCodexDebugModelToProviderModel)
     .filter((model): model is ProviderModel => model !== null)
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function parseCodexVersionOutput(output: string): string | undefined {
+  const match = output.trim().match(/(?:codex(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i);
+  return match?.[1];
 }
 
 function buildStaticOpenAIModels(): ProviderModel[] {
@@ -486,6 +545,7 @@ async function runCodexCommandAcrossCandidates(
   args: string[]
 ): Promise<CodexCommandAttemptResult> {
   let lastError: unknown;
+  const attempts: CodexCommandAttempt[] = [];
 
   for (const cliCandidate of getPrioritizedCliCandidates(context)) {
     try {
@@ -494,12 +554,21 @@ async function runCodexCommandAcrossCandidates(
         [...cliCandidate.argsPrefix, ...args]
       );
       context.preferredCandidate = cliCandidate;
+      attempts.push({
+        candidate: cliCandidate,
+        result,
+      });
 
       return {
         result,
+        attempts,
       };
     } catch (error) {
       lastError = error;
+      attempts.push({
+        candidate: cliCandidate,
+        error,
+      });
       if (!shouldTryNextCandidate(error)) {
         break;
       }
@@ -508,6 +577,7 @@ async function runCodexCommandAcrossCandidates(
 
   return {
     error: lastError ?? new Error(CODEX_CLI_NOT_FOUND_MESSAGE),
+    attempts,
   };
 }
 
@@ -516,6 +586,14 @@ export async function getCodexCapabilities(
 ): Promise<ProviderCapabilities> {
   try {
     const discoveryContext = await createCodexDiscoveryContext(dependencies);
+    const versionStatus = await runCodexCommandAcrossCandidates(discoveryContext, [
+      '--version',
+    ]);
+    const codexVersion = versionStatus.result
+      ? parseCodexVersionOutput(
+          `${versionStatus.result.stdout}\n${versionStatus.result.stderr}`.trim()
+        )
+      : undefined;
     const loginStatus = await runCodexCommandAcrossCandidates(discoveryContext, [
       'login',
       'status',
@@ -528,6 +606,28 @@ export async function getCodexCapabilities(
       const { stdout, stderr } = getErrorOutput(loginStatus.error);
       const combinedOutput = `${stderr}\n${stdout}`.trim()
         || (loginStatus.error instanceof Error ? loginStatus.error.message : '');
+
+      if (hasWindowsAppsAliasBlock(loginStatus) && !isCodexAuthMissingMessage(combinedOutput)) {
+        const readiness = buildCodexReadiness('windowsapps_alias_blocked');
+        return withCodexApprovalProtocol({
+          provider: 'codex',
+          displayName: 'Codex',
+          available: false,
+          auth: {
+            type: 'cli-login',
+            status: 'unknown',
+            loginCommand: 'codex login',
+            message: readiness.message,
+          },
+          readiness,
+          version: codexVersion,
+          error: combinedOutput || readiness.message,
+          models: [],
+          parameters: CODEX_PARAMETERS,
+          refreshHint:
+            'Install or update @openai/codex globally, fix PATH or App Execution Alias settings, then refresh Codex readiness.',
+        });
+      }
 
       if (isCodexAuthMissingMessage(combinedOutput)) {
         const readiness = buildCodexReadiness('auth_missing');
@@ -542,6 +642,7 @@ export async function getCodexCapabilities(
             message: readiness.message,
           },
           readiness,
+          version: codexVersion,
           error: combinedOutput || readiness.message,
           models: [],
           parameters: CODEX_PARAMETERS,
@@ -600,6 +701,7 @@ export async function getCodexCapabilities(
           message: authWarning,
         },
         readiness,
+        version: codexVersion,
         error: errorMessage,
         models: [],
         parameters: CODEX_PARAMETERS,
@@ -643,6 +745,7 @@ export async function getCodexCapabilities(
           ?? (catalogResult.stderr.trim().length > 0 ? catalogResult.stderr.trim() : undefined),
       },
       readiness,
+      version: codexVersion,
       models,
       defaultModel,
       parameters: CODEX_PARAMETERS,

@@ -14,7 +14,8 @@ function createCapabilities(
     codex: {
       provider: 'codex',
       displayName: 'Codex',
-      available: readiness?.code !== 'cli_missing',
+      available:
+        readiness?.code !== 'cli_missing' && readiness?.code !== 'windowsapps_alias_blocked',
       auth: {
         type: 'cli-login',
         status: readiness?.code === 'auth_missing' ? 'missing' : 'authenticated',
@@ -72,6 +73,29 @@ describe('provider-capabilities readiness helpers', () => {
       blocking: false,
     });
     expect(getCodexReadinessBlockMessage(state)).toBeNull();
+  });
+
+  it('blocks WindowsApps alias readiness failures as setup-needed states', () => {
+    const state = getCodexReadinessBadgeState(
+      createCapabilities({
+        code: 'windowsapps_alias_blocked',
+        blocking: true,
+        title: 'Codex WindowsApps alias is blocking execution.',
+        message:
+          'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn.',
+        actionCommand: 'npm i -g @openai/codex',
+        catalogSource: 'none',
+      }),
+      ['gpt-5.5']
+    );
+
+    expect(state).toMatchObject({
+      label: 'Setup needed',
+      tone: 'blocked',
+      blocking: true,
+      actionCommand: 'npm i -g @openai/codex',
+    });
+    expect(getCodexReadinessBlockMessage(state)).toContain('@openai/codex');
   });
 
   it('warns but does not block unknown workflow models', () => {

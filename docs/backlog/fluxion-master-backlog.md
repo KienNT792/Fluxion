@@ -39,7 +39,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - Runtime UX da duoc lam ro them: terminal/log cleanup direction, output preview, stopping state, review CTA/section, duplicate review-action prevention, va retry/rerun attempt separators.
 - Codex approval guardrail Phase 1 da xong: `on-request` va `untrusted` bi chan truoc spawn tru khi approval protocol duoc xac nhan `supported`.
 - Codex approval protocol probe Phase 2A da xong va hien ket luan `unsupported`; Phase 2B approval host van bi block.
-- Gap con lai co tac dong lon nhat hien nay la fix Electron install/test environment, manual desktop smoke runtime UX batch, WindowsApps/App Execution Alias readiness error handling, CI baseline, provider config validation, va sau do moi quay lai `Explain with AI`.
+- Gap con lai co tac dong lon nhat hien nay la manual desktop smoke runtime UX batch, lint baseline cleanup, provider config validation, richer frontmatter validation, va sau do moi quay lai `Explain with AI`.
 
 ## Release Gates
 
@@ -278,16 +278,16 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - [ ] `Review Required` CTA focus dung review section, approve/rerun/reject co pending state.
 - [ ] Retry/rerun giu log context voi attempt separators va latest output label dung.
 
-### FX-031 Harden Codex CLI WindowsApps alias readiness
+### FX-031 Harden Codex CLI WindowsApps alias readiness [DONE]
 
 - Priority: `P1`
 - Outcome: Fluxion bao loi setup Codex CLI tren Windows ro hon khi `codex.exe` resolve vao App Execution Alias / WindowsApps path khong spawn duoc.
 - Deliverable: Resolver/readiness error path phan biet `EPERM`/WindowsApps alias voi CLI missing/auth missing.
 - Acceptance:
-- [ ] Detect `C:\Program Files\WindowsApps` Codex candidates va spawn `EPERM` separately.
-- [ ] Prefer npm global/node-script Codex CLI candidate khi co san va spawnable.
-- [ ] Renderer hien setup copy co action ro: install/update `@openai/codex` globally hoac sua PATH.
-- [ ] Test provider readiness cho WindowsApps alias failure va fallback candidate.
+- [x] Detect `C:\Program Files\WindowsApps` Codex candidates va spawn `EPERM` separately.
+- [x] Prefer npm global/node-script Codex CLI candidate khi co san va spawnable.
+- [x] Renderer hien setup copy co action ro: install/update `@openai/codex` globally hoac sua PATH.
+- [x] Test provider readiness cho WindowsApps alias failure va fallback candidate.
 
 ## Phase F - Data Integrity, Security, and Hardening
 
@@ -315,46 +315,45 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 ### FX-025 Establish test matrix and CI baseline [PARTIAL]
 
 - Priority: `P1`
-- Outcome: Unit tests cho engine/runtime core va local Windows smoke baseline da co, nhung CI baseline va lint gate van chua khop DoD.
+- Outcome: Unit tests cho engine/runtime core, local Windows smoke baseline, va Windows CI baseline da co; lint gate van chua khop DoD.
 - Deliverable: Unit test, integration test, build smoke, lint/typecheck pipeline.
 - Acceptance:
 - [x] Co test cho engine success/error/abort.
 - [x] Co test cho memory frontmatter parsing.
 - [x] Co build smoke tren Windows.
-- [ ] Full local `npm test` lap lai duoc sau khi Electron install state healthy.
-- [ ] Co CI baseline cho lint/typecheck/test.
+- [x] Full local `npm test` lap lai duoc sau khi Electron install state healthy.
+- [x] Co CI baseline cho typecheck/test/build tren Windows.
 
 ### FX-026 Clean lint baseline and align product metadata [PARTIAL]
 
 - Priority: `P2`
-- Outcome: README da gan hon voi product that, nhung metadata starter va lint baseline van can don dep.
+- Outcome: README va package metadata da gan hon voi product that; lint baseline van can don dep.
 - Deliverable: Giam lint noise va sua `package.json`, README, docs theo identity Fluxion.
 - Acceptance:
 - [ ] `npm run lint` pass clean.
-- [ ] `package.json` khong con metadata starter.
+- [x] `package.json` khong con metadata starter.
 - [x] README mo ta dung tinh nang hien co hon truoc.
 
 ## Suggested Implementation Order
 
-1. `FX-030`, `FX-031`, `FX-025`
+1. `FX-030`, `FX-025`, `FX-026`
 2. `FX-023`, `FX-024`, `FX-026`
 3. `FX-020`, `FX-021`
 4. `FX-016`, `FX-013`, `FX-014`
 
 ## Suggested Next Sprint
 
-Sprint tiep theo nen tap trung vao 6 item:
+Sprint tiep theo nen tap trung vao 5 item:
 
 - `FX-030` Manual smoke runtime UX batch vua ship: output preview, terminal clarity, stopping, review CTA, retry/rerun separators.
-- `FX-031` Xu ly WindowsApps/App Execution Alias readiness cho Codex CLI va thong bao setup ro rang.
-- `FX-025` Khoi phuc full local `npm test`, sau do dua `typecheck` / `test` / smoke build vao CI baseline.
+- `FX-025` Duy tri full local `npm test`, theo doi CI baseline Windows, va quyet dinh khi nao dua lint vao gate.
 - `FX-023` Chan metadata/frontmatter khong hop le truoc khi dua vao downstream context.
 - `FX-024` Mo rong validate auth/config truoc khi run cho tat ca runtime/provider lien quan ngoai Codex CLI readiness da co.
 - `FX-026` Don dep lint baseline va metadata san pham.
 
-`Explain with AI` (`FX-020`/`FX-021`) nen quay lai sau khi 6 item tren on dinh, vi diagnostic AI se co gia tri hon khi runtime output/error/retry state da dang tin.
+`Explain with AI` (`FX-020`/`FX-021`) nen quay lai sau khi 5 item tren on dinh, vi diagnostic AI se co gia tri hon khi runtime output/error/retry state da dang tin.
 
-Neu xong 6 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co guardrail va runtime UX source-level polish" sang "beta candidate co verification lap lai duoc, Windows setup error ro rang, va product hardening tot hon".
+Neu xong 5 item nay, Fluxion se chuyen tu "Codex-first desktop alpha da co guardrail va runtime UX source-level polish" sang "beta candidate co verification lap lai duoc, Windows setup error ro rang, va product hardening tot hon".
 
 ## Deferred for Later
 

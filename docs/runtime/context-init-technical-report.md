@@ -1,7 +1,7 @@
 # Fluxion Context Init Technical Report
 
 Date: 2026-05-10  
-Status: Draft for technical, UX, and solution-architecture review  
+Status: P2 hardened; ready for P2.5 acceptance smoke
 Scope: Context initialization, onboarding packet generation, context persistence, and export actions  
 Audience: Tech Lead, UX/UI Lead, Solution Architecture Office
 
@@ -402,7 +402,7 @@ UX heuristics mapped to implementation:
 - `src/renderer/src/features/topbar/components/ProjectMenu.tsx`
 - `src/renderer/src/features/workflow-editor/canvas/FlowCanvas.tsx`
 
-## Test Coverage
+## Test Coverage And Verification
 
 Current automated coverage includes:
 
@@ -429,6 +429,17 @@ Current automated coverage includes:
   - Packet schema validation.
 - `src/renderer/src/features/project-context/setup/lib/*.test.ts`
   - Enrichment and onboarding patch logic.
+
+P1/P2 hardening verification completed before this report update:
+
+- `npm run typecheck`
+- `npm test`
+- Targeted ESLint for touched Context Init/onboarding files
+- `npm run build`
+- `npm audit --audit-level=high`
+
+P2.5 adds a manual acceptance checklist at `docs/qa/context-init-smoke.md` and includes Context Init
+in the internal alpha smoke gate.
 
 Recommended additional coverage:
 
@@ -457,12 +468,12 @@ Recommended additional coverage:
 
 | Priority | Risk                                                                    | Recommendation                                                                      |
 | -------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| P1       | Renderer layout regressions can recur without screenshot tests.         | Add Playwright or equivalent screenshot checks for Context Init modal.              |
-| P1       | Evidence exclusion relies on filename/path heuristics.                  | Add a central sensitive-path matcher and tests for more credential naming patterns. |
-| P2       | Full `npm run lint` currently reports broad baseline Prettier warnings. | Track baseline separately so touched files can be evaluated cleanly.                |
+| P1       | Manual desktop smoke still needs a repeatable record.                   | Use `docs/qa/context-init-smoke.md` during internal alpha release checks.           |
+| P1       | WindowsApps/App Execution Alias can look like a broken Codex install.   | Add a dedicated readiness code and setup copy for alias-blocked candidates.         |
+| P2       | Renderer layout regressions can recur without screenshot tests.         | Add Playwright or equivalent screenshot checks for Context Init modal.              |
+| P2       | Evidence exclusion relies on filename/path heuristics.                  | Continue expanding sensitive-path fixtures as new naming patterns appear.           |
 | P2       | Codex-assisted onboarding depends on local Codex CLI behavior.          | Keep deterministic packet path as default fallback and expose readiness clearly.    |
-| P2       | AGENTS/export previews can diverge from context schema additions.       | Add snapshot tests for compact AGENTS output after every context-field change.      |
-| P3       | `contextOnboarding` metadata is useful but invisible to most reviewers. | Add inspector diagnostics panel if support needs increase.                          |
+| P3       | Large-repository scan performance has not been benchmarked.             | Add benchmark notes before introducing bounded parallel scan.                       |
 
 ## Refactor And Improvement Roadmap
 

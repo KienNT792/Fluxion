@@ -1,10 +1,9 @@
 {
   "name": "fluxion",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Windows-first Electron desktop app for designing and running Codex workflows",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Fluxion",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
