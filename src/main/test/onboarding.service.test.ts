@@ -165,19 +165,39 @@ describe('onboarding.service', () => {
   it('excludes secrets from onboarding evidence even when suggested by draft paths', async () => {
     const workspacePath = await createWorkspace()
     await writeWorkspaceFile(workspacePath, 'README.md', '# Fixture\n\nA safe project.')
-    await writeWorkspaceFile(workspacePath, '.env', 'OPENAI_API_KEY=secret')
+    const skippedPaths = [
+      '.env',
+      '.env.local',
+      'config/secret.json',
+      'config/credentials.json',
+      'certs/private-key.pem',
+      'certs/server.key',
+      'keys/id_rsa',
+      'vendor/pkg/index.js',
+      'node_modules/lib/index.js',
+      'dist/app.js',
+      'build/app.js',
+      'coverage/report.json'
+    ]
+    for (const skippedPath of skippedPaths) {
+      await writeWorkspaceFile(workspacePath, skippedPath, 'OPENAI_API_KEY=secret')
+    }
     const draft = normalizeProjectContextDraft({
       workspaceType: 'existing',
       projectName: 'Fixture',
       projectGoal: 'Test secrets',
-      importantPaths: ['README.md', '.env'],
+      importantPaths: ['README.md', ...skippedPaths],
       sourceEvidence: []
     })
     const service = new OnboardingService()
 
     const packet = await service.generatePacket({ workspacePath, draft, mode: 'deterministic' })
 
-    expect(packet.sourceEvidence.map((evidence) => evidence.sourcePath)).not.toContain('.env')
+    const sourcePaths = packet.sourceEvidence.map((evidence) => evidence.sourcePath)
+    expect(sourcePaths).toContain('README.md')
+    for (const skippedPath of skippedPaths) {
+      expect(sourcePaths).not.toContain(skippedPath)
+    }
   })
 
   it('runs Codex onboarding with read-only non-interactive permissions', async () => {
