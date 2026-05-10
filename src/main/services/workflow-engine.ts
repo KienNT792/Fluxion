@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import * as path from 'path';
+import { WorkflowTraceEvent, WorkflowTraceEventType } from '@core';
 import {
   AbortReason,
   AgentResult,
@@ -24,6 +26,7 @@ import {
   runStateStore,
   RunStateStore,
 } from './run-state-store';
+import { workflowTraceStore, WorkflowTraceStore } from './workflow-trace-store';
 
 export interface WorkflowEventSender {
   send(channel: string, payload: unknown): void;
@@ -56,6 +59,7 @@ interface WorkflowEngineDependencies {
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >;
+  traceStore?: Pick<WorkflowTraceStore, 'append'>;
 }
 
 interface WorkflowRuntime {
@@ -148,6 +152,7 @@ export class WorkflowEngine {
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >;
+  private readonly traceStore: Pick<WorkflowTraceStore, 'append'>;
   private currentRuntime: WorkflowRuntime | null = null;
   private continuationPromise: Promise<void> | null = null;
 
@@ -156,6 +161,7 @@ export class WorkflowEngine {
     this.memoryManager = dependencies.memoryManager ?? memoryManager;
     this.runStateStore = dependencies.runStateStore ?? runStateStore;
     this.artifactGateService = dependencies.artifactGateService ?? artifactGateService;
+    this.traceStore = dependencies.traceStore ?? workflowTraceStore;
   }
 
   public static getInstance(): WorkflowEngine {
@@ -194,7 +200,7 @@ export class WorkflowEngine {
         executionMode: workflow.executionMode ?? 'auto',
       } satisfies InitializeRunOptions);
 
-      this.currentRuntime = this.createRuntime(
+      const runtime = this.createRuntime(
         workflow,
         workspacePath,
         sender,
@@ -202,6 +208,13 @@ export class WorkflowEngine {
         startTime,
         executionNodeIds
       );
+      this.currentRuntime = runtime;
+
+      await this.trace(runtime, 'workflow.started', undefined, {
+        executionMode: runtime.executionMode,
+        nodeCount: runtime.nodes.size,
+        resumeFromNodeId,
+      });
 
       await this.continueCurrentRuntime();
     } catch (error) {
@@ -231,6 +244,9 @@ export class WorkflowEngine {
     await this.runStateStore.markReviewApproved(runtime.workspacePath, runtime.runId, payload.nodeId, {
       comment: payload.comment,
     });
+    await this.trace(runtime, 'node.review_approved', payload.nodeId, {
+      hasComment: Boolean(payload.comment?.trim()),
+    });
     runtime.awaitingReviewNodeIds.delete(payload.nodeId);
     this.sendNodeStatus(runtime.sender, payload.nodeId, 'completed');
     this.unlockNeighbors(runtime, payload.nodeId);
@@ -253,6 +269,10 @@ export class WorkflowEngine {
     await this.runStateStore.markReviewRejected(runtime.workspacePath, runtime.runId, payload.nodeId, {
       comment: payload.comment,
     });
+    await this.trace(runtime, 'node.review_rejected', payload.nodeId, {
+      error: errorMessage,
+      hasComment: Boolean(payload.comment?.trim()),
+    });
     runtime.awaitingReviewNodeIds.delete(payload.nodeId);
     this.sendNodeStatus(runtime.sender, payload.nodeId, 'error', errorMessage);
     this.isHalted = true;
@@ -273,6 +293,9 @@ export class WorkflowEngine {
     }
 
     runtime.awaitingReviewNodeIds.delete(payload.nodeId);
+    await this.trace(runtime, 'node.rerun_requested', payload.nodeId, {
+      hasComment: Boolean(payload.comment?.trim()),
+    });
     await this.runStateStore.resetNodeForRerun(runtime.workspacePath, runtime.runId, payload.nodeId);
     await this.memoryManager.deleteNodeOutput(runtime.workspacePath, runtime.workflow.id, payload.nodeId);
     runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
@@ -336,6 +359,11 @@ export class WorkflowEngine {
           reviewNodeId,
           this.haltError ?? 'Workflow aborted by user.'
         );
+        await this.trace(runtime, 'node.aborted', reviewNodeId, {
+          error: this.haltError ?? 'Workflow aborted by user.',
+          abortReason: reason,
+          awaitingReview: true,
+        });
       }
       runtime.awaitingReviewNodeIds.clear();
       await this.finalizeRuntime('aborted', this.haltError ?? 'Workflow aborted by user.');
@@ -368,6 +396,34 @@ export class WorkflowEngine {
     this.haltError = error;
   }
 
+  private async trace(
+    runtime: WorkflowRuntime,
+    type: WorkflowTraceEventType,
+    nodeId?: NodeId,
+    data: Record<string, unknown> = {}
+  ): Promise<void> {
+    const event: WorkflowTraceEvent = {
+      schemaVersion: 1,
+      runId: runtime.runId,
+      workflowId: runtime.workflow.id,
+      type,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (nodeId) {
+      event.nodeId = nodeId;
+    }
+    if (Object.keys(data).length > 0) {
+      event.data = data;
+    }
+
+    await this.traceStore.append(runtime.workspacePath, event);
+  }
+
+  private toWorkspaceRelative(workspacePath: string, absolutePath: string): string {
+    return path.relative(workspacePath, absolutePath).replaceAll(path.sep, '/');
+  }
+
   private getFinalRunStatus(): 'completed' | 'failed' | 'aborted' | 'rejected' {
     if (this.haltReason === 'aborted') {
       return 'aborted';
@@ -382,6 +438,22 @@ export class WorkflowEngine {
     }
 
     return 'completed';
+  }
+
+  private getWorkflowFinalTraceType(
+    status: 'completed' | 'failed' | 'aborted' | 'rejected'
+  ): WorkflowTraceEventType {
+    switch (status) {
+      case 'completed':
+        return 'workflow.completed';
+      case 'aborted':
+        return 'workflow.aborted';
+      case 'rejected':
+        return 'workflow.rejected';
+      case 'failed':
+      default:
+        return 'workflow.failed';
+    }
   }
 
   private getExecutionNodeIds(workflow: Workflow, resumeFromNodeId?: NodeId): Set<NodeId> {
@@ -513,6 +585,9 @@ export class WorkflowEngine {
           }
 
           const previousNodeIds = this.getPreviousNodeIds(runtime, nodeId);
+          await this.trace(runtime, 'node.ready', nodeId, {
+            previousNodeIds,
+          });
           return this.runNode(node, runtime, previousNodeIds);
         })
       );
@@ -564,10 +639,17 @@ export class WorkflowEngine {
   ): Promise<NodeExecutionResult> {
     try {
       await this.ensureRequiredArtifacts(runtime.workspacePath, node);
+      await this.trace(runtime, 'node.requires_validated', node.id, {
+        requiresCount: node.data.requires?.length ?? 0,
+      });
       const produceSnapshots = await this.artifactGateService.snapshotProduces(
         runtime.workspacePath,
         node.data.produces ?? []
       );
+      await this.trace(runtime, 'node.produces_snapshot', node.id, {
+        producesCount: node.data.produces?.length ?? 0,
+        existingCount: produceSnapshots.filter((snapshot) => snapshot.exists).length,
+      });
       const runningState = await this.runStateStore.markNodeRunning(
         runtime.workspacePath,
         runtime.runId,
@@ -577,6 +659,10 @@ export class WorkflowEngine {
 
       this.activeNodes.add(node.id);
       this.sendNodeStatus(runtime.sender, node.id, 'running');
+      await this.trace(runtime, 'node.running', node.id, {
+        attempt: runningState.nodes[node.id]?.attempts,
+        startedAt,
+      });
 
       const context = await this.memoryManager.compileContext(
         runtime.workspacePath,
@@ -587,9 +673,31 @@ export class WorkflowEngine {
         nodeId: node.id,
         compiledContext: context,
       });
+      await this.trace(runtime, 'node.context_compiled', node.id, {
+        previousNodeIds,
+        contextBytes: Buffer.byteLength(context, 'utf8'),
+      });
 
       const fullPrompt = buildPrompt(node, context);
+      await this.trace(runtime, 'node.execution_started', node.id, {
+        runner: node.data.runner ?? 'codex',
+        provider: node.data.provider,
+        model: node.data.model,
+        promptBytes: Buffer.byteLength(fullPrompt, 'utf8'),
+      });
       const result = await this.executeNode(node, fullPrompt, runtime);
+      await this.trace(runtime, 'node.execution_completed', node.id, {
+        success: result.success,
+        exitCode: result.exitCode,
+        aborted: Boolean(result.abortReason),
+        abortReason: result.abortReason,
+        outputBytes: Buffer.byteLength(result.output ?? '', 'utf8'),
+      });
+      if (result.processTelemetry) {
+        await this.trace(runtime, 'node.process_exited', node.id, {
+          ...result.processTelemetry,
+        });
+      }
 
       runtime.sender.send(IpcChannels.TERMINAL_EXIT, {
         nodeId: node.id,
@@ -611,6 +719,11 @@ export class WorkflowEngine {
           this.haltReason = 'aborted';
           this.haltError = errorMessage;
         }
+        await this.trace(runtime, 'node.aborted', node.id, {
+          error: errorMessage,
+          exitCode: result.exitCode,
+          abortReason: result.abortReason,
+        });
         return { nodeId: node.id, kind: 'aborted' };
       }
 
@@ -620,6 +733,10 @@ export class WorkflowEngine {
         runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage });
         this.sendNodeStatus(runtime.sender, node.id, 'error', errorMessage, result.exitCode);
         await this.runStateStore.markNodeFailed(runtime.workspacePath, runtime.runId, node.id, {
+          error: errorMessage,
+          exitCode: result.exitCode,
+        });
+        await this.trace(runtime, 'node.failed', node.id, {
           error: errorMessage,
           exitCode: result.exitCode,
         });
@@ -638,6 +755,10 @@ export class WorkflowEngine {
           errorMessage,
           result.exitCode
         );
+        await this.trace(runtime, 'node.aborted', node.id, {
+          error: errorMessage,
+          exitCode: result.exitCode,
+        });
         return { nodeId: node.id, kind: 'aborted' };
       }
 
@@ -646,12 +767,20 @@ export class WorkflowEngine {
         node,
         produceSnapshots
       );
+      await this.trace(runtime, 'node.produces_validated', node.id, {
+        producesCount: node.data.produces?.length ?? 0,
+        artifactPaths: producedPaths,
+      });
       const completedAt = new Date().toISOString();
       const outputFilePath = await this.memoryManager.saveNodeOutput(
         runtime.workspacePath,
         runtime.workflow.id,
         this.createSaveNodeOutputParams(node, runtime.runId, startedAt, completedAt, result)
       );
+      await this.trace(runtime, 'node.output_saved', node.id, {
+        outputFilePath: this.toWorkspaceRelative(runtime.workspacePath, outputFilePath),
+        completedAt,
+      });
 
       const reviewSource = this.getReviewSource(runtime, node);
       if (reviewSource) {
@@ -674,6 +803,10 @@ export class WorkflowEngine {
           nodeId: node.id,
           outputFilePath,
           status: 'awaiting_review',
+        });
+        await this.trace(runtime, 'node.review_requested', node.id, {
+          reviewSource,
+          outputFilePath: this.toWorkspaceRelative(runtime.workspacePath, outputFilePath),
         });
         return { nodeId: node.id, kind: 'awaiting_review' };
       }
@@ -707,6 +840,9 @@ export class WorkflowEngine {
         // Keep the original node execution error as the primary failure signal.
       }
 
+      await this.trace(runtime, 'node.failed', node.id, {
+        error: errorMessage,
+      });
       this.markWorkflowFailed(errorMessage);
       await this.haltActiveNodes(node.id);
       return { nodeId: node.id, kind: 'failed' };
@@ -888,6 +1024,12 @@ export class WorkflowEngine {
     }
 
     await this.runStateStore.finalizeWorkflow(runtime.workspacePath, runtime.runId, status);
+    await this.trace(runtime, this.getWorkflowFinalTraceType(status), undefined, {
+      status,
+      success: status === 'completed',
+      totalTimeMs: Date.now() - runtime.startTime,
+      error,
+    });
     runtime.sender.send(
       IpcChannels.WORKFLOW_COMPLETED,
       createWorkflowCompletedPayload(runtime.workflow.id, runtime.startTime, status, error)

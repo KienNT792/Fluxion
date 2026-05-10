@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { PassThrough } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunnerContext, WorkflowNodeSchema } from '@core';
+import { RunnerContext, RunnerResult, WorkflowNodeSchema } from '@core';
 import {
   buildCodexExecArgs,
   CodexCliRunner,
@@ -89,6 +89,22 @@ function createRunner(processManager: FakeProcessManager, outputDirectory: strin
       source: 'node-script',
     }),
     modelSupportsReasoning: async () => false,
+  });
+}
+
+function createNonJsonContext(): RunnerContext {
+  const base = createContext();
+  return createContext({
+    node: WorkflowNodeSchema.parse({
+      ...base.node,
+      data: {
+        ...base.node.data,
+        codex: {
+          ...base.node.data.codex,
+          json: false,
+        },
+      },
+    }),
   });
 }
 
@@ -250,7 +266,53 @@ describe('CodexCliRunner', () => {
     processManager.child.close(0);
     const done = await iterator.next();
     expect(done.done).toBe(true);
-    expect(done.value).toMatchObject({ success: true, output: 'not-json\n' });
+    expect(done.value).toMatchObject({
+      success: true,
+      output: 'not-json\n',
+      processTelemetry: expect.objectContaining({
+        pid: processManager.child.pid,
+        displayCommand: 'node codex.js',
+        exitCode: 0,
+        aborted: false,
+        stdoutBytes: Buffer.byteLength('{"type":"started"}\n{"type":"delta","value":1}\nnot-json\n'),
+        stderrBytes: 0,
+      }),
+    });
+  });
+
+  it('records process telemetry and byte counts for non-JSON stdout and stderr', async () => {
+    const processManager = new FakeProcessManager();
+    const runner = createRunner(processManager, outputDirectory);
+    const iterator = runner.run(createNonJsonContext());
+
+    await iterator.next();
+    processManager.child.stdout.write('plain output\n');
+    processManager.child.stderr.write('warning output\n');
+
+    const stdoutEvent = await iterator.next();
+    expect(stdoutEvent.value).toMatchObject({ type: 'stdout', content: 'plain output\n' });
+    const stderrEvent = await iterator.next();
+    expect(stderrEvent.value).toMatchObject({ type: 'stderr', content: 'warning output\n' });
+
+    processManager.child.close(0);
+    const done = await iterator.next();
+    const result = done.value as RunnerResult;
+
+    expect(done.done).toBe(true);
+    expect(result).toMatchObject({
+      success: true,
+      output: 'plain output\n',
+      processTelemetry: expect.objectContaining({
+        pid: processManager.child.pid,
+        exitCode: 0,
+        aborted: false,
+        stdoutBytes: Buffer.byteLength('plain output\n'),
+        stderrBytes: Buffer.byteLength('warning output\n'),
+      }),
+    });
+    expect(result.processTelemetry?.startedAt).toEqual(expect.any(String));
+    expect(result.processTelemetry?.completedAt).toEqual(expect.any(String));
+    expect(result.processTelemetry?.durationMs).toEqual(expect.any(Number));
   });
 
   it('captures final assistant output from --output-last-message without echoing it to stdout', async () => {
@@ -271,6 +333,12 @@ describe('CodexCliRunner', () => {
       success: true,
       output: 'Final assistant answer',
       exitCode: 0,
+      processTelemetry: expect.objectContaining({
+        pid: processManager.child.pid,
+        displayCommand: 'node codex.js',
+        exitCode: 0,
+        aborted: false,
+      }),
     });
   });
 
@@ -291,6 +359,13 @@ describe('CodexCliRunner', () => {
     expect(done.value).toMatchObject({
       success: false,
       exitCode: 127,
+      processTelemetry: expect.objectContaining({
+        displayCommand: 'node codex.js',
+        exitCode: 127,
+        aborted: false,
+        stdoutBytes: 0,
+        stderrBytes: 0,
+      }),
     });
   });
 
@@ -301,7 +376,7 @@ describe('CodexCliRunner', () => {
     const iterator = runner.run(ctx);
 
     await iterator.next();
-    await runner.abort(ctx.runId, ctx.node.id);
+    await runner.abort(ctx.runId, ctx.node.id, 'USER_REQUESTED');
 
     expect(processManager.killCalls).toEqual([processManager.child.pid]);
 
@@ -312,6 +387,12 @@ describe('CodexCliRunner', () => {
       success: false,
       error: 'Codex CLI execution was aborted.',
       exitCode: 1,
+      processTelemetry: expect.objectContaining({
+        pid: processManager.child.pid,
+        exitCode: 1,
+        aborted: true,
+        abortReason: 'USER_REQUESTED',
+      }),
     });
   });
 });

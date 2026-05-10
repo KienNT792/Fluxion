@@ -50,7 +50,7 @@ Ket qua mong muon:
 
 ## Proposed Sprint 1 - Runtime Evidence Foundation
 
-### FX-WO-001 Add structured runtime trace writer [READY]
+### FX-WO-001 Add structured runtime trace writer [DONE]
 
 Priority: `P0`
 
@@ -79,11 +79,11 @@ Candidate event shape:
 
 Acceptance:
 
-- [ ] Trace file duoc tao khi workflow start.
-- [ ] Event `workflow.started` va `workflow.completed` duoc ghi cho happy path.
-- [ ] Event co schema validation test.
-- [ ] Trace writer khong lam workflow fail neu append loi; loi trace duoc log warning.
-- [ ] Path duoc build bang `path.join()`.
+- [x] Trace file duoc tao khi workflow start.
+- [x] Event `workflow.started` va `workflow.completed` duoc ghi cho happy path.
+- [x] Event co schema validation test.
+- [x] Trace writer khong lam workflow fail neu append loi; loi trace duoc log warning.
+- [x] Path duoc build bang `path.join()`.
 
 Files likely touched:
 
@@ -92,7 +92,7 @@ Files likely touched:
 - `src/core/runs/workflow-trace.types.ts`
 - `src/main/test/workflow-trace-store.test.ts`
 
-### FX-WO-002 Instrument WorkflowEngine with trace events [READY]
+### FX-WO-002 Instrument WorkflowEngine with trace events [DONE]
 
 Priority: `P0`
 
@@ -122,11 +122,11 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Simple A -> B workflow trace co dung thu tu event.
-- [ ] Parallel nodes trace duoc ca hai `node.running`.
-- [ ] Failed node trace co `node.failed` va workflow `failed`.
-- [ ] Review node trace co `review_requested`, approve thi co `review_approved`.
-- [ ] Existing workflow-engine tests van pass sau khi mock/inject trace dependency.
+- [x] Simple A -> B workflow trace co dung thu tu event.
+- [x] Parallel nodes trace duoc ca hai `node.running`.
+- [x] Failed node trace co `node.failed` va workflow `failed`.
+- [x] Review node trace co `review_requested`, approve thi co `review_approved`.
+- [x] Existing workflow-engine tests van pass sau khi mock/inject trace dependency.
 
 Files likely touched:
 
@@ -134,7 +134,7 @@ Files likely touched:
 - `src/main/test/workflow-engine.test.ts`
 - `src/main/services/workflow-trace-store.ts`
 
-### FX-WO-003 Add Codex process telemetry counters [READY]
+### FX-WO-003 Add Codex process telemetry counters [DONE]
 
 Priority: `P0`
 
@@ -149,11 +149,11 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Successful Codex runner result exposes process telemetry.
-- [ ] Failed spawn co error telemetry toi thieu va exit code.
-- [ ] Abort path ghi aborted=true va abort reason khi co.
-- [ ] Tests cover stdout/stderr byte counters.
-- [ ] Khong dua process management logic vao renderer.
+- [x] Successful Codex runner result exposes process telemetry.
+- [x] Failed spawn co error telemetry toi thieu va exit code.
+- [x] Abort path ghi aborted=true va abort reason khi co.
+- [x] Tests cover stdout/stderr byte counters.
+- [x] Khong dua process management logic vao renderer.
 
 Files likely touched:
 
@@ -428,9 +428,9 @@ Acceptance:
 
 | Item | Priority | Status | Sprint |
 | --- | --- | --- | --- |
-| FX-WO-001 Structured runtime trace writer | P0 | READY | 1 |
-| FX-WO-002 Instrument WorkflowEngine trace events | P0 | READY | 1 |
-| FX-WO-003 Codex process telemetry counters | P0 | READY | 1 |
+| FX-WO-001 Structured runtime trace writer | P0 | DONE | 1 |
+| FX-WO-002 Instrument WorkflowEngine trace events | P0 | DONE | 1 |
+| FX-WO-003 Codex process telemetry counters | P0 | DONE | 1 |
 | FX-WO-004 Persist process telemetry into trace | P1 | READY | 1 |
 | FX-WO-005 Trace smoke assertions | P1 | READY | 1 |
 | FX-WO-006 Memory source report | P1 | READY | 2 |

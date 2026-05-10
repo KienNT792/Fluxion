@@ -46,6 +46,19 @@ export interface AgentChunk {
   timestamp: number;
 }
 
+export interface AgentProcessTelemetry {
+  pid?: number;
+  displayCommand: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  exitCode?: number;
+  aborted: boolean;
+  abortReason?: string;
+  stdoutBytes: number;
+  stderrBytes: number;
+}
+
 /**
  * The final return value of an Agent Adapter's AsyncGenerator.
  */
@@ -60,4 +73,5 @@ export interface AgentResult {
   /** Runner-native session identifier, reserved for future resume support. */
   runnerSessionId?: string;
   abortReason?: AbortReason;
+  processTelemetry?: AgentProcessTelemetry;
 }

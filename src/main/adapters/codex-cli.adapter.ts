@@ -238,6 +238,12 @@ export class CodexCliAdapter extends BaseAdapter {
             exitCode: runnerResult.exitCode,
             runnerSessionId: runnerResult.runnerSessionId,
             abortReason,
+            processTelemetry: runnerResult.processTelemetry
+              ? {
+                  ...runnerResult.processTelemetry,
+                  abortReason: abortReason ?? runnerResult.processTelemetry.abortReason,
+                }
+              : undefined,
           };
           break;
         }
@@ -263,6 +269,6 @@ export class CodexCliAdapter extends BaseAdapter {
     }
 
     this.abortReasons.set(nodeId, reason);
-    await this.runner.abort(runId, nodeId);
+    await this.runner.abort(runId, nodeId, reason);
   }
 }

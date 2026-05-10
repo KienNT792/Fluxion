@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { WorkflowTraceEvent, WorkflowTraceEventSchema } from '@core';
 import {
   AbortReason,
   AgentChunk,
@@ -31,6 +32,7 @@ interface AdapterBehavior {
   onExecute?: (ctx: { nodeId: string; prompt: string; workspacePath: string }) => Promise<void> | void;
   runnerSessionId?: string;
   abortable?: boolean;
+  processTelemetry?: AgentResult['processTelemetry'];
 }
 
 class FakeSender implements WorkflowEventSender {
@@ -95,6 +97,7 @@ class FakeAdapter implements IAgentAdapter {
       output: behavior.output ?? `Output for ${nodeId}`,
       exitCode: 0,
       runnerSessionId: behavior.runnerSessionId,
+      processTelemetry: behavior.processTelemetry,
     };
   }
 
@@ -162,7 +165,7 @@ async function readSingleRunState(workspacePath: string): Promise<{
 }> {
   const runsDir = join(workspacePath, '.fluxion', 'runs');
   const files = await readdir(runsDir);
-  const fileName = files[0]!;
+  const fileName = files.find((file) => file.endsWith('.json'))!;
   return JSON.parse(await readFile(join(runsDir, fileName), 'utf8')) as {
     runId: string;
     status: string;
@@ -181,6 +184,15 @@ async function readSingleRunState(workspacePath: string): Promise<{
       }
     >;
   };
+}
+
+async function readTrace(workspacePath: string, runId: string): Promise<WorkflowTraceEvent[]> {
+  const tracePath = join(workspacePath, '.fluxion', 'runs', `${runId}.trace.jsonl`);
+  const content = await readFile(tracePath, 'utf8');
+  return content
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => WorkflowTraceEventSchema.parse(JSON.parse(line) as unknown));
 }
 
 function reviewAction(runId: string, nodeId: string): WorkflowReviewActionPayload {
@@ -207,6 +219,17 @@ describe('WorkflowEngine', () => {
       'node-a': {
         output: 'Node A output',
         runnerSessionId: 'session-a',
+        processTelemetry: {
+          pid: 1234,
+          displayCommand: 'node codex.js',
+          startedAt: '2026-05-10T00:00:00.000Z',
+          completedAt: '2026-05-10T00:00:01.000Z',
+          durationMs: 1000,
+          exitCode: 0,
+          aborted: false,
+          stdoutBytes: 12,
+          stderrBytes: 0,
+        },
       },
       'node-b': {
         output: 'Node B output',
@@ -244,6 +267,24 @@ describe('WorkflowEngine', () => {
         success: true,
       }),
     });
+
+    const trace = await readTrace(workspacePath, runState.runId);
+    const eventKeys = trace.map((event) => `${event.nodeId ?? 'workflow'}:${event.type}`);
+    expect(eventKeys[0]).toBe('workflow:workflow.started');
+    expect(eventKeys).toContain('node-a:node.output_saved');
+    expect(eventKeys).toContain('node-b:node.running');
+    expect(eventKeys.at(-1)).toBe('workflow:workflow.completed');
+    expect(eventKeys.indexOf('node-a:node.output_saved')).toBeLessThan(
+      eventKeys.indexOf('node-b:node.running')
+    );
+    expect(
+      trace.some(
+        (event) =>
+          event.nodeId === 'node-a' &&
+          event.type === 'node.process_exited' &&
+          event.data?.stdoutBytes === 12
+      )
+    ).toBe(true);
   });
 
   it('tracks currentNodeIds for parallel nodes while the batch is running', async () => {
@@ -276,6 +317,13 @@ describe('WorkflowEngine', () => {
     const runStateWhileRunning = await readSingleRunState(workspacePath);
     expect(runStateWhileRunning.currentNodeIds).toEqual(['node-a', 'node-b']);
 
+    const traceWhileRunning = await readTrace(workspacePath, runStateWhileRunning.runId);
+    const runningNodeIds = traceWhileRunning
+      .filter((event) => event.type === 'node.running')
+      .map((event) => event.nodeId)
+      .sort();
+    expect(runningNodeIds).toEqual(['node-a', 'node-b']);
+
     releaseA.resolve();
     releaseB.resolve();
     await runPromise;
@@ -306,6 +354,12 @@ describe('WorkflowEngine', () => {
     expect(adapter.executeCalls).toHaveLength(0);
     expect(runState.status).toBe('failed');
     expect(runState.nodes['node-a']?.status).toBe('failed');
+
+    const trace = await readTrace(workspacePath, runState.runId);
+    expect(trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.failed')).toBe(
+      true
+    );
+    expect(trace.at(-1)).toMatchObject({ type: 'workflow.failed' });
   });
 
   it('fails a node when declared produced artifacts are missing and does not run downstream nodes', async () => {
@@ -371,6 +425,12 @@ describe('WorkflowEngine', () => {
     expect(adapter.abortCalls).toEqual([
       { nodeId: 'node-a', reason: AbortReason.USER_REQUESTED },
     ]);
+
+    const trace = await readTrace(workspacePath, runState.runId);
+    expect(trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.aborted')).toBe(
+      true
+    );
+    expect(trace.at(-1)).toMatchObject({ type: 'workflow.aborted' });
   });
 
   it('creates a fresh run scoped to downstream nodes when resuming from a node', async () => {
@@ -475,6 +535,13 @@ describe('WorkflowEngine', () => {
       sender.events.some((event) => event.channel === IpcChannels.WORKFLOW_COMPLETED)
     ).toBe(false);
 
+    let trace = await readTrace(workspacePath, runState.runId);
+    expect(
+      trace.some(
+        (event) => event.nodeId === 'node-a' && event.type === 'node.review_requested'
+      )
+    ).toBe(true);
+
     await engine.approveReview(reviewAction(runState.runId, 'node-a'));
 
     runState = await readSingleRunState(workspacePath);
@@ -483,6 +550,12 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.reviewStatus).toBe('approved');
     expect(runState.nodes['node-b']?.status).toBe('completed');
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
+
+    trace = await readTrace(workspacePath, runState.runId);
+    expect(
+      trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.review_approved')
+    ).toBe(true);
+    expect(trace.at(-1)).toMatchObject({ type: 'workflow.completed' });
   });
 
   it('rejects a review checkpoint and finalizes the workflow as rejected', async () => {

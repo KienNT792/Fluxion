@@ -6,6 +6,7 @@ import {
   FluxionRunner,
   RunnerContext,
   RunnerEvent,
+  RunnerProcessTelemetry,
   RunnerResult,
 } from '@core';
 import { processManager } from '../services/process-manager';
@@ -84,6 +85,8 @@ interface ActiveCodexProcess {
   child: ChildProcess;
   pid?: number;
   aborted: boolean;
+  abortReason?: string;
+  telemetry: RunnerProcessTelemetry;
 }
 
 export interface CodexProcessManager {
@@ -177,6 +180,27 @@ function createRunnerEvent(type: 'stdout' | 'stderr' | 'status', content: string
   };
 }
 
+function countChunkBytes(chunk: Buffer | string): number {
+  return Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk, 'utf8');
+}
+
+function completeProcessTelemetry(
+  telemetry: RunnerProcessTelemetry,
+  startedAtMs: number,
+  update: Partial<RunnerProcessTelemetry>
+): RunnerProcessTelemetry {
+  const completedAtMs = Date.now();
+  const completed = {
+    ...telemetry,
+    ...update,
+    completedAt: new Date(completedAtMs).toISOString(),
+    durationMs: Math.max(0, completedAtMs - startedAtMs),
+  };
+
+  Object.assign(telemetry, completed);
+  return { ...completed };
+}
+
 function executionKey(runId: string, nodeId: string): string {
   return `${runId}:${nodeId}`;
 }
@@ -253,8 +277,19 @@ export class CodexCliRunner implements FluxionRunner {
     let child: ChildProcess | null = null;
     let selectedCli: ResolvedCodexCli | null = null;
     let lastSpawnError: unknown;
+    const startedAtMs = Date.now();
+    const processTelemetry: RunnerProcessTelemetry = {
+      displayCommand: 'unknown',
+      startedAt: new Date(startedAtMs).toISOString(),
+      completedAt: new Date(startedAtMs).toISOString(),
+      durationMs: 0,
+      aborted: false,
+      stdoutBytes: 0,
+      stderrBytes: 0,
+    };
 
     for (const cliCandidate of cliCandidates) {
+      processTelemetry.displayCommand = cliCandidate.displayCommand;
       try {
         child = this.processManager.spawnProcess(
           ctx.node.id,
@@ -281,18 +316,26 @@ export class CodexCliRunner implements FluxionRunner {
 
     if (!child || !selectedCli) {
       const error = mapSpawnError(lastSpawnError);
+      const exitCode = getSpawnErrorCode(lastSpawnError) === 'ENOENT' ? 127 : 1;
+      const completedTelemetry = completeProcessTelemetry(processTelemetry, startedAtMs, {
+        exitCode,
+      });
       yield createRunnerEvent('stderr', `${error}\n`);
       return {
         success: false,
         error,
-        exitCode: getSpawnErrorCode(lastSpawnError) === 'ENOENT' ? 127 : 1,
+        exitCode,
+        processTelemetry: completedTelemetry,
       };
     }
 
+    processTelemetry.pid = child.pid;
+    processTelemetry.displayCommand = selectedCli.displayCommand;
     this.activeProcesses.set(key, {
       child,
       pid: child.pid,
       aborted: false,
+      telemetry: processTelemetry,
     });
 
     queue.push(createRunnerEvent('status', `Starting Codex CLI via ${selectedCli.displayCommand}.`));
@@ -326,6 +369,7 @@ export class CodexCliRunner implements FluxionRunner {
     };
 
     const handleStdoutChunk = (chunk: Buffer | string): void => {
+      processTelemetry.stdoutBytes += countChunkBytes(chunk);
       const content = chunk.toString();
 
       if (!codexOptions.json) {
@@ -347,12 +391,22 @@ export class CodexCliRunner implements FluxionRunner {
     };
 
     const finalize = async (result: RunnerResult): Promise<void> => {
+      const activeProcess = this.activeProcesses.get(key);
+      const completedTelemetry = completeProcessTelemetry(processTelemetry, startedAtMs, {
+        exitCode: result.exitCode,
+        aborted: activeProcess?.aborted ?? processTelemetry.aborted,
+        abortReason: activeProcess?.abortReason ?? processTelemetry.abortReason,
+      });
       this.activeProcesses.delete(key);
-      queue.close(result);
+      queue.close({
+        ...result,
+        processTelemetry: result.processTelemetry ?? completedTelemetry,
+      });
     };
 
     child.stdout?.on('data', handleStdoutChunk);
     child.stderr?.on('data', (chunk: Buffer | string) => {
+      processTelemetry.stderrBytes += countChunkBytes(chunk);
       const content = chunk.toString();
       stderrOutput += content;
       queue.push(createRunnerEvent('stderr', content));
@@ -426,13 +480,16 @@ export class CodexCliRunner implements FluxionRunner {
     }
   }
 
-  public async abort(runId: string, nodeId: string): Promise<void> {
+  public async abort(runId: string, nodeId: string, reason?: string): Promise<void> {
     const activeProcess = this.activeProcesses.get(executionKey(runId, nodeId));
     if (!activeProcess) {
       return;
     }
 
     activeProcess.aborted = true;
+    activeProcess.abortReason = reason;
+    activeProcess.telemetry.aborted = true;
+    activeProcess.telemetry.abortReason = reason;
 
     if (activeProcess.pid) {
       await this.processManager.killProcessGracefully(activeProcess.pid);
