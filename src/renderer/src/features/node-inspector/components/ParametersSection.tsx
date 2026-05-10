@@ -15,6 +15,7 @@ interface ParametersSectionProps {
   onHumanReviewChange: (checked: boolean) => void
   onModelChange: (model: ModelId) => void
   onReasoningLevelChange: (level: ReasoningLevel) => void
+  providerNote: string
   reasoningLevel?: ReasoningLevel
   reasoningOptions: ReasoningLevel[]
   reviewModeNote: string
@@ -29,11 +30,12 @@ export const ParametersSection: React.FC<ParametersSectionProps> = ({
   onHumanReviewChange,
   onModelChange,
   onReasoningLevelChange,
+  providerNote,
   reasoningLevel,
   reasoningOptions,
   reviewModeNote
 }) => (
-  <Section title="Parameters">
+  <Section title="Run">
     <div>
       <label style={LABEL_STYLE}>Model</label>
       <Select
@@ -47,6 +49,9 @@ export const ParametersSection: React.FC<ParametersSectionProps> = ({
           </option>
         ))}
       </Select>
+      <div className="mt-2" style={MUTED_NOTE_STYLE}>
+        {providerNote}
+      </div>
     </div>
 
     <div>

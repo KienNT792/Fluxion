@@ -11,6 +11,7 @@ import type { WorkflowRuntimeStatus } from '@renderer/stores/execution.store'
 import { getCodexReadinessBadgeState } from '@renderer/lib/provider-capabilities'
 import { useWorkflowElapsed } from './useWorkflowElapsed'
 import {
+  getAggregateReadinessState,
   formatElapsed,
   formatSavedLabel,
   getContextChipState,
@@ -62,6 +63,7 @@ export function useTopbarDerivedState({
   activityDetailItems: ReturnType<typeof buildActivityDetailItems>
   activityHasAttention: boolean
   activitySummaryLabel: string
+  aggregateReadiness: ReturnType<typeof getAggregateReadinessState>
   approvalGuardrail: CodexApprovalGuardrailResult
   canRun: boolean
   canSave: boolean
@@ -157,6 +159,8 @@ export function useTopbarDerivedState({
     workflowStatus === 'running'
       ? `${workflowChipState.label} ${formatElapsed(elapsedMs)}`
       : workflowChipState.label
+  const saveChipState = getSaveChipState(isDirty, isSaving, saveError)
+  const contextChipState = getContextChipState(contextStatus)
   const activityDetailItems = React.useMemo(
     () => buildActivityDetailItems(recentWorkspaceChanges),
     [recentWorkspaceChanges]
@@ -165,16 +169,31 @@ export function useTopbarDerivedState({
     reviewNodeIds.length === 1
       ? (nodes.find((node) => node.id === reviewNodeIds[0])?.data?.label ?? reviewNodeIds[0])
       : undefined
+  const aggregateReadiness = getAggregateReadinessState({
+    activityHasAttention: changeCount > 0 || hasExternalWorkflowChange,
+    activitySummaryLabel,
+    approvalGuardrail,
+    codexReadiness,
+    contextChipState,
+    hasExternalWorkflowChange,
+    readinessTone,
+    saveChipState,
+    saveStateLabel: saveError ?? formatSavedLabel(lastSavedAt),
+    workflowChipLabel,
+    workflowChipState,
+    workflowStatus
+  })
 
   return {
     activityDetailItems,
     activityHasAttention: changeCount > 0 || hasExternalWorkflowChange,
     activitySummaryLabel,
+    aggregateReadiness,
     approvalGuardrail,
     canRun,
     canSave,
     codexReadiness,
-    contextChipState: getContextChipState(contextStatus),
+    contextChipState,
     displayWorkflowName,
     isBusy,
     isPaused,
@@ -188,7 +207,7 @@ export function useTopbarDerivedState({
       : 'Review Required',
     reviewNodeLabel,
     runTooltip,
-    saveChipState: getSaveChipState(isDirty, isSaving, saveError),
+    saveChipState,
     saveStateLabel: saveError ?? formatSavedLabel(lastSavedAt),
     statusSubtext: workflowError ?? saveError,
     workflowChipLabel,

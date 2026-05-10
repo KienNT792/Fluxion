@@ -29,7 +29,7 @@ export const CodexPermissionsSection: React.FC<CodexPermissionsSectionProps> = (
   sandboxMode,
   windowsSandbox
 }) => (
-  <Section title="Codex Permissions">
+  <Section title="Permissions">
     <div>
       <label style={LABEL_STYLE}>Sandbox Mode</label>
       <Select

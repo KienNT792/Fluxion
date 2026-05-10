@@ -1,32 +1,26 @@
 import React from 'react'
 
 interface UseTopbarPopoversOptions {
-  isActivityPopoverOpen: boolean
   isProjectMenuOpen: boolean
   isReadinessPopoverOpen: boolean
-  setIsActivityPopoverOpen: React.Dispatch<React.SetStateAction<boolean>>
   setIsProjectMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
   setIsReadinessPopoverOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export function useTopbarPopovers({
-  isActivityPopoverOpen,
   isProjectMenuOpen,
   isReadinessPopoverOpen,
-  setIsActivityPopoverOpen,
   setIsProjectMenuOpen,
   setIsReadinessPopoverOpen
 }: UseTopbarPopoversOptions): {
-  activityPopoverRef: React.RefObject<HTMLDivElement | null>
   projectMenuRef: React.RefObject<HTMLDivElement | null>
   readinessPopoverRef: React.RefObject<HTMLDivElement | null>
 } {
   const projectMenuRef = React.useRef<HTMLDivElement | null>(null)
-  const activityPopoverRef = React.useRef<HTMLDivElement | null>(null)
   const readinessPopoverRef = React.useRef<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
-    if (!isProjectMenuOpen && !isActivityPopoverOpen && !isReadinessPopoverOpen) {
+    if (!isProjectMenuOpen && !isReadinessPopoverOpen) {
       return
     }
 
@@ -42,15 +36,6 @@ export function useTopbarPopovers({
       }
 
       if (
-        isActivityPopoverOpen &&
-        activityPopoverRef.current &&
-        target &&
-        !activityPopoverRef.current.contains(target)
-      ) {
-        setIsActivityPopoverOpen(false)
-      }
-
-      if (
         isReadinessPopoverOpen &&
         readinessPopoverRef.current &&
         target &&
@@ -63,7 +48,6 @@ export function useTopbarPopovers({
     const handleEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setIsProjectMenuOpen(false)
-        setIsActivityPopoverOpen(false)
         setIsReadinessPopoverOpen(false)
       }
     }
@@ -76,16 +60,13 @@ export function useTopbarPopovers({
       window.removeEventListener('keydown', handleEscape)
     }
   }, [
-    isActivityPopoverOpen,
     isProjectMenuOpen,
     isReadinessPopoverOpen,
-    setIsActivityPopoverOpen,
     setIsProjectMenuOpen,
     setIsReadinessPopoverOpen
   ])
 
   return {
-    activityPopoverRef,
     projectMenuRef,
     readinessPopoverRef
   }

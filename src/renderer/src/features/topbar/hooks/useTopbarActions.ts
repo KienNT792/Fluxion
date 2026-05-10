@@ -16,10 +16,10 @@ interface UseTopbarActionsOptions {
   isCreatingWorkflow: boolean
   newWorkflowName: string
   requestWorkspaceTrust: (workspacePath: string) => Promise<boolean>
-  setIsActivityPopoverOpen: Dispatch<SetStateAction<boolean>>
   setIsCreateWorkflowDialogOpen: Dispatch<SetStateAction<boolean>>
   setIsCreatingWorkflow: Dispatch<SetStateAction<boolean>>
   setIsProjectMenuOpen: Dispatch<SetStateAction<boolean>>
+  setIsReadinessPopoverOpen: Dispatch<SetStateAction<boolean>>
   setNewWorkflowName: Dispatch<SetStateAction<string>>
   setSelectedNode: (nodeId: string | null) => void
   setWorkflowError: (error: string | null) => void
@@ -35,10 +35,10 @@ export function useTopbarActions({
   isCreatingWorkflow,
   newWorkflowName,
   requestWorkspaceTrust,
-  setIsActivityPopoverOpen,
   setIsCreateWorkflowDialogOpen,
   setIsCreatingWorkflow,
   setIsProjectMenuOpen,
+  setIsReadinessPopoverOpen,
   setNewWorkflowName,
   setSelectedNode,
   setWorkflowError,
@@ -143,13 +143,13 @@ export function useTopbarActions({
     try {
       await reloadCurrentWorkspaceFromDisk()
       setWorkflowError(null)
-      setIsActivityPopoverOpen(false)
+      setIsReadinessPopoverOpen(false)
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to reload workflow from disk.'
       setWorkflowError(errorMessage)
     }
-  }, [setIsActivityPopoverOpen, setWorkflowError])
+  }, [setIsReadinessPopoverOpen, setWorkflowError])
 
   const handleAbort = useCallback((): void => {
     const previousStatus = workflowStatus

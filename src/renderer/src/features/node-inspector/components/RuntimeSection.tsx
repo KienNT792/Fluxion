@@ -9,7 +9,7 @@ import { StatusChip } from '@renderer/components/ui/StatusChip'
 import type { WorkflowRuntimeStatus } from '@renderer/stores/execution.store'
 import { InspectorSection as Section } from './InspectorSection'
 import { LABEL_STYLE, READONLY_BLOCK_STYLE, READONLY_INLINE_STYLE } from '../lib/inspector-styles'
-import { NODE_STATUS_TONE } from '../lib/node-display'
+import { getNodeStatusLabel, NODE_STATUS_TONE } from '../lib/node-display'
 
 interface RuntimeSectionProps {
   nodeAttemptCount?: number
@@ -19,6 +19,7 @@ interface RuntimeSectionProps {
   nodeStatus: NodeStatus
   onError: (error: string | null) => void
   selectedNodeId: NodeId
+  showOutputPreviewForPaused?: boolean
   workflowStatus: WorkflowRuntimeStatus
   workspacePath: string | null
 }
@@ -31,14 +32,14 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
   nodeStatus,
   onError,
   selectedNodeId,
+  showOutputPreviewForPaused = false,
   workflowStatus,
   workspacePath
 }) => {
-  const nodeStatusLabel =
-    nodeStatus === 'completed' ? 'Done' : nodeStatus.charAt(0).toUpperCase() + nodeStatus.slice(1)
+  const nodeStatusLabel = getNodeStatusLabel(nodeStatus)
 
   return (
-    <Section title="Runtime">
+    <Section title="Output">
       <div>
         <label style={LABEL_STYLE}>Status</label>
         <StatusChip
@@ -58,7 +59,7 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
         <FilePathCard path={nodeOutputPath} onError={onError} />
       </div>
 
-      {nodeStatus !== 'paused' && (
+      {(nodeStatus !== 'paused' || showOutputPreviewForPaused) && (
         <div>
           <label style={LABEL_STYLE}>Output Preview</label>
           <OutputPreview

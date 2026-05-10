@@ -8,13 +8,15 @@ import type { TextSummary } from '../lib/node-display'
 interface InstructionsSectionProps {
   onEditPrompt: () => void
   promptSummary: TextSummary
+  title?: string
 }
 
 export const InstructionsSection: React.FC<InstructionsSectionProps> = ({
   onEditPrompt,
-  promptSummary
+  promptSummary,
+  title = 'Prompt'
 }) => (
-  <Section title="Instructions">
+  <Section title={title}>
     <div>
       <label style={LABEL_STYLE}>Prompt</label>
       <PreviewCard summary={promptSummary} />

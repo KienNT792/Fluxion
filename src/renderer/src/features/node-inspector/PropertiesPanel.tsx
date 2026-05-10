@@ -5,17 +5,19 @@ import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { AdvancedSection } from './components/AdvancedSection'
 import { CodexPermissionsSection } from './components/CodexPermissionsSection'
-import { InspectorDivider } from './components/InspectorDivider'
 import { InspectorHeader } from './components/InspectorHeader'
 import { InstructionsSection } from './components/InstructionsSection'
+import { NodeInspectorTabs } from './components/NodeInspectorTabs'
 import { NodeTextEditors } from './components/NodeTextEditors'
 import { OverviewSection } from './components/OverviewSection'
 import { ParametersSection } from './components/ParametersSection'
-import { ReviewSection } from './components/ReviewSection'
+import { ReviewBanner } from './components/ReviewBanner'
+import { RuntimeErrorBanner } from './components/RuntimeErrorBanner'
 import { RuntimeSection } from './components/RuntimeSection'
 import { useEditableNodeData } from './hooks/useEditableNodeData'
 import { useNodeInspectorEffects } from './hooks/useNodeInspectorEffects'
 import { useNodeInspectorDerivedState } from './hooks/useNodeInspectorDerivedState'
+import { getDefaultNodeInspectorTab, type NodeInspectorTab } from './lib/inspector-tabs'
 import { getNextReasoningLevelForModel } from './lib/model-selection'
 
 interface PropertiesPanelContentProps {
@@ -123,6 +125,13 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
     selectedNode,
     selectedNodeId
   })
+  const defaultInspectorTab = getDefaultNodeInspectorTab(
+    nodeStatus,
+    nodeApprovalGuardrail.severity
+  )
+  const [activeTab, setActiveTab] = useState<NodeInspectorTab>(defaultInspectorTab)
+  const visibleActiveTab =
+    nodeStatus === 'paused' || nodeStatus === 'error' ? 'output' : activeTab
 
   const updateCodexOptions = (nextOptions: Partial<CodexExecutionOptions>): void => {
     setLocalData((prev) => ({
@@ -157,100 +166,120 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
   return (
     <>
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="h-0.5 w-full flex-shrink-0" style={{ background: '#412991' }} />
         <InspectorHeader
-          title={localData.label || currentModelDisplayName}
+          label={localData.label || ''}
+          modelDisplayName={currentModelDisplayName}
+          nodeStatus={nodeStatus}
+          onLabelChange={(label) => setLocalData((prev) => ({ ...prev, label }))}
           onDelete={() => deleteNode(selectedNodeId)}
           onClose={() => setSelectedNode(null)}
+          title={localData.label || currentModelDisplayName}
         />
+
+        {nodeStatus === 'paused' && (
+          <ReviewBanner
+            nodeAttemptCount={nodeAttemptCount}
+            reviewActionInFlight={reviewActionInFlight}
+            reviewSectionRef={reviewSectionRef}
+            selectedNodeId={selectedNodeId}
+          />
+        )}
+
+        {nodeStatus === 'error' && (
+          <RuntimeErrorBanner
+            nodeError={nodeError}
+            selectedNodeId={selectedNodeId}
+            workflowStatus={workflowStatus}
+          />
+        )}
+
+        <NodeInspectorTabs activeTab={visibleActiveTab} onChange={setActiveTab} />
 
         <div
           className="flex-1 overflow-y-auto"
           style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
         >
-          <OverviewSection
-            currentModelDisplayName={currentModelDisplayName}
-            label={localData.label || ''}
-            onLabelChange={(label) => setLocalData((prev) => ({ ...prev, label }))}
-            providerNote={providerNote}
-          />
-          <InspectorDivider />
-          <InstructionsSection
-            promptSummary={promptSummary}
-            onEditPrompt={() => setActiveTextEditor('prompt')}
-          />
-          <InspectorDivider />
-          <ParametersSection
-            currentDefaultReasoningLevel={currentDefaultReasoningLevel}
-            currentModel={currentModel}
-            humanReview={Boolean(localData.humanReview)}
-            isReasoningModel={isReasoningModel}
-            modelOptions={modelOptions}
-            onHumanReviewChange={(humanReview) =>
-              setLocalData((prev) => ({ ...prev, humanReview }))
-            }
-            onModelChange={(nextModel) => {
-              const nextModelCapabilities = getCodexModelById(providerCapabilities, nextModel)
-              const nextReasoningLevel = getNextReasoningLevelForModel(
-                localData.reasoningLevel,
-                nextModelCapabilities,
-                modelSupportsReasoning(nextModelCapabilities)
-              )
-
-              setLocalData((prev) => ({
-                ...prev,
-                model: nextModel,
-                reasoningLevel: nextReasoningLevel
-              }))
-            }}
-            onReasoningLevelChange={(reasoningLevel) =>
-              setLocalData((prev) => ({ ...prev, reasoningLevel }))
-            }
-            reasoningLevel={localData.reasoningLevel}
-            reasoningOptions={reasoningOptions}
-            reviewModeNote={reviewModeNote}
-          />
-          <InspectorDivider />
-          <CodexPermissionsSection
-            approvalPolicy={currentApprovalPolicy}
-            nodeApprovalGuardrail={nodeApprovalGuardrail}
-            onApprovalPolicyChange={(approvalPolicy) => updateCodexOptions({ approvalPolicy })}
-            onSandboxModeChange={(sandboxMode) => updateCodexOptions({ sandboxMode })}
-            onWindowsSandboxChange={updateWindowsSandbox}
-            sandboxMode={currentSandboxMode}
-            windowsSandbox={currentWindowsSandbox}
-          />
-          <InspectorDivider />
-          {nodeStatus === 'paused' && (
+          {visibleActiveTab === 'prompt' && (
             <>
-              <ReviewSection
-                nodeAttemptCount={nodeAttemptCount}
-                nodeOutputPath={nodeOutputPath}
-                onError={setWorkflowError}
-                reviewActionInFlight={reviewActionInFlight}
-                reviewSectionRef={reviewSectionRef}
-                selectedNodeId={selectedNodeId}
-                workspacePath={workspacePath}
+              <OverviewSection
+                currentModelDisplayName={currentModelDisplayName}
+                label={localData.label || ''}
+                onLabelChange={(label) => setLocalData((prev) => ({ ...prev, label }))}
               />
-              <InspectorDivider />
+              <InstructionsSection
+                promptSummary={promptSummary}
+                onEditPrompt={() => setActiveTextEditor('prompt')}
+              />
             </>
           )}
-          <RuntimeSection
-            nodeAttemptCount={nodeAttemptCount}
-            nodeError={nodeError}
-            nodeExitCode={nodeExitCode}
-            nodeOutputPath={nodeOutputPath}
-            nodeStatus={nodeStatus}
-            onError={setWorkflowError}
-            selectedNodeId={selectedNodeId}
-            workflowStatus={workflowStatus}
-            workspacePath={workspacePath}
-          />
-          <InspectorDivider />
-          <AdvancedSection
-            systemInstructionSummary={systemInstructionSummary}
-            onEditSystemInstruction={() => setActiveTextEditor('systemInstruction')}
-          />
+
+          {visibleActiveTab === 'run' && (
+            <ParametersSection
+              currentDefaultReasoningLevel={currentDefaultReasoningLevel}
+              currentModel={currentModel}
+              humanReview={Boolean(localData.humanReview)}
+              isReasoningModel={isReasoningModel}
+              modelOptions={modelOptions}
+              onHumanReviewChange={(humanReview) =>
+                setLocalData((prev) => ({ ...prev, humanReview }))
+              }
+              onModelChange={(nextModel) => {
+                const nextModelCapabilities = getCodexModelById(providerCapabilities, nextModel)
+                const nextReasoningLevel = getNextReasoningLevelForModel(
+                  localData.reasoningLevel,
+                  nextModelCapabilities,
+                  modelSupportsReasoning(nextModelCapabilities)
+                )
+
+                setLocalData((prev) => ({
+                  ...prev,
+                  model: nextModel,
+                  reasoningLevel: nextReasoningLevel
+                }))
+              }}
+              onReasoningLevelChange={(reasoningLevel) =>
+                setLocalData((prev) => ({ ...prev, reasoningLevel }))
+              }
+              providerNote={providerNote}
+              reasoningLevel={localData.reasoningLevel}
+              reasoningOptions={reasoningOptions}
+              reviewModeNote={reviewModeNote}
+            />
+          )}
+
+          {visibleActiveTab === 'permissions' && (
+            <CodexPermissionsSection
+              approvalPolicy={currentApprovalPolicy}
+              nodeApprovalGuardrail={nodeApprovalGuardrail}
+              onApprovalPolicyChange={(approvalPolicy) => updateCodexOptions({ approvalPolicy })}
+              onSandboxModeChange={(sandboxMode) => updateCodexOptions({ sandboxMode })}
+              onWindowsSandboxChange={updateWindowsSandbox}
+              sandboxMode={currentSandboxMode}
+              windowsSandbox={currentWindowsSandbox}
+            />
+          )}
+
+          {visibleActiveTab === 'output' && (
+            <RuntimeSection
+              nodeAttemptCount={nodeAttemptCount}
+              nodeError={nodeError}
+              nodeExitCode={nodeExitCode}
+              nodeOutputPath={nodeOutputPath}
+              nodeStatus={nodeStatus}
+              onError={setWorkflowError}
+              selectedNodeId={selectedNodeId}
+              showOutputPreviewForPaused
+              workflowStatus={workflowStatus}
+              workspacePath={workspacePath}
+            />
+          )}
+
+          {visibleActiveTab === 'advanced' && (
+            <AdvancedSection
+              systemInstructionSummary={systemInstructionSummary}
+              onEditSystemInstruction={() => setActiveTextEditor('systemInstruction')}
+            />
+          )}
         </div>
       </div>
 

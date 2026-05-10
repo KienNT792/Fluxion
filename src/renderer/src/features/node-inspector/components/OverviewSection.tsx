@@ -7,7 +7,7 @@ interface OverviewSectionProps {
   currentModelDisplayName: string
   label: string
   onLabelChange: (value: string) => void
-  providerNote: string
+  providerNote?: string
 }
 
 export const OverviewSection: React.FC<OverviewSectionProps> = ({
@@ -16,7 +16,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   onLabelChange,
   providerNote
 }) => (
-  <Section title="Overview">
+  <Section title="Task">
     <div>
       <label style={LABEL_STYLE}>Node Label</label>
       <Input
@@ -26,11 +26,15 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
       />
     </div>
 
-    <div>
-      <label style={LABEL_STYLE}>Provider</label>
-      <div style={READONLY_INLINE_STYLE}>Codex</div>
-    </div>
+    {providerNote && (
+      <>
+        <div>
+          <label style={LABEL_STYLE}>Provider</label>
+          <div style={READONLY_INLINE_STYLE}>Codex</div>
+        </div>
 
-    <div style={MUTED_NOTE_STYLE}>{providerNote}</div>
+        <div style={MUTED_NOTE_STYLE}>{providerNote}</div>
+      </>
+    )}
   </Section>
 )

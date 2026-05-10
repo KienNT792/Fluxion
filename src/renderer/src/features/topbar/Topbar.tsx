@@ -1,17 +1,16 @@
 import React, { useState } from 'react'
+import { Button } from '@renderer/components/ui/Button'
 import { InputDialog } from '@renderer/components/ui/InputDialog'
 import { GlobalSettingsDialog } from '@renderer/features/settings/GlobalSettingsDialog'
 import { useWorkspaceTrustPrompt } from '@renderer/hooks/useWorkspaceTrustPrompt'
 import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useThemeStore } from '@renderer/stores/theme.store'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
-import { CodexReadinessPopover } from './components/CodexReadinessPopover'
-import { ContextControl } from './components/ContextControl'
 import { ProjectMenu } from './components/ProjectMenu'
+import { ReadinessCluster } from './components/ReadinessCluster'
 import { RunAbortControl } from './components/RunAbortControl'
 import { ThemeSettingsButtons } from './components/ThemeSettingsButtons'
 import { WorkflowIdentityStatus } from './components/WorkflowIdentityStatus'
-import { WorkspaceActivityPopover } from './components/WorkspaceActivityPopover'
 import { useTopbarActions } from './hooks/useTopbarActions'
 import { useTopbarDerivedState } from './hooks/useTopbarDerivedState'
 import { useTopbarPopovers } from './hooks/useTopbarPopovers'
@@ -22,7 +21,6 @@ export const Topbar: React.FC = () => {
   const [isCreatingWorkflow, setIsCreatingWorkflow] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false)
-  const [isActivityPopoverOpen, setIsActivityPopoverOpen] = useState(false)
   const [isReadinessPopoverOpen, setIsReadinessPopoverOpen] = useState(false)
   const { requestWorkspaceTrust, trustDialog } = useWorkspaceTrustPrompt()
 
@@ -55,27 +53,19 @@ export const Topbar: React.FC = () => {
 
   const {
     activityDetailItems,
-    activityHasAttention,
-    activitySummaryLabel,
+    aggregateReadiness,
     approvalGuardrail,
     canRun,
     canSave,
     codexReadiness,
-    contextChipState,
     displayWorkflowName,
     isBusy,
     isPaused,
     isStopping,
     isWorkspaceOpening,
-    readinessTone,
     reviewButtonLabel,
     reviewNodeLabel,
     runTooltip,
-    saveChipState,
-    saveStateLabel,
-    statusSubtext,
-    workflowChipLabel,
-    workflowChipState,
     workspaceName
   } = useTopbarDerivedState({
     contextStatus,
@@ -94,11 +84,9 @@ export const Topbar: React.FC = () => {
     workspaceOpenPhase: workspaceOpenState.phase,
     workspacePath
   })
-  const { activityPopoverRef, projectMenuRef, readinessPopoverRef } = useTopbarPopovers({
-    isActivityPopoverOpen,
+  const { projectMenuRef, readinessPopoverRef } = useTopbarPopovers({
     isProjectMenuOpen,
     isReadinessPopoverOpen,
-    setIsActivityPopoverOpen,
     setIsProjectMenuOpen,
     setIsReadinessPopoverOpen
   })
@@ -122,10 +110,10 @@ export const Topbar: React.FC = () => {
     isCreatingWorkflow,
     newWorkflowName,
     requestWorkspaceTrust,
-    setIsActivityPopoverOpen,
     setIsCreateWorkflowDialogOpen,
     setIsCreatingWorkflow,
     setIsProjectMenuOpen,
+    setIsReadinessPopoverOpen,
     setNewWorkflowName,
     setSelectedNode,
     setWorkflowError,
@@ -145,56 +133,30 @@ export const Topbar: React.FC = () => {
       >
         <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
           <WorkflowIdentityStatus
-            approvalGuardrail={approvalGuardrail}
             displayWorkflowName={displayWorkflowName}
-            isDirty={isDirty}
-            isPaused={isPaused}
-            isSaving={isSaving}
-            onFixPermissions={handleFixPermissions}
-            onReviewFocus={() => requestReviewFocus(reviewNodeIds[0]!)}
-            reviewButtonLabel={reviewButtonLabel}
-            reviewNodeCount={reviewNodeIds.length}
-            reviewNodeLabel={reviewNodeLabel ? String(reviewNodeLabel) : undefined}
-            saveChipState={saveChipState}
-            saveError={saveError}
-            saveStateLabel={saveStateLabel}
-            statusSubtext={statusSubtext}
-            workflowChipLabel={workflowChipLabel}
-            workflowChipState={workflowChipState}
             workspaceName={workspaceName}
             workspacePath={workspacePath}
           />
 
           <div className="flex min-w-0 items-center justify-end gap-1.5">
-            <ContextControl
-              contextChipState={contextChipState}
-              disabled={isBusy}
-              dimmed={isBusy}
-              onOpenContext={() => setContextSetupOpen(true)}
-            />
-            <CodexReadinessPopover
+            <ReadinessCluster
+              activityDetailItems={activityDetailItems}
+              aggregateReadiness={aggregateReadiness}
+              approvalGuardrail={approvalGuardrail}
               codexReadiness={codexReadiness}
               disabled={isBusy}
+              hasExternalWorkflowChange={hasExternalWorkflowChange}
               isLoading={isProviderCapabilitiesLoading}
               isOpen={isReadinessPopoverOpen}
-              onRefresh={handleRefreshReadiness}
-              onToggle={() => setIsReadinessPopoverOpen((current) => !current)}
-              readinessPopoverRef={readinessPopoverRef}
-              readinessTone={readinessTone}
-            />
-            <WorkspaceActivityPopover
-              activityDetailItems={activityDetailItems}
-              activityHasAttention={activityHasAttention}
-              activityPopoverRef={activityPopoverRef}
-              activitySummaryLabel={activitySummaryLabel}
-              hasExternalWorkflowChange={hasExternalWorkflowChange}
-              isBusy={isBusy}
-              isOpen={isActivityPopoverOpen}
               onCopyPath={(filePath) => void handleCopyPath(filePath)}
+              onFixPermissions={handleFixPermissions}
+              onOpenContext={() => setContextSetupOpen(true)}
               onOpenPath={(filePath) => void handleOpenPath(filePath)}
-              onReload={handleReload}
+              onRefresh={() => void handleRefreshReadiness()}
+              onReload={() => void handleReload()}
               onRevealPath={(filePath) => void handleRevealPath(filePath)}
-              onToggle={() => setIsActivityPopoverOpen((current) => !current)}
+              onToggle={() => setIsReadinessPopoverOpen((current) => !current)}
+              readinessClusterRef={readinessPopoverRef}
             />
             <ProjectMenu
               canSave={canSave}
@@ -216,6 +178,29 @@ export const Topbar: React.FC = () => {
               onToggleTheme={toggleTheme}
               theme={theme}
             />
+            {isPaused && reviewNodeIds.length > 0 && (
+              <Button
+                variant="secondary"
+                size="toolbar"
+                className="hidden min-w-[132px] shrink-0 md:inline-flex"
+                title={reviewNodeLabel ? `Open review for ${String(reviewNodeLabel)}` : 'Open review panel'}
+                onClick={() => requestReviewFocus(reviewNodeIds[0]!)}
+              >
+                {reviewButtonLabel}
+              </Button>
+            )}
+            {approvalGuardrail.severity === 'blocked' && approvalGuardrail.nodeId && (
+              <Button
+                variant="secondary"
+                size="toolbar"
+                className="hidden min-w-[132px] shrink-0 md:inline-flex"
+                title={approvalGuardrail.message}
+                onClick={handleFixPermissions}
+                disabled={isBusy}
+              >
+                Fix Permissions
+              </Button>
+            )}
             <RunAbortControl
               canRun={canRun}
               isBusy={isBusy}

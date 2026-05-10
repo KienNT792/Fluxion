@@ -112,3 +112,231 @@ export function getContextChipState(contextStatus: 'missing' | 'incomplete' | 'r
       }
   }
 }
+
+export interface TopbarStatusView {
+  animate?: boolean
+  detail?: string
+  label: string
+  tone: StatusChipTone
+}
+
+export interface AggregateReadinessRow {
+  detail?: string
+  id: 'workflow' | 'save' | 'context' | 'codex' | 'activity' | 'permissions'
+  label: string
+  tone: StatusChipTone
+  value: string
+}
+
+export interface AggregateReadinessState {
+  animate: boolean
+  detail: string
+  label: string
+  rows: AggregateReadinessRow[]
+  tone: StatusChipTone
+}
+
+export interface AggregateReadinessOptions {
+  activityHasAttention: boolean
+  activitySummaryLabel: string
+  approvalGuardrail: {
+    message?: string
+    severity: 'ok' | 'warning' | 'blocked'
+    summary?: string
+  }
+  codexReadiness: {
+    blocking?: boolean
+    detail: string
+    label: string
+    summary: string
+  }
+  contextChipState: TopbarStatusView
+  hasExternalWorkflowChange: boolean
+  readinessTone: StatusChipTone
+  saveChipState: TopbarStatusView
+  saveStateLabel: string
+  workflowChipLabel: string
+  workflowChipState: TopbarStatusView
+  workflowStatus: WorkflowRuntimeStatus
+}
+
+export function getAggregateReadinessState({
+  activityHasAttention,
+  activitySummaryLabel,
+  approvalGuardrail,
+  codexReadiness,
+  contextChipState,
+  hasExternalWorkflowChange,
+  readinessTone,
+  saveChipState,
+  saveStateLabel,
+  workflowChipLabel,
+  workflowChipState,
+  workflowStatus
+}: AggregateReadinessOptions): AggregateReadinessState {
+  const permissionTone: StatusChipTone =
+    approvalGuardrail.severity === 'blocked'
+      ? 'error'
+      : approvalGuardrail.severity === 'warning'
+        ? 'warning'
+        : 'success'
+  const rows: AggregateReadinessRow[] = [
+    {
+      id: 'workflow',
+      label: 'Workflow',
+      tone: workflowChipState.tone,
+      value: workflowChipLabel,
+      detail: workflowChipState.detail
+    },
+    {
+      id: 'save',
+      label: 'Save',
+      tone: saveChipState.tone,
+      value: saveChipState.label,
+      detail: saveStateLabel
+    },
+    {
+      id: 'context',
+      label: 'Context',
+      tone: contextChipState.tone,
+      value: contextChipState.label.replace(/^Context\s+/, ''),
+      detail: contextChipState.detail
+    },
+    {
+      id: 'codex',
+      label: 'Codex',
+      tone: readinessTone,
+      value: codexReadiness.label,
+      detail: codexReadiness.detail
+    },
+    {
+      id: 'activity',
+      label: 'Activity',
+      tone: hasExternalWorkflowChange ? 'error' : activityHasAttention ? 'completed' : 'idle',
+      value: activitySummaryLabel,
+      detail: hasExternalWorkflowChange
+        ? 'Workflow file changed on disk. Reload before continuing.'
+        : activitySummaryLabel
+    },
+    {
+      id: 'permissions',
+      label: 'Permissions',
+      tone: permissionTone,
+      value:
+        approvalGuardrail.severity === 'ok'
+          ? 'Runnable'
+          : approvalGuardrail.severity === 'blocked'
+            ? 'Blocked'
+            : 'Warning',
+      detail: approvalGuardrail.message ?? approvalGuardrail.summary
+    }
+  ]
+
+  if (workflowStatus === 'running' || workflowStatus === 'stopping') {
+    return {
+      animate: true,
+      detail: workflowChipLabel,
+      label: workflowStatus === 'stopping' ? 'Workflow stopping' : 'Workflow running',
+      rows,
+      tone: workflowChipState.tone
+    }
+  }
+
+  if (workflowStatus === 'paused') {
+    return {
+      animate: false,
+      detail: 'A node is waiting for review before the workflow can continue.',
+      label: 'Review required',
+      rows,
+      tone: 'paused'
+    }
+  }
+
+  if (approvalGuardrail.severity === 'blocked') {
+    return {
+      animate: false,
+      detail: approvalGuardrail.summary ?? 'Codex permissions block this workflow.',
+      label: 'Permission blocked',
+      rows,
+      tone: 'error'
+    }
+  }
+
+  if (workflowStatus === 'error' || workflowStatus === 'aborted') {
+    return {
+      animate: false,
+      detail: workflowChipState.detail ?? workflowChipLabel,
+      label: workflowChipLabel,
+      rows,
+      tone: workflowChipState.tone
+    }
+  }
+
+  if (hasExternalWorkflowChange) {
+    return {
+      animate: false,
+      detail: 'Workflow file changed on disk. Reload to sync the canvas.',
+      label: 'Workflow changed',
+      rows,
+      tone: 'error'
+    }
+  }
+
+  if (contextChipState.tone === 'error' || contextChipState.tone === 'warning') {
+    return {
+      animate: false,
+      detail: contextChipState.detail ?? 'Project context needs review.',
+      label: 'Needs context',
+      rows,
+      tone: contextChipState.tone
+    }
+  }
+
+  if (codexReadiness.blocking || readinessTone === 'error') {
+    return {
+      animate: false,
+      detail: codexReadiness.summary,
+      label: 'Codex missing',
+      rows,
+      tone: 'error'
+    }
+  }
+
+  if (saveChipState.tone === 'error') {
+    return {
+      animate: false,
+      detail: saveStateLabel,
+      label: 'Save failed',
+      rows,
+      tone: 'error'
+    }
+  }
+
+  if (approvalGuardrail.severity === 'warning') {
+    return {
+      animate: false,
+      detail: approvalGuardrail.summary ?? 'Codex permissions need review.',
+      label: 'Permission warning',
+      rows,
+      tone: 'warning'
+    }
+  }
+
+  if (saveChipState.label === 'Unsaved' || saveChipState.label === 'Saving') {
+    return {
+      animate: saveChipState.animate ?? false,
+      detail: saveStateLabel,
+      label: saveChipState.label === 'Saving' ? 'Saving' : 'Unsaved changes',
+      rows,
+      tone: saveChipState.tone
+    }
+  }
+
+  return {
+    animate: false,
+    detail: 'Workflow, context, Codex runtime, and permissions are ready.',
+    label: 'Ready',
+    rows,
+    tone: 'success'
+  }
+}

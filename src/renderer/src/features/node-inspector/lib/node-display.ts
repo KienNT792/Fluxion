@@ -30,6 +30,18 @@ export const NODE_STATUS_TONE: Record<NodeStatus, StatusChipTone> = {
   paused: 'paused'
 }
 
+export function getNodeStatusLabel(status: NodeStatus): string {
+  if (status === 'completed') {
+    return 'Done'
+  }
+
+  if (status === 'paused') {
+    return 'Review'
+  }
+
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
 export function buildModelOptions(
   models: AgentNodeData['model'],
   options: ModelOption[]

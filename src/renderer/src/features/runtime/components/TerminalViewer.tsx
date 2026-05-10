@@ -9,13 +9,17 @@ import { truncateTerminalText } from '@renderer/lib/terminal'
 import { useXtermTerminal } from '../hooks/useXtermTerminal'
 import { STATUS_DOT } from '../lib/runtime-status'
 
+const EMPTY_TERMINAL_LOGS: string[] = []
+
 export const TerminalViewer: React.FC = () => {
   const terminalNodeId = useWorkflowStore((state) => state.terminalNodeId)
   const terminalFollowMode = useWorkflowStore((state) => state.terminalFollowMode)
   const nodes = useWorkflowStore((state) => state.nodes)
   const clearLogs = useExecutionStore((state) => state.clearLogs)
   const terminalLogs = useExecutionStore((state) =>
-    terminalNodeId ? (state.terminalLogs[terminalNodeId] ?? []) : []
+    terminalNodeId
+      ? (state.terminalLogs[terminalNodeId] ?? EMPTY_TERMINAL_LOGS)
+      : EMPTY_TERMINAL_LOGS
   )
   const status = useExecutionStore((state) =>
     terminalNodeId ? (state.nodeStatuses[terminalNodeId] ?? 'idle') : 'idle'
