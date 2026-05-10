@@ -125,7 +125,7 @@ export const Topbar: React.FC = () => {
   return (
     <>
       <header
-        className="relative z-40 flex h-14 shrink-0 items-center px-3 sm:px-4 lg:px-5"
+        className="relative z-[80] flex h-14 shrink-0 items-center px-3 sm:px-4 lg:px-5"
         style={{
           background: 'var(--color-canvas)',
           borderBottom: '1px solid var(--color-hairline)'

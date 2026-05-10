@@ -1,12 +1,14 @@
 import React from 'react'
-import { ArrowRightFromLine, TerminalSquare, Trash2 } from 'lucide-react'
+import { ArrowRightFromLine, Trash2 } from 'lucide-react'
 import type { NodeStatus } from '@shared'
+import { ModelIconBadge } from '@renderer/components/ui/ModelIconBadge'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
 import { getNodeStatusLabel, NODE_STATUS_TONE } from '../lib/node-display'
 
 interface InspectorHeaderProps {
   label: string
   modelDisplayName: string
+  modelId: string
   nodeStatus: NodeStatus
   onClose: () => void
   onDelete: () => void
@@ -17,6 +19,7 @@ interface InspectorHeaderProps {
 export const InspectorHeader: React.FC<InspectorHeaderProps> = ({
   label,
   modelDisplayName,
+  modelId,
   nodeStatus,
   onClose,
   onDelete,
@@ -31,16 +34,7 @@ export const InspectorHeader: React.FC<InspectorHeaderProps> = ({
     }}
   >
     <div className="flex min-w-0 flex-1 items-start gap-3">
-      <div
-        className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
-        style={{
-          background: 'var(--color-canvas)',
-          border: '1px solid var(--color-hairline)',
-          color: nodeStatus === 'idle' ? 'var(--color-muted)' : 'var(--color-primary)'
-        }}
-      >
-        <TerminalSquare size={15} />
-      </div>
+      <ModelIconBadge className="mt-0.5" modelId={modelId} displayName={modelDisplayName} />
 
       <div className="min-w-0 flex-1">
         <input

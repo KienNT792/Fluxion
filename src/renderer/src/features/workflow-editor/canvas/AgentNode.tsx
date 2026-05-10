@@ -1,7 +1,8 @@
 import React from 'react'
 import { Handle, Node, NodeProps, Position } from '@xyflow/react'
-import { Eye, RotateCcw, Settings, Terminal, TerminalSquare } from 'lucide-react'
+import { Eye, RotateCcw, Settings, Terminal } from 'lucide-react'
 import { AgentNodeData } from '@shared'
+import { ModelIconBadge } from '@renderer/components/ui/ModelIconBadge'
 import { retryWorkflowFromNode } from '@renderer/lib/workflow-session'
 import { getCodexModelDisplayName } from '@renderer/lib/provider-capabilities'
 import { logRuntimeDebug } from '@renderer/lib/runtime-debug'
@@ -104,16 +105,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
         className="flex items-start gap-2.5 px-3.5 py-3 pl-4"
         style={{ background: 'var(--color-canvas-soft)' }}
       >
-        <div
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
-          style={{
-            background: 'var(--color-surface-card)',
-            border: '1px solid var(--color-hairline)',
-            color: visualState === 'idle' || visualState === 'selected' ? 'var(--color-muted)' : visualColor
-          }}
-        >
-          <TerminalSquare size={15} />
-        </div>
+        <ModelIconBadge modelId={data.model} displayName={modelDisplayName} />
 
         <div className="min-w-0 flex-1">
           <div

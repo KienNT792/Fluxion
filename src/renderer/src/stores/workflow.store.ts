@@ -29,6 +29,7 @@ import {
   getDefaultCodexModel,
 } from '../lib/provider-capabilities';
 import { logRuntimeDebug } from '../lib/runtime-debug';
+import { getNextDefaultNodeLabel } from './workflow-node-labels';
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
   receivedAt: number;
@@ -383,6 +384,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       data: {
         provider: 'codex',
         model,
+        label:
+          typeof preset.label === 'string' && preset.label.trim().length > 0
+            ? preset.label.trim()
+            : getNextDefaultNodeLabel(get().nodes),
         prompt: '',
         systemInstruction: '',
         reasoningLevel: reasoningLevels && reasoningLevels.length > 0

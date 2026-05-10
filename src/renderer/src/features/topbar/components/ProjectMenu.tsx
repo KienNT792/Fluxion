@@ -44,7 +44,7 @@ export const ProjectMenu: React.FC<ProjectMenuProps> = ({
 
     {isOpen && (
       <div
-        className="absolute right-0 top-[calc(100%+10px)] z-50 w-[220px] p-2"
+        className="absolute right-0 top-[calc(100%+10px)] z-[90] w-[220px] p-2"
         style={POPOVER_SURFACE_STYLE}
       >
         <button

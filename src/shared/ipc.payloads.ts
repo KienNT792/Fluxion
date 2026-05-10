@@ -1,18 +1,20 @@
-import { AbortReason } from './agent.types';
+import { AbortReason } from './agent.types'
 import {
   AgentConfigApplyPreviewRequest,
   AgentConfigApplyPreviewResult,
   AgentConfigExporterSummary,
   AgentConfigPreviewRequest,
-  AgentConfigExportPreview,
-} from './agent-config.types';
+  AgentConfigExportPreview
+} from './agent-config.types'
 import {
+  ContextEnrichmentRequest,
+  ContextEnrichmentResult,
   ContextScanResult,
   ProjectContextOnboarding,
   ProjectContextDraft,
   WorkspaceContextSavedPayload,
-  WorkspaceContextStatus,
-} from './context.types';
+  WorkspaceContextStatus
+} from './context.types'
 import {
   ExecutionMode,
   NodeId,
@@ -21,234 +23,236 @@ import {
   Workflow,
   WorkflowEdge,
   WorkflowMetadata,
-  WorkflowNode,
-} from './workflow.types';
+  WorkflowNode
+} from './workflow.types'
 
 // ─── Workspace Payloads ──────────────────────────────────────────────────────
 
 export interface WorkspaceOpenedPayload {
-  workspacePath: string;
+  workspacePath: string
   /** Full document of the initially active workflow. */
-  workflow: Workflow;
+  workflow: Workflow
   /** Absolute path to the active workflow file on disk. */
-  activeWorkflowFilePath: string;
+  activeWorkflowFilePath: string
   /** ULID of the active workflow. */
-  activeWorkflowId: string;
+  activeWorkflowId: string
   /** List of all detected workflows (metadata only, no nodes/edges). */
-  workflows: WorkflowMetadata[];
-  isNewWorkspace: boolean;
+  workflows: WorkflowMetadata[]
+  isNewWorkspace: boolean
   /** Current project-context state for this workspace. */
-  contextStatus: WorkspaceContextStatus;
+  contextStatus: WorkspaceContextStatus
   /** Parsed project-context draft when available. */
-  contextSummary?: ProjectContextDraft | null;
+  contextSummary?: ProjectContextDraft | null
   /** True if a legacy `.fluxion/workflow.json` was detected. */
-  legacyWorkflowDetected: boolean;
+  legacyWorkflowDetected: boolean
   /** Backup path produced by the latest legacy workflow migration, when applicable. */
-  legacyWorkflowBackupFilePath?: string;
+  legacyWorkflowBackupFilePath?: string
 }
 
-export type WorkspaceLoadingStep = 'init' | 'loadWorkflows' | 'loadContext' | 'watcher' | 'ready';
+export type WorkspaceLoadingStep = 'init' | 'loadWorkflows' | 'loadContext' | 'watcher' | 'ready'
 
 export interface WorkspaceLoadingEvent {
-  workspacePath: string;
-  step: WorkspaceLoadingStep;
-  status: 'active' | 'done' | 'error';
-  message?: string;
+  workspacePath: string
+  step: WorkspaceLoadingStep
+  status: 'active' | 'done' | 'error'
+  message?: string
 }
 
 export interface WorkspaceTrustMigrationPayload {
-  workspacePaths: string[];
+  workspacePaths: string[]
 }
 
 export interface RecentWorkspaceEntry {
-  path: string;
-  name: string;
-  lastOpenedAt: string;
+  path: string
+  name: string
+  lastOpenedAt: string
 }
 
 export type WorkspaceDirectoryValidationResult =
   | {
-      ok: true;
-      path: string;
+      ok: true
+      path: string
     }
   | {
-      ok: false;
-      path: string;
-      message: string;
-    };
+      ok: false
+      path: string
+      message: string
+    }
 
 export interface WorkspaceFileChangedPayload {
-  filePath: string;
-  relativePath: string;
-  changeType: 'add' | 'change' | 'unlink';
+  filePath: string
+  relativePath: string
+  changeType: 'add' | 'change' | 'unlink'
 }
 
 export interface WorkspaceReadTextFilePayload {
-  workspacePath: string;
-  filePath: string;
-  maxBytes?: number;
+  workspacePath: string
+  filePath: string
+  maxBytes?: number
 }
 
 export interface WorkspaceReadTextFileResult {
-  content: string;
-  truncated: boolean;
+  content: string
+  truncated: boolean
 }
 
 export interface WorkflowSavePayload {
-  workspacePath: string;
-  workflow: Workflow;
-  activeWorkflowFilePath: string;
+  workspacePath: string
+  workflow: Workflow
+  activeWorkflowFilePath: string
 }
 
 export interface WorkflowSavedPayload {
-  workspacePath: string;
-  workflowFilePath: string;
-  savedAt: string;
+  workspacePath: string
+  workflowFilePath: string
+  savedAt: string
 }
 
-export type WorkspaceContextScanPayload = ContextScanResult;
-export type WorkspaceContextPayload = ProjectContextDraft | null;
-export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload;
+export type WorkspaceContextScanPayload = ContextScanResult
+export type WorkspaceContextEnrichPayload = ContextEnrichmentRequest
+export type WorkspaceContextEnrichResult = ContextEnrichmentResult
+export type WorkspaceContextPayload = ProjectContextDraft | null
+export type WorkspaceContextSaveResult = WorkspaceContextSavedPayload
 
 export interface WorkspaceContextOnboardingUpdatePayload {
-  workspacePath: string;
-  patch: ProjectContextOnboarding;
+  workspacePath: string
+  patch: ProjectContextOnboarding
 }
 
-export type WorkspaceContextOnboardingUpdateResult = WorkspaceContextSavedPayload;
+export type WorkspaceContextOnboardingUpdateResult = WorkspaceContextSavedPayload
 
 export interface LegacyWorkflowMigrationPayload {
-  workspacePath: string;
+  workspacePath: string
 }
 
-export type LegacyWorkflowMigrationResult = WorkspaceOpenedPayload;
+export type LegacyWorkflowMigrationResult = WorkspaceOpenedPayload
 
-export type AgentConfigListExportersResult = AgentConfigExporterSummary[];
-export type AgentConfigCreatePreviewPayload = AgentConfigPreviewRequest;
-export type AgentConfigCreatePreviewResult = AgentConfigExportPreview;
-export type AgentConfigApplyPreviewPayload = AgentConfigApplyPreviewRequest;
-export type AgentConfigApplyPreviewResultPayload = AgentConfigApplyPreviewResult;
+export type AgentConfigListExportersResult = AgentConfigExporterSummary[]
+export type AgentConfigCreatePreviewPayload = AgentConfigPreviewRequest
+export type AgentConfigCreatePreviewResult = AgentConfigExportPreview
+export type AgentConfigApplyPreviewPayload = AgentConfigApplyPreviewRequest
+export type AgentConfigApplyPreviewResultPayload = AgentConfigApplyPreviewResult
 
 // ─── Multi-Workflow Payloads ──────────────────────────────────────────────────
 
 export interface WorkflowCreatePayload {
-  workspacePath: string;
-  name: string;
+  workspacePath: string
+  name: string
   /** Optional specific template to use. If omitted, creates a blank workflow. */
-  templateId?: string;
+  templateId?: string
 }
 
 export interface WorkflowCreateResult {
   /** The newly created workflow document. */
-  workflow: Workflow;
+  workflow: Workflow
   /** Absolute path to the newly created file. */
-  workflowFilePath: string;
+  workflowFilePath: string
 }
 
 export interface WorkflowLoadPayload {
-  workspacePath: string;
+  workspacePath: string
   /** ID of the workflow to load. */
-  workflowId: string;
+  workflowId: string
 }
 
 export interface WorkflowDeletePayload {
-  workspacePath: string;
+  workspacePath: string
   /** ID of the workflow to delete. */
-  workflowId: string;
+  workflowId: string
 }
 
 // ─── Workflow Execution Payloads ─────────────────────────────────────────────
 export interface WorkflowRunPayload {
-  workflowId: string;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
-  workspacePath: string;
-  executionMode?: ExecutionMode;
-  resumeFromNodeId?: NodeId;
+  workflowId: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+  workspacePath: string
+  executionMode?: ExecutionMode
+  resumeFromNodeId?: NodeId
 }
 
 export interface GetProviderCapabilitiesPayload {
-  forceRefresh?: boolean;
+  forceRefresh?: boolean
 }
 
 export interface WorkflowAbortPayload {
   /** If provided, abort only this node. If omitted, abort the entire workflow. */
-  nodeId?: NodeId;
-  reason: AbortReason;
+  nodeId?: NodeId
+  reason: AbortReason
 }
 
 export interface WorkflowReviewActionPayload {
-  workflowId: string;
-  runId: string;
-  nodeId: NodeId;
-  comment?: string;
+  workflowId: string
+  runId: string
+  nodeId: NodeId
+  comment?: string
 }
 
 export interface WorkflowNodeStatusPayload {
-  nodeId: NodeId;
-  status: NodeStatus;
-  error?: string;
-  exitCode?: number;
+  nodeId: NodeId
+  status: NodeStatus
+  error?: string
+  exitCode?: number
 }
 
 export interface WorkflowNodeOutputPayload {
-  nodeId: NodeId;
-  status: NodeStatus;
+  nodeId: NodeId
+  status: NodeStatus
   /** Absolute path to the generated .md file in .fluxion/memory/short-term/ */
-  outputFilePath?: string;
+  outputFilePath?: string
 }
 
 export interface WorkflowReviewRequiredPayload {
-  workflowId: string;
-  runId: string;
-  nodeId: NodeId;
-  outputFilePath: string;
-  status: 'awaiting_review';
+  workflowId: string
+  runId: string
+  nodeId: NodeId
+  outputFilePath: string
+  status: 'awaiting_review'
 }
 
 export interface WorkflowCompletedPayload {
-  workflowId: string;
-  success: boolean;
-  totalTimeMs: number;
-  aborted?: boolean;
-  error?: string;
+  workflowId: string
+  success: boolean
+  totalTimeMs: number
+  aborted?: boolean
+  error?: string
 }
 
 // Terminal payloads
 export interface TerminalDataBatchPayload {
-  nodeId: NodeId;
+  nodeId: NodeId
   /** Array of lines or raw text chunks. */
-  batch: string[];
+  batch: string[]
   /** Distinguishes standard output from error logs. */
-  sourceType: 'stdout' | 'stderr';
+  sourceType: 'stdout' | 'stderr'
 }
 
 export interface TerminalErrorPayload {
-  nodeId: NodeId;
-  error: string;
+  nodeId: NodeId
+  error: string
 }
 
 export interface TerminalExitPayload {
-  nodeId: NodeId;
-  code: number | null;
+  nodeId: NodeId
+  code: number | null
 }
 
 // Memory payloads
 export interface MemoryContextReadyPayload {
-  nodeId: NodeId;
+  nodeId: NodeId
   /** The fully compiled mega-prompt string ready to be fed to the agent. */
-  compiledContext: string;
+  compiledContext: string
 }
 
-export type ProviderCapabilitiesPayload = ProviderCapabilitiesMap;
+export type ProviderCapabilitiesPayload = ProviderCapabilitiesMap
 
 export interface ProviderSettingsSummaryPayload {
-  openaiApiKeyConfigured: boolean;
-  openaiApiKeySource: 'stored' | 'env' | 'none';
-  openaiApiKeyMasked?: string;
-  storageMode: 'secure' | 'plain' | 'env' | 'none';
+  openaiApiKeyConfigured: boolean
+  openaiApiKeySource: 'stored' | 'env' | 'none'
+  openaiApiKeyMasked?: string
+  storageMode: 'secure' | 'plain' | 'env' | 'none'
 }
 
 export interface UpdateOpenAIApiKeyPayload {
-  apiKey: string | null;
+  apiKey: string | null
 }

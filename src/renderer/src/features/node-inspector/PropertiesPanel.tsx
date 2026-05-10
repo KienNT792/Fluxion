@@ -169,6 +169,7 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
         <InspectorHeader
           label={localData.label || ''}
           modelDisplayName={currentModelDisplayName}
+          modelId={currentModel}
           nodeStatus={nodeStatus}
           onLabelChange={(label) => setLocalData((prev) => ({ ...prev, label }))}
           onDelete={() => deleteNode(selectedNodeId)}

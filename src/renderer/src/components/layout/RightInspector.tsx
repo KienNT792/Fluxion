@@ -20,7 +20,7 @@ export const RightInspector: React.FC = () => {
 
   return (
     <aside
-      className="z-40 flex h-full flex-col overflow-hidden"
+      className="z-20 flex h-full flex-col overflow-hidden"
       style={{
         width: 'clamp(340px, 28vw, 420px)',
         flexShrink: 0,

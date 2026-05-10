@@ -1,5 +1,5 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { electronAPI } from '@electron-toolkit/preload';
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { electronAPI } from '@electron-toolkit/preload'
 import {
   AbortReason,
   AgentConfigApplyPreviewRequest,
@@ -8,6 +8,8 @@ import {
   AgentConfigPreviewRequest,
   AgentConfigExportPreview,
   ContextSaveMode,
+  ContextEnrichmentRequest,
+  ContextEnrichmentResult,
   ContextScanResult,
   ExecutionMode,
   IpcChannels,
@@ -40,26 +42,28 @@ import {
   WorkspaceOpenedPayload,
   WorkspaceDirectoryValidationResult,
   WorkspaceTrustMigrationPayload,
-  WorkflowCreateResult,
-} from '@shared';
+  WorkflowCreateResult
+} from '@shared'
 
-type Unsubscribe = () => void;
+type Unsubscribe = () => void
 
 function bindListener<TPayload>(
   channel: string,
   callback: (payload: TPayload) => void
 ): Unsubscribe {
-  const handler = (_event: Electron.IpcRendererEvent, payload: TPayload): void =>
-    callback(payload);
-  ipcRenderer.on(channel, handler);
-  return () => ipcRenderer.removeListener(channel, handler);
+  const handler = (_event: Electron.IpcRendererEvent, payload: TPayload): void => callback(payload)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
 }
 
 const api = {
   openWorkspaceDialog: (): Promise<string | null> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_OPEN_DIALOG) as Promise<string | null>,
   loadWorkspace: (workspacePath: string): Promise<WorkspaceOpenedPayload> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_LOAD, workspacePath) as Promise<WorkspaceOpenedPayload>,
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_LOAD,
+      workspacePath
+    ) as Promise<WorkspaceOpenedPayload>,
   isWorkspaceTrusted: (workspacePath: string): Promise<boolean> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_TRUST_IS_TRUSTED, workspacePath) as Promise<boolean>,
   trustWorkspace: (workspacePath: string): Promise<void> =>
@@ -68,7 +72,7 @@ const api = {
     workspacePaths: WorkspaceTrustMigrationPayload['workspacePaths']
   ): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_TRUST_MIGRATE_RENDERER_CACHE, {
-      workspacePaths,
+      workspacePaths
     } satisfies WorkspaceTrustMigrationPayload) as Promise<void>,
   listRecentWorkspaces: (): Promise<RecentWorkspaceEntry[]> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_RECENT_LIST) as Promise<RecentWorkspaceEntry[]>,
@@ -78,30 +82,58 @@ const api = {
     >,
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   validateWorkspaceDirectory: (pathValue: string): Promise<WorkspaceDirectoryValidationResult> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_VALIDATE_DIRECTORY, pathValue) as Promise<
-      WorkspaceDirectoryValidationResult
-    >,
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_VALIDATE_DIRECTORY,
+      pathValue
+    ) as Promise<WorkspaceDirectoryValidationResult>,
   saveWorkflow: (
     workspacePath: string,
     workflow: Workflow,
     activeWorkflowFilePath: string
   ): Promise<WorkflowSavedPayload> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE, { workspacePath, workflow, activeWorkflowFilePath }) as Promise<WorkflowSavedPayload>,
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE, {
+      workspacePath,
+      workflow,
+      activeWorkflowFilePath
+    }) as Promise<WorkflowSavedPayload>,
   readWorkspaceTextFile: (
     payload: WorkspaceReadTextFilePayload
   ): Promise<WorkspaceReadTextFileResult> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_READ_TEXT_FILE, payload) as Promise<WorkspaceReadTextFileResult>,
-  
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_READ_TEXT_FILE,
+      payload
+    ) as Promise<WorkspaceReadTextFileResult>,
+
   createWorkflow: (workspacePath: string, name: string): Promise<WorkflowCreateResult> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_CREATE, { workspacePath, name }) as Promise<WorkflowCreateResult>,
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_CREATE, {
+      workspacePath,
+      name
+    }) as Promise<WorkflowCreateResult>,
   loadWorkflow: (workspacePath: string, workflowId: string): Promise<Workflow> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_LOAD, { workspacePath, workflowId }) as Promise<Workflow>,
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_LOAD, {
+      workspacePath,
+      workflowId
+    }) as Promise<Workflow>,
   deleteWorkflow: (workspacePath: string, workflowId: string): Promise<void> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_DELETE, { workspacePath, workflowId }) as Promise<void>,
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_DELETE, {
+      workspacePath,
+      workflowId
+    }) as Promise<void>,
   scanWorkspaceContext: (workspacePath: string): Promise<ContextScanResult> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_SCAN_CONTEXT, workspacePath) as Promise<ContextScanResult>,
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_SCAN_CONTEXT,
+      workspacePath
+    ) as Promise<ContextScanResult>,
+  enrichProjectContext: (payload: ContextEnrichmentRequest): Promise<ContextEnrichmentResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_ENRICH_CONTEXT,
+      payload
+    ) as Promise<ContextEnrichmentResult>,
   getContext: (workspacePath: string): Promise<ProjectContextDraft | null> =>
-    ipcRenderer.invoke(IpcChannels.WORKSPACE_GET_CONTEXT, workspacePath) as Promise<ProjectContextDraft | null>,
+    ipcRenderer.invoke(
+      IpcChannels.WORKSPACE_GET_CONTEXT,
+      workspacePath
+    ) as Promise<ProjectContextDraft | null>,
   saveProjectContext: (
     workspacePath: string,
     draft: ProjectContextDraft,
@@ -110,7 +142,7 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT, {
       workspacePath,
       draft,
-      mode,
+      mode
     }) as Promise<WorkspaceContextSavedPayload>,
   updateContextOnboarding: (
     workspacePath: string,
@@ -118,16 +150,16 @@ const api = {
   ): Promise<WorkspaceContextSavedPayload> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_UPDATE_CONTEXT_ONBOARDING, {
       workspacePath,
-      patch,
+      patch
     } satisfies WorkspaceContextOnboardingUpdatePayload) as Promise<WorkspaceContextSavedPayload>,
   migrateLegacyWorkflow: (workspacePath: string): Promise<WorkspaceOpenedPayload> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW, {
-      workspacePath,
+      workspacePath
     }) as Promise<WorkspaceOpenedPayload>,
   listAgentConfigExporters: (): Promise<AgentConfigExporterSummary[]> =>
-    ipcRenderer.invoke(
-      IpcChannels.AGENT_CONFIG_LIST_EXPORTERS
-    ) as Promise<AgentConfigExporterSummary[]>,
+    ipcRenderer.invoke(IpcChannels.AGENT_CONFIG_LIST_EXPORTERS) as Promise<
+      AgentConfigExporterSummary[]
+    >,
   createAgentConfigPreview: (
     payload: AgentConfigPreviewRequest
   ): Promise<AgentConfigExportPreview> =>
@@ -150,10 +182,12 @@ const api = {
       payload
     ) as Promise<ProviderCapabilitiesPayload>,
   getProviderSettingsSummary: (): Promise<ProviderSettingsSummaryPayload> =>
-    ipcRenderer.invoke(IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY) as Promise<ProviderSettingsSummaryPayload>,
+    ipcRenderer.invoke(
+      IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY
+    ) as Promise<ProviderSettingsSummaryPayload>,
   setOpenAIApiKey: (apiKey: string | null): Promise<ProviderSettingsSummaryPayload> =>
     ipcRenderer.invoke(IpcChannels.SETTINGS_SET_OPENAI_API_KEY, {
-      apiKey,
+      apiKey
     } satisfies UpdateOpenAIApiKeyPayload) as Promise<ProviderSettingsSummaryPayload>,
   openPath: (path: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.SHELL_OPEN_PATH, path) as Promise<void>,
@@ -173,8 +207,8 @@ const api = {
       edges,
       workspacePath,
       executionMode,
-      resumeFromNodeId,
-    });
+      resumeFromNodeId
+    })
   },
   abortWorkflow: (
     nodeId?: NodeId,
@@ -207,19 +241,19 @@ const api = {
   onMemoryContextReady: (callback: (payload: MemoryContextReadyPayload) => void) =>
     bindListener(IpcChannels.MEMORY_CONTEXT_READY, callback),
   onWorkflowCompleted: (callback: (payload: WorkflowCompletedPayload) => void) =>
-    bindListener(IpcChannels.WORKFLOW_COMPLETED, callback),
-};
+    bindListener(IpcChannels.WORKFLOW_COMPLETED, callback)
+}
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI);
-    contextBridge.exposeInMainWorld('api', api);
+    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
-    console.error(error);
+    console.error(error)
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = electronAPI;
+  window.electron = electronAPI
   // @ts-ignore (define in dts)
-  window.api = api;
+  window.api = api
 }

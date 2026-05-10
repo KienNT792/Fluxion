@@ -1,4 +1,3 @@
-
 export const IpcChannels = {
   // Workspace
   WORKSPACE_OPEN_DIALOG: 'workspace:open-dialog',
@@ -12,6 +11,7 @@ export const IpcChannels = {
   WORKSPACE_READ_TEXT_FILE: 'workspace:read-text-file',
   WORKSPACE_SAVE_CONTEXT: 'workspace:save-context',
   WORKSPACE_SCAN_CONTEXT: 'workspace:scan-context',
+  WORKSPACE_ENRICH_CONTEXT: 'workspace:enrich-context',
   WORKSPACE_GET_CONTEXT: 'workspace:get-context',
   WORKSPACE_SAVE_PROJECT_CONTEXT: 'workspace:save-project-context',
   WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY: 'workspace:save-context-v2',
@@ -61,9 +61,9 @@ export const IpcChannels = {
 
   // Shell
   SHELL_OPEN_PATH: 'shell:open-path',
-  SHELL_REVEAL_PATH: 'shell:reveal-path',
-} as const;
+  SHELL_REVEAL_PATH: 'shell:reveal-path'
+} as const
 
-export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];
+export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
 
-export type IpcChannelKey = keyof typeof IpcChannels;
+export type IpcChannelKey = keyof typeof IpcChannels

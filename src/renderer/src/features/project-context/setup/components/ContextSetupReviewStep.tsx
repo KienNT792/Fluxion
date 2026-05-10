@@ -4,10 +4,13 @@ import type {
   AgentConfigExportPreview,
   AgentConfigExporterId,
   AgentConfigExporterSummary,
+  ContextEnrichmentField,
+  ContextEnrichmentResult,
   ProjectContextDraft
 } from '@shared'
 import { StatusChip, StatusChipTone } from '@renderer/components/ui/StatusChip'
 import { AgentConfigExportPanel } from './AgentConfigExportPanel'
+import { ContextEnrichmentPanel } from './ContextEnrichmentPanel'
 import { getWorkspaceTypeLabel } from '../lib/context-setup-model'
 
 interface ContextSetupReviewStepProps {
@@ -17,14 +20,20 @@ interface ContextSetupReviewStepProps {
   canExportAgentConfig: boolean
   canSaveFinal: boolean
   clearAgentConfigPreview: () => void
+  clearContextEnrichment: () => void
+  contextEnrichmentError: string | null
+  contextEnrichmentResult: ContextEnrichmentResult | null
   draft: ProjectContextDraft
+  handleAcceptContextEnrichment: (fields?: ContextEnrichmentField[]) => void
   handleApplyAgentConfigPreview: () => Promise<void>
   handleCreateAgentConfigPreview: (
     exporterId: AgentConfigExporterId,
     includeAdvancedConfig?: boolean
   ) => Promise<void>
+  handleRunContextEnrichment: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
   isCreatingAgentConfigPreview: boolean
+  isEnrichingContext: boolean
   missingRequirements: string[]
   statusState: {
     detail: string
@@ -40,11 +49,17 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
   canExportAgentConfig,
   canSaveFinal,
   clearAgentConfigPreview,
+  clearContextEnrichment,
+  contextEnrichmentError,
+  contextEnrichmentResult,
   draft,
+  handleAcceptContextEnrichment,
   handleApplyAgentConfigPreview,
   handleCreateAgentConfigPreview,
+  handleRunContextEnrichment,
   isApplyingAgentConfigPreview,
   isCreatingAgentConfigPreview,
+  isEnrichingContext,
   missingRequirements,
   statusState
 }) => (
@@ -115,6 +130,16 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
         </div>
       </div>
     )}
+
+    <ContextEnrichmentPanel
+      draft={draft}
+      enrichmentError={contextEnrichmentError}
+      enrichmentResult={contextEnrichmentResult}
+      isEnriching={isEnrichingContext}
+      onAccept={handleAcceptContextEnrichment}
+      onClear={clearContextEnrichment}
+      onEnrich={handleRunContextEnrichment}
+    />
 
     <AgentConfigExportPanel
       agentConfigError={agentConfigError}

@@ -1,10 +1,11 @@
-import { app, dialog, ipcMain, IpcMainEvent, shell } from 'electron';
-import { open, realpath, stat } from 'fs/promises';
-import { isAbsolute, relative, resolve } from 'path';
+import { app, dialog, ipcMain, IpcMainEvent, shell } from 'electron'
+import { open, realpath, stat } from 'fs/promises'
+import { isAbsolute, relative, resolve } from 'path'
 import {
   ContextSaveMode,
   AgentConfigApplyPreviewPayload,
   AgentConfigCreatePreviewPayload,
+  ContextEnrichmentRequest,
   getProviderCodexApprovalProtocolStatus,
   getWorkflowCodexApprovalGuardrail,
   IpcChannels,
@@ -26,21 +27,22 @@ import {
   WorkspaceTrustMigrationPayload,
   WorkspaceDirectoryValidationResult,
   WorkspaceReadTextFilePayload,
-  WorkspaceReadTextFileResult,
-} from '@shared';
-import { formatZodError, validateWorkflowGraph, WorkflowSchema } from '@core';
-import { workflowEngine } from '../services/workflow-engine';
-import { providerRegistryService } from '../services/provider-registry.service';
-import { processManager } from '../services/process-manager';
-import { settingsService } from '../services/settings.service';
-import { openShellPath, revealShellPath } from '../services/shell-path.service';
-import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service';
-import { workspaceService } from '../services/workspace.service';
-import { workspaceTrustService } from '../services/workspace-trust.service';
-import { recentWorkspacesService } from '../services/recent-workspaces.service';
+  WorkspaceReadTextFileResult
+} from '@shared'
+import { formatZodError, validateWorkflowGraph, WorkflowSchema } from '@core'
+import { workflowEngine } from '../services/workflow-engine'
+import { providerRegistryService } from '../services/provider-registry.service'
+import { processManager } from '../services/process-manager'
+import { settingsService } from '../services/settings.service'
+import { openShellPath, revealShellPath } from '../services/shell-path.service'
+import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service'
+import { contextEnrichmentService } from '../services/context-enrichment.service'
+import { workspaceService } from '../services/workspace.service'
+import { workspaceTrustService } from '../services/workspace-trust.service'
+import { recentWorkspacesService } from '../services/recent-workspaces.service'
 
-const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024;
-const HARD_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024
+const HARD_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024
 
 function createWorkflowFailurePayload(
   workflowId: string,
@@ -52,13 +54,13 @@ function createWorkflowFailurePayload(
     success: false,
     totalTimeMs: 0,
     aborted,
-    error,
-  };
+    error
+  }
 }
 
 function validateWorkflow(payload: WorkflowRunPayload): string | null {
   if (!payload.workspacePath.trim()) {
-    return 'Open a workspace before running the workflow.';
+    return 'Open a workspace before running the workflow.'
   }
 
   const parsedWorkflow = WorkflowSchema.safeParse({
@@ -66,128 +68,116 @@ function validateWorkflow(payload: WorkflowRunPayload): string | null {
     name: 'Fluxion Workflow',
     executionMode: payload.executionMode,
     nodes: payload.nodes,
-    edges: payload.edges,
-  });
+    edges: payload.edges
+  })
 
   if (!parsedWorkflow.success) {
-    return `Invalid workflow payload: ${formatZodError(parsedWorkflow.error)}`;
+    return `Invalid workflow payload: ${formatZodError(parsedWorkflow.error)}`
   }
 
-  const workflow = parsedWorkflow.data;
+  const workflow = parsedWorkflow.data
   const result = validateWorkflowGraph(workflow, {
-    resumeFromNodeId: payload.resumeFromNodeId,
-  });
+    resumeFromNodeId: payload.resumeFromNodeId
+  })
 
-  return result.errors[0]?.message ?? null;
+  return result.errors[0]?.message ?? null
 }
 
 function coercePreviewMaxBytes(maxBytes: number | undefined): number {
   if (typeof maxBytes !== 'number' || !Number.isFinite(maxBytes)) {
-    return DEFAULT_TEXT_PREVIEW_MAX_BYTES;
+    return DEFAULT_TEXT_PREVIEW_MAX_BYTES
   }
 
-  return Math.min(
-    HARD_TEXT_PREVIEW_MAX_BYTES,
-    Math.max(1, Math.floor(maxBytes))
-  );
+  return Math.min(HARD_TEXT_PREVIEW_MAX_BYTES, Math.max(1, Math.floor(maxBytes)))
 }
 
 async function recordRecentWorkspace(workspacePath: string): Promise<void> {
   try {
-    await recentWorkspacesService.recordWorkspaceOpened(workspacePath);
+    await recentWorkspacesService.recordWorkspaceOpened(workspacePath)
   } catch (error) {
-    console.warn('Failed to record recent workspace:', error);
+    console.warn('Failed to record recent workspace:', error)
   }
 }
 
 async function validateWorkspaceDirectory(
   pathValue: string
 ): Promise<WorkspaceDirectoryValidationResult> {
-  const candidatePath = pathValue.trim();
+  const candidatePath = pathValue.trim()
 
   if (!candidatePath) {
     return {
       ok: false,
       path: '',
-      message: 'Drop a folder to open it as a workspace.',
-    };
+      message: 'Drop a folder to open it as a workspace.'
+    }
   }
 
-  const resolvedPath = resolve(candidatePath);
+  const resolvedPath = resolve(candidatePath)
 
   try {
-    const pathStats = await stat(resolvedPath);
+    const pathStats = await stat(resolvedPath)
 
     if (!pathStats.isDirectory()) {
       return {
         ok: false,
         path: resolvedPath,
-        message: 'Drop a folder, not a file.',
-      };
+        message: 'Drop a folder, not a file.'
+      }
     }
 
     return {
       ok: true,
-      path: resolvedPath,
-    };
+      path: resolvedPath
+    }
   } catch {
     return {
       ok: false,
       path: resolvedPath,
-      message: 'Folder does not exist or cannot be accessed.',
-    };
+      message: 'Folder does not exist or cannot be accessed.'
+    }
   }
 }
 
-async function resolveWorkspaceBoundFile(
-  workspacePath: string,
-  filePath: string
-): Promise<string> {
-  const workspaceRoot = resolve(workspacePath);
-  const requestedPath = isAbsolute(filePath)
-    ? resolve(filePath)
-    : resolve(workspaceRoot, filePath);
+async function resolveWorkspaceBoundFile(workspacePath: string, filePath: string): Promise<string> {
+  const workspaceRoot = resolve(workspacePath)
+  const requestedPath = isAbsolute(filePath) ? resolve(filePath) : resolve(workspaceRoot, filePath)
   const [workspaceRealPath, fileRealPath] = await Promise.all([
     realpath(workspaceRoot),
-    realpath(requestedPath),
-  ]);
-  const relativePath = relative(workspaceRealPath, fileRealPath);
+    realpath(requestedPath)
+  ])
+  const relativePath = relative(workspaceRealPath, fileRealPath)
 
-  if (
-    relativePath === ''
-    || relativePath.startsWith('..')
-    || isAbsolute(relativePath)
-  ) {
-    throw new Error('File is outside the active workspace.');
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new Error('File is outside the active workspace.')
   }
 
-  return fileRealPath;
+  return fileRealPath
 }
 
 async function readWorkspaceTextFile(
   payload: WorkspaceReadTextFilePayload
 ): Promise<WorkspaceReadTextFileResult> {
-  const filePath = await resolveWorkspaceBoundFile(payload.workspacePath, payload.filePath);
-  const maxBytes = coercePreviewMaxBytes(payload.maxBytes);
-  const fileStats = await stat(filePath);
+  const filePath = await resolveWorkspaceBoundFile(payload.workspacePath, payload.filePath)
+  const maxBytes = coercePreviewMaxBytes(payload.maxBytes)
+  const fileStats = await stat(filePath)
 
   if (!fileStats.isFile()) {
-    throw new Error('Path is not a file.');
+    throw new Error('Path is not a file.')
   }
 
-  const bytesToRead = Math.min(fileStats.size, maxBytes);
-  const fileHandle = await open(filePath, 'r');
+  const bytesToRead = Math.min(fileStats.size, maxBytes)
+  const fileHandle = await open(filePath, 'r')
 
   try {
-    const buffer = Buffer.alloc(bytesToRead);
-    const { bytesRead } = await fileHandle.read(buffer, 0, bytesToRead, 0);
+    const buffer = Buffer.alloc(bytesToRead)
+    const { bytesRead } = await fileHandle.read(buffer, 0, bytesToRead, 0)
 
     return {
       content: buffer.subarray(0, bytesRead).toString('utf8'),
-      truncated: fileStats.size > maxBytes,
-    };
+      truncated: fileStats.size > maxBytes
+    }
   } finally {
-    await fileHandle.close();
+    await fileHandle.close()
   }
 }
 
@@ -197,109 +187,119 @@ export function registerWorkflowHandlers(): void {
       title: 'Open Workspace',
       buttonLabel: 'Open Workspace',
       defaultPath: app.getPath('documents'),
-      properties: ['openDirectory', 'createDirectory'],
-    });
+      properties: ['openDirectory', 'createDirectory']
+    })
 
     if (result.canceled) {
-      return null;
+      return null
     }
 
-    return result.filePaths[0] ?? null;
-  });
+    return result.filePaths[0] ?? null
+  })
 
   ipcMain.handle(IpcChannels.WORKSPACE_LOAD, async (event, workspacePath: string) => {
-    const payload = await workspaceService.loadWorkspace(workspacePath, event.sender);
-    await recordRecentWorkspace(payload.workspacePath);
-    return payload;
-  });
+    const payload = await workspaceService.loadWorkspace(workspacePath, event.sender)
+    await recordRecentWorkspace(payload.workspacePath)
+    return payload
+  })
 
   ipcMain.handle(IpcChannels.WORKSPACE_VALIDATE_DIRECTORY, async (_event, pathValue: string) => {
-    return validateWorkspaceDirectory(pathValue);
-  });
+    return validateWorkspaceDirectory(pathValue)
+  })
 
   ipcMain.handle(IpcChannels.WORKSPACE_TRUST_IS_TRUSTED, async (_event, workspacePath: string) => {
-    return workspaceTrustService.isWorkspaceTrusted(workspacePath);
-  });
+    return workspaceTrustService.isWorkspaceTrusted(workspacePath)
+  })
 
-  ipcMain.handle(IpcChannels.WORKSPACE_TRUST_MARK_TRUSTED, async (_event, workspacePath: string) => {
-    await workspaceTrustService.markWorkspaceAsTrusted(workspacePath);
-  });
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_TRUST_MARK_TRUSTED,
+    async (_event, workspacePath: string) => {
+      await workspaceTrustService.markWorkspaceAsTrusted(workspacePath)
+    }
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_TRUST_MIGRATE_RENDERER_CACHE,
     async (_event, payload: WorkspaceTrustMigrationPayload) => {
-      await workspaceTrustService.migrateTrustedWorkspaces(payload.workspacePaths);
+      await workspaceTrustService.migrateTrustedWorkspaces(payload.workspacePaths)
     }
-  );
+  )
 
   ipcMain.handle(IpcChannels.WORKSPACE_RECENT_LIST, async () => {
-    return recentWorkspacesService.listRecentWorkspaces();
-  });
+    return recentWorkspacesService.listRecentWorkspaces()
+  })
 
   ipcMain.handle(IpcChannels.WORKSPACE_RECENT_REMOVE, async (_event, workspacePath: string) => {
-    return recentWorkspacesService.removeRecentWorkspace(workspacePath);
-  });
+    return recentWorkspacesService.removeRecentWorkspace(workspacePath)
+  })
 
   ipcMain.handle(IpcChannels.WORKSPACE_SAVE, async (_event, payload: WorkflowSavePayload) => {
     return workspaceService.saveWorkflow(
       payload.workspacePath,
       payload.workflow,
       payload.activeWorkflowFilePath
-    );
-  });
+    )
+  })
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_READ_TEXT_FILE,
     async (_event, payload: WorkspaceReadTextFilePayload) => {
-      return readWorkspaceTextFile(payload);
+      return readWorkspaceTextFile(payload)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_WORKFLOW_CREATE,
     async (_event, payload: WorkflowCreatePayload) => {
-      return workspaceService.createWorkflow(payload.workspacePath, payload.name);
+      return workspaceService.createWorkflow(payload.workspacePath, payload.name)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_WORKFLOW_LOAD,
     async (_event, payload: WorkflowLoadPayload) => {
-      const { workflows } = await workspaceService.scanWorkflows(payload.workspacePath);
-      const target = workflows.find((w) => w.id === payload.workflowId);
+      const { workflows } = await workspaceService.scanWorkflows(payload.workspacePath)
+      const target = workflows.find((w) => w.id === payload.workflowId)
       if (!target) {
-        throw new Error(`Workflow with ID ${payload.workflowId} not found.`);
+        throw new Error(`Workflow with ID ${payload.workflowId} not found.`)
       }
-      return workspaceService.loadWorkflowFile(target.filePath);
+      return workspaceService.loadWorkflowFile(target.filePath)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_WORKFLOW_DELETE,
     async (_event, payload: WorkflowDeletePayload) => {
-      const { workflows } = await workspaceService.scanWorkflows(payload.workspacePath);
-      const target = workflows.find((w) => w.id === payload.workflowId);
+      const { workflows } = await workspaceService.scanWorkflows(payload.workspacePath)
+      const target = workflows.find((w) => w.id === payload.workflowId)
       if (!target) {
-        throw new Error(`Workflow with ID ${payload.workflowId} not found.`);
+        throw new Error(`Workflow with ID ${payload.workflowId} not found.`)
       }
-      return workspaceService.deleteWorkflow(target.filePath);
+      return workspaceService.deleteWorkflow(target.filePath)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_SAVE_CONTEXT,
     async (_event, payload: { workspacePath: string; context: Record<string, string> }) => {
-      await workspaceService.saveContext(payload.workspacePath, payload.context);
+      await workspaceService.saveContext(payload.workspacePath, payload.context)
     }
-  );
+  )
 
   ipcMain.handle(IpcChannels.WORKSPACE_SCAN_CONTEXT, async (_event, workspacePath: string) => {
-    return workspaceService.scanWorkspaceContext(workspacePath);
-  });
+    return workspaceService.scanWorkspaceContext(workspacePath)
+  })
+
+  ipcMain.handle(
+    IpcChannels.WORKSPACE_ENRICH_CONTEXT,
+    async (_event, payload: ContextEnrichmentRequest) => {
+      return contextEnrichmentService.enrich(payload)
+    }
+  )
 
   ipcMain.handle(IpcChannels.WORKSPACE_GET_CONTEXT, async (_event, workspacePath: string) => {
-    return workspaceService.getContext(workspacePath);
-  });
+    return workspaceService.getContext(workspacePath)
+  })
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT,
@@ -307,13 +307,9 @@ export function registerWorkflowHandlers(): void {
       _event,
       payload: { workspacePath: string; draft: ProjectContextDraft; mode?: ContextSaveMode }
     ) => {
-      return workspaceService.saveProjectContext(
-        payload.workspacePath,
-        payload.draft,
-        payload.mode
-      );
+      return workspaceService.saveProjectContext(payload.workspacePath, payload.draft, payload.mode)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT_LEGACY,
@@ -321,37 +317,36 @@ export function registerWorkflowHandlers(): void {
       _event,
       payload: { workspacePath: string; draft: ProjectContextDraft; mode?: ContextSaveMode }
     ) => {
-      return workspaceService.saveProjectContext(
-        payload.workspacePath,
-        payload.draft,
-        payload.mode
-      );
+      return workspaceService.saveProjectContext(payload.workspacePath, payload.draft, payload.mode)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_UPDATE_CONTEXT_ONBOARDING,
     async (_event, payload: WorkspaceContextOnboardingUpdatePayload) => {
-      return workspaceService.updateContextOnboarding(payload.workspacePath, payload.patch);
+      return workspaceService.updateContextOnboarding(payload.workspacePath, payload.patch)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW,
     async (event, payload: LegacyWorkflowMigrationPayload) => {
-      const migrationResult = await workspaceService.migrateLegacyWorkflow(payload.workspacePath);
-      const openedPayload = await workspaceService.loadWorkspace(payload.workspacePath, event.sender);
-      await recordRecentWorkspace(openedPayload.workspacePath);
+      const migrationResult = await workspaceService.migrateLegacyWorkflow(payload.workspacePath)
+      const openedPayload = await workspaceService.loadWorkspace(
+        payload.workspacePath,
+        event.sender
+      )
+      await recordRecentWorkspace(openedPayload.workspacePath)
       return {
         ...openedPayload,
-        legacyWorkflowBackupFilePath: migrationResult.backupFilePath,
-      };
+        legacyWorkflowBackupFilePath: migrationResult.backupFilePath
+      }
     }
-  );
+  )
 
   ipcMain.handle(IpcChannels.AGENT_CONFIG_LIST_EXPORTERS, async () => {
-    return agentConfigPreviewService.listExporters();
-  });
+    return agentConfigPreviewService.listExporters()
+  })
 
   ipcMain.handle(
     IpcChannels.AGENT_CONFIG_CREATE_PREVIEW,
@@ -361,148 +356,141 @@ export function registerWorkflowHandlers(): void {
         payload.exporterId,
         payload.context,
         payload.options
-      );
+      )
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.AGENT_CONFIG_APPLY_PREVIEW,
     async (_event, payload: AgentConfigApplyPreviewPayload) => {
-      return agentConfigPreviewService.applyPreview(payload.preview);
+      return agentConfigPreviewService.applyPreview(payload.preview)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.PROVIDERS_GET_CAPABILITIES,
     async (_event, payload?: GetProviderCapabilitiesPayload) => {
-      return providerRegistryService.fetchCapabilities(Boolean(payload?.forceRefresh));
+      return providerRegistryService.fetchCapabilities(Boolean(payload?.forceRefresh))
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.SETTINGS_GET_PROVIDER_SUMMARY,
     async (): Promise<ProviderSettingsSummaryPayload> => {
-      return settingsService.getProviderSettingsSummary();
+      return settingsService.getProviderSettingsSummary()
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.SETTINGS_SET_OPENAI_API_KEY,
     async (_event, payload: UpdateOpenAIApiKeyPayload): Promise<ProviderSettingsSummaryPayload> => {
-      const summary = await settingsService.updateOpenAIApiKey(payload.apiKey);
-      providerRegistryService.invalidateCache();
-      return summary;
+      const summary = await settingsService.updateOpenAIApiKey(payload.apiKey)
+      providerRegistryService.invalidateCache()
+      return summary
     }
-  );
+  )
 
   ipcMain.handle(IpcChannels.SHELL_OPEN_PATH, async (_event, pathValue: string) => {
-    await openShellPath(shell, pathValue);
-  });
+    await openShellPath(shell, pathValue)
+  })
 
   ipcMain.handle(IpcChannels.SHELL_REVEAL_PATH, async (_event, pathValue: string) => {
-    await revealShellPath(shell, pathValue);
-  });
+    await revealShellPath(shell, pathValue)
+  })
 
-  ipcMain.on(
-    IpcChannels.WORKFLOW_RUN,
-    async (event: IpcMainEvent, payload: WorkflowRunPayload) => {
-      try {
-        const validationError = validateWorkflow(payload);
-        if (validationError) {
-          event.sender.send(IpcChannels.TERMINAL_ERROR, {
-            nodeId: 'system',
-            error: validationError,
-          });
-          event.sender.send(
-            IpcChannels.WORKFLOW_COMPLETED,
-            createWorkflowFailurePayload(payload.workflowId, validationError)
-          );
-          return;
-        }
-
-        const approvalGuardrail = getWorkflowCodexApprovalGuardrail(payload.nodes, {
-          approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
-            providerRegistryService.getCachedCapabilities()
-          ),
-        });
-        if (approvalGuardrail.severity === 'blocked') {
-          event.sender.send(IpcChannels.TERMINAL_ERROR, {
-            nodeId: 'system',
-            error: approvalGuardrail.message,
-          });
-          event.sender.send(
-            IpcChannels.WORKFLOW_COMPLETED,
-            createWorkflowFailurePayload(payload.workflowId, approvalGuardrail.message)
-          );
-          return;
-        }
-
-        const workflow: Workflow = {
-          id: payload.workflowId,
-          name: 'Fluxion Workflow',
-          executionMode: payload.executionMode ?? 'auto',
-          nodes: payload.nodes,
-          edges: payload.edges,
-        };
-
-        await workflowEngine.start(
-          workflow,
-          payload.workspacePath,
-          event.sender,
-          payload.resumeFromNodeId
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown workflow start error';
-        console.error('Error starting workflow:', error);
+  ipcMain.on(IpcChannels.WORKFLOW_RUN, async (event: IpcMainEvent, payload: WorkflowRunPayload) => {
+    try {
+      const validationError = validateWorkflow(payload)
+      if (validationError) {
         event.sender.send(IpcChannels.TERMINAL_ERROR, {
           nodeId: 'system',
-          error: errorMessage,
-        });
+          error: validationError
+        })
         event.sender.send(
           IpcChannels.WORKFLOW_COMPLETED,
-          createWorkflowFailurePayload(payload.workflowId, errorMessage)
-        );
+          createWorkflowFailurePayload(payload.workflowId, validationError)
+        )
+        return
       }
-    }
-  );
 
-  ipcMain.handle(
-    IpcChannels.WORKFLOW_ABORT,
-    async (_event, payload: WorkflowAbortPayload) => {
-      console.log(
-        `Received abort request for node: ${payload.nodeId || 'ALL'}, reason: ${payload.reason}`
-      );
-      await workflowEngine.abort(payload.nodeId, payload.reason);
+      const approvalGuardrail = getWorkflowCodexApprovalGuardrail(payload.nodes, {
+        approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
+          providerRegistryService.getCachedCapabilities()
+        )
+      })
+      if (approvalGuardrail.severity === 'blocked') {
+        event.sender.send(IpcChannels.TERMINAL_ERROR, {
+          nodeId: 'system',
+          error: approvalGuardrail.message
+        })
+        event.sender.send(
+          IpcChannels.WORKFLOW_COMPLETED,
+          createWorkflowFailurePayload(payload.workflowId, approvalGuardrail.message)
+        )
+        return
+      }
+
+      const workflow: Workflow = {
+        id: payload.workflowId,
+        name: 'Fluxion Workflow',
+        executionMode: payload.executionMode ?? 'auto',
+        nodes: payload.nodes,
+        edges: payload.edges
+      }
+
+      await workflowEngine.start(
+        workflow,
+        payload.workspacePath,
+        event.sender,
+        payload.resumeFromNodeId
+      )
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown workflow start error'
+      console.error('Error starting workflow:', error)
+      event.sender.send(IpcChannels.TERMINAL_ERROR, {
+        nodeId: 'system',
+        error: errorMessage
+      })
+      event.sender.send(
+        IpcChannels.WORKFLOW_COMPLETED,
+        createWorkflowFailurePayload(payload.workflowId, errorMessage)
+      )
     }
-  );
+  })
+
+  ipcMain.handle(IpcChannels.WORKFLOW_ABORT, async (_event, payload: WorkflowAbortPayload) => {
+    console.log(
+      `Received abort request for node: ${payload.nodeId || 'ALL'}, reason: ${payload.reason}`
+    )
+    await workflowEngine.abort(payload.nodeId, payload.reason)
+  })
 
   ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_APPROVE,
     async (_event, payload: WorkflowReviewActionPayload) => {
-      await workflowEngine.approveReview(payload);
+      await workflowEngine.approveReview(payload)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_REJECT,
     async (_event, payload: WorkflowReviewActionPayload) => {
-      await workflowEngine.rejectReview(payload);
+      await workflowEngine.rejectReview(payload)
     }
-  );
+  )
 
   ipcMain.handle(
     IpcChannels.WORKFLOW_REVIEW_RERUN,
     async (_event, payload: WorkflowReviewActionPayload) => {
-      await workflowEngine.rerunReviewNode(payload);
+      await workflowEngine.rerunReviewNode(payload)
     }
-  );
+  )
 
   app.on('before-quit', async (e: Electron.Event) => {
-    e.preventDefault();
-    console.log('App quitting, cleaning up processes and workspace watchers...');
-    await workspaceService.dispose();
-    await processManager.killAll();
-    app.exit(0);
-  });
+    e.preventDefault()
+    console.log('App quitting, cleaning up processes and workspace watchers...')
+    await workspaceService.dispose()
+    await processManager.killAll()
+    app.exit(0)
+  })
 }

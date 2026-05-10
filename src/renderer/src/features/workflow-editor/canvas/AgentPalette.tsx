@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Plus, TerminalSquare, X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { Tooltip } from '@renderer/components/ui/Tooltip'
+import { ModelIconBadge } from '@renderer/components/ui/ModelIconBadge'
 import {
   getCodexCapabilities,
   getCodexModelDisplayName,
@@ -119,16 +120,7 @@ export const AgentPalette: React.FC = () => {
                 event.currentTarget.style.background = 'transparent'
               }}
             >
-              <div
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md"
-                style={{
-                  background: 'var(--color-canvas-soft)',
-                  border: '1px solid var(--color-hairline)',
-                  color: 'var(--color-primary)'
-                }}
-              >
-                <TerminalSquare size={15} />
-              </div>
+              <ModelIconBadge modelId={paletteModel} displayName={paletteHint} />
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium" style={{ color: 'var(--color-ink)' }}>
                   Codex

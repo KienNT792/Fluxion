@@ -20,11 +20,19 @@ export const NodeTextEditors: React.FC<NodeTextEditorsProps> = ({
   <>
     <TextEditorDialog
       isOpen={activeTextEditor === 'prompt'}
-      title="Edit Prompt"
-      helperText="Use the full editor for long node instructions. Save applies the change to this node."
+      title="Edit Prompt (Markdown)"
+      helperText="Write Markdown instructions. Headings, checklists, bullet lists, and fenced code blocks are preserved and sent to Codex as plain Markdown."
       value={promptValue}
       defaultValue=""
-      placeholder="What should this agent do?"
+      placeholder={`## Goal
+Describe what this agent should do.
+
+## Constraints
+- Keep behavior unchanged.
+- Use Windows-safe commands.
+
+## Output
+Return a concise Markdown summary.`}
       showReset
       onSave={(value) => {
         setLocalData((prev) => ({ ...prev, prompt: value }))

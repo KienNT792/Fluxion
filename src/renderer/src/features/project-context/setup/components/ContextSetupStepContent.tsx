@@ -3,6 +3,8 @@ import type {
   AgentConfigExportPreview,
   AgentConfigExporterId,
   AgentConfigExporterSummary,
+  ContextEnrichmentField,
+  ContextEnrichmentResult,
   ContextScanResult,
   ProjectContextDraft
 } from '@shared'
@@ -20,16 +22,22 @@ interface ContextSetupStepContentProps {
   agentConfigPreview: AgentConfigExportPreview | null
   canExportAgentConfig: boolean
   canSaveFinal: boolean
+  clearContextEnrichment: () => void
   clearAgentConfigPreview: () => void
+  contextEnrichmentError: string | null
+  contextEnrichmentResult: ContextEnrichmentResult | null
   currentStep: ContextStepId
   draft: ProjectContextDraft
+  handleAcceptContextEnrichment: (fields?: ContextEnrichmentField[]) => void
   handleApplyAgentConfigPreview: () => Promise<void>
   handleCreateAgentConfigPreview: (
     exporterId: AgentConfigExporterId,
     includeAdvancedConfig?: boolean
   ) => Promise<void>
+  handleRunContextEnrichment: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
   isCreatingAgentConfigPreview: boolean
+  isEnrichingContext: boolean
   missingRequirements: string[]
   scanResult: ContextScanResult | null
   statusState: {
@@ -47,13 +55,19 @@ export function ContextSetupStepContent({
   agentConfigPreview,
   canExportAgentConfig,
   canSaveFinal,
+  clearContextEnrichment,
   clearAgentConfigPreview,
+  contextEnrichmentError,
+  contextEnrichmentResult,
   currentStep,
   draft,
+  handleAcceptContextEnrichment,
   handleApplyAgentConfigPreview,
   handleCreateAgentConfigPreview,
+  handleRunContextEnrichment,
   isApplyingAgentConfigPreview,
   isCreatingAgentConfigPreview,
+  isEnrichingContext,
   missingRequirements,
   scanResult,
   statusState,
@@ -80,11 +94,17 @@ export function ContextSetupStepContent({
           canExportAgentConfig={canExportAgentConfig}
           canSaveFinal={canSaveFinal}
           clearAgentConfigPreview={clearAgentConfigPreview}
+          clearContextEnrichment={clearContextEnrichment}
+          contextEnrichmentError={contextEnrichmentError}
+          contextEnrichmentResult={contextEnrichmentResult}
           draft={draft}
+          handleAcceptContextEnrichment={handleAcceptContextEnrichment}
           handleApplyAgentConfigPreview={handleApplyAgentConfigPreview}
           handleCreateAgentConfigPreview={handleCreateAgentConfigPreview}
+          handleRunContextEnrichment={handleRunContextEnrichment}
           isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
           isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
+          isEnrichingContext={isEnrichingContext}
           missingRequirements={missingRequirements}
           statusState={statusState}
         />

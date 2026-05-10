@@ -1,16 +1,16 @@
-export const PROJECT_CONTEXT_VERSION = '2.0' as const;
+export const PROJECT_CONTEXT_VERSION = '2.0' as const
 
-export type WorkspaceContextType = 'blank' | 'existing' | 'existing_with_instructions';
+export type WorkspaceContextType = 'blank' | 'existing' | 'existing_with_instructions'
 
-export type WorkspaceContextStatus = 'missing' | 'incomplete' | 'ready' | 'legacy';
+export type WorkspaceContextStatus = 'missing' | 'incomplete' | 'ready' | 'legacy'
 
-export type KickoffIntent = 'desktop-app' | 'cli-tool' | 'web-app' | 'not-sure-yet';
+export type KickoffIntent = 'desktop-app' | 'cli-tool' | 'web-app' | 'not-sure-yet'
 
-export type ContextEvidenceConfidence = 'high' | 'medium' | 'low';
+export type ContextEvidenceConfidence = 'high' | 'medium' | 'low'
 
-export type WorkspaceTrustLevel = 'unknown' | 'trusted' | 'untrusted';
+export type WorkspaceTrustLevel = 'unknown' | 'trusted' | 'untrusted'
 
-export type LegacyWorkflowDecision = 'keep' | 'migrated';
+export type LegacyWorkflowDecision = 'keep' | 'migrated'
 
 export type ProjectComponentType =
   | 'frontend'
@@ -21,7 +21,7 @@ export type ProjectComponentType =
   | 'library'
   | 'cli'
   | 'infra'
-  | 'unknown';
+  | 'unknown'
 
 export type ProjectCommandCategory =
   | 'setup'
@@ -32,72 +32,85 @@ export type ProjectCommandCategory =
   | 'build'
   | 'e2e'
   | 'db'
-  | 'other';
+  | 'other'
 
-export type ProjectCommandRisk = 'safe' | 'needs-approval' | 'destructive';
+export type ProjectCommandRisk = 'safe' | 'needs-approval' | 'destructive'
 
-export type AgentInstructionTarget = 'codex' | 'claude' | 'gemini' | 'cursor' | 'cline' | 'windsurf' | 'copilot' | 'generic';
+export type AgentInstructionTarget =
+  | 'codex'
+  | 'claude'
+  | 'gemini'
+  | 'cursor'
+  | 'cline'
+  | 'windsurf'
+  | 'copilot'
+  | 'generic'
 
-export type AgentInstructionActivation = 'always' | 'path' | 'manual' | 'agent-requested' | 'unknown';
+export type AgentInstructionActivation =
+  | 'always'
+  | 'path'
+  | 'manual'
+  | 'agent-requested'
+  | 'unknown'
 
 export interface ProjectContextSignal {
-  value: string;
-  sourcePath?: string;
+  value: string
+  sourcePath?: string
 }
 
 export interface ProjectContextComponent {
-  id: string;
-  name: string;
-  type: ProjectComponentType;
-  rootPath: string;
-  languages: string[];
-  frameworks: string[];
-  entrypoints: string[];
-  verificationCommands: string[];
-  evidenceIds: string[];
+  id: string
+  name: string
+  type: ProjectComponentType
+  rootPath: string
+  languages: string[]
+  frameworks: string[]
+  entrypoints: string[]
+  verificationCommands: string[]
+  evidenceIds: string[]
 }
 
 export interface ProjectContextCommand {
-  id: string;
-  label: string;
-  command: string;
-  cwd: string;
-  category: ProjectCommandCategory;
-  risk: ProjectCommandRisk;
-  confidence: ContextEvidenceConfidence;
-  evidenceIds: string[];
+  id: string
+  label: string
+  command: string
+  cwd: string
+  category: ProjectCommandCategory
+  risk: ProjectCommandRisk
+  confidence: ContextEvidenceConfidence
+  evidenceIds: string[]
 }
 
 export interface AgentInstructionSource {
-  target: AgentInstructionTarget;
-  sourcePath: string;
-  scope: string;
-  activation: AgentInstructionActivation;
-  priority: number;
-  trusted: boolean;
+  target: AgentInstructionTarget
+  sourcePath: string
+  scope: string
+  activation: AgentInstructionActivation
+  priority: number
+  trusted: boolean
 }
 
 export interface ProjectSecurityPolicy {
-  sensitivePaths: string[];
-  generatedOrIgnoredPaths: string[];
-  writableRoots: string[];
-  approvalRequiredFor: string[];
-  destructiveCommands: string[];
-  networkPolicy: 'unknown' | 'disabled' | 'limited' | 'full';
+  sensitivePaths: string[]
+  generatedOrIgnoredPaths: string[]
+  writableRoots: string[]
+  approvalRequiredFor: string[]
+  destructiveCommands: string[]
+  networkPolicy: 'unknown' | 'disabled' | 'limited' | 'full'
 }
 
 export interface ProjectContextReadiness {
-  status: Exclude<WorkspaceContextStatus, 'missing' | 'legacy'>;
-  missingItems: string[];
-  riskFlags: string[];
-  recommendedFirstActions: string[];
+  status: Exclude<WorkspaceContextStatus, 'missing' | 'legacy'>
+  missingItems: string[]
+  riskFlags: string[]
+  recommendedFirstActions: string[]
 }
 
 export interface ProjectContextOnboarding {
-  initialPromptDismissedAt?: string;
-  incompleteBannerDismissedAt?: string;
-  legacyWorkflowDecision?: LegacyWorkflowDecision;
-  legacyWorkflowDecisionAt?: string;
+  initialPromptDismissedAt?: string
+  incompleteBannerDismissedAt?: string
+  legacyWorkflowDecision?: LegacyWorkflowDecision
+  legacyWorkflowDecisionAt?: string
 }
 
 export type ProjectContextField =
@@ -130,82 +143,116 @@ export type ProjectContextField =
   | 'commandCatalog'
   | 'agentInstructionSources'
   | 'securityPolicy'
-  | 'readiness';
+  | 'readiness'
 
 export interface ContextSourceEvidence {
-  id?: string;
-  field: ProjectContextField;
-  sourcePath: string;
-  confidence: ContextEvidenceConfidence;
-  note?: string;
-  detectorId?: string;
-  matchedSignals?: string[];
-  rawValue?: string;
-  confidenceReason?: string;
+  id?: string
+  field: ProjectContextField
+  sourcePath: string
+  confidence: ContextEvidenceConfidence
+  note?: string
+  detectorId?: string
+  matchedSignals?: string[]
+  rawValue?: string
+  confidenceReason?: string
 }
 
 export interface ProjectContextDraft {
-  version: typeof PROJECT_CONTEXT_VERSION;
-  workspaceType: WorkspaceContextType;
-  projectName: string;
-  kickoffIntent?: KickoffIntent;
-  projectGoal: string;
-  targetUsers: string;
-  primaryStack: string[];
-  architectureSummary: string;
-  firstMilestone: string;
-  stableRules: string[];
-  verificationCommands: string[];
-  importantPaths: string[];
-  focusAreas: string[];
-  nonGoals: string[];
-  openQuestions: string[];
-  languages: string[];
-  frameworks: string[];
-  packageManagers: string[];
-  buildSystems: string[];
-  testFrameworks: string[];
-  entrypoints: string[];
-  moduleBoundaries: string[];
-  generatedOrIgnoredPaths: string[];
-  riskFlags: string[];
-  recommendedFirstActions: string[];
-  workspaceTrust: WorkspaceTrustLevel;
-  components: ProjectContextComponent[];
-  commandCatalog: ProjectContextCommand[];
-  agentInstructionSources: AgentInstructionSource[];
-  securityPolicy: ProjectSecurityPolicy;
-  readiness: ProjectContextReadiness;
-  contextOnboarding: ProjectContextOnboarding;
-  sourceEvidence: ContextSourceEvidence[];
-  lastReviewedAt: string;
-  contextStatus: WorkspaceContextStatus;
+  version: typeof PROJECT_CONTEXT_VERSION
+  workspaceType: WorkspaceContextType
+  projectName: string
+  kickoffIntent?: KickoffIntent
+  projectGoal: string
+  targetUsers: string
+  primaryStack: string[]
+  architectureSummary: string
+  firstMilestone: string
+  stableRules: string[]
+  verificationCommands: string[]
+  importantPaths: string[]
+  focusAreas: string[]
+  nonGoals: string[]
+  openQuestions: string[]
+  languages: string[]
+  frameworks: string[]
+  packageManagers: string[]
+  buildSystems: string[]
+  testFrameworks: string[]
+  entrypoints: string[]
+  moduleBoundaries: string[]
+  generatedOrIgnoredPaths: string[]
+  riskFlags: string[]
+  recommendedFirstActions: string[]
+  workspaceTrust: WorkspaceTrustLevel
+  components: ProjectContextComponent[]
+  commandCatalog: ProjectContextCommand[]
+  agentInstructionSources: AgentInstructionSource[]
+  securityPolicy: ProjectSecurityPolicy
+  readiness: ProjectContextReadiness
+  contextOnboarding: ProjectContextOnboarding
+  sourceEvidence: ContextSourceEvidence[]
+  lastReviewedAt: string
+  contextStatus: WorkspaceContextStatus
 }
 
 export interface ContextScanResult {
-  workspaceType: WorkspaceContextType;
-  projectName: string;
+  workspaceType: WorkspaceContextType
+  projectName: string
   detectedFields: Partial<
     Omit<
       ProjectContextDraft,
       'version' | 'sourceEvidence' | 'lastReviewedAt' | 'contextStatus' | 'contextOnboarding'
     >
-  >;
-  sourceEvidence: ContextSourceEvidence[];
-  unresolvedFields: ProjectContextField[];
-  scannedFiles: string[];
-  discoveredPaths: string[];
+  >
+  sourceEvidence: ContextSourceEvidence[]
+  unresolvedFields: ProjectContextField[]
+  scannedFiles: string[]
+  discoveredPaths: string[]
 }
 
-export type ContextSaveMode = 'draft' | 'skip' | 'final';
+export type ContextEnrichmentField =
+  | 'projectGoal'
+  | 'targetUsers'
+  | 'architectureSummary'
+  | 'stableRules'
+  | 'focusAreas'
+  | 'openQuestions'
+  | 'recommendedFirstActions'
+
+export type ContextEnrichmentSuggestedFields = Partial<
+  Pick<ProjectContextDraft, ContextEnrichmentField>
+>
+
+export interface ContextEnrichmentRequest {
+  workspacePath: string
+  draft: ProjectContextDraft
+  scanResult?: ContextScanResult | null
+  model?: string
+}
+
+export interface ContextEnrichmentDiagnostics {
+  generatedAt: string
+  model: string
+  filesRead: number
+  truncatedFiles: string[]
+  warnings: string[]
+}
+
+export interface ContextEnrichmentResult {
+  suggestedFields: ContextEnrichmentSuggestedFields
+  sourceEvidence: ContextSourceEvidence[]
+  diagnostics: ContextEnrichmentDiagnostics
+}
+
+export type ContextSaveMode = 'draft' | 'skip' | 'final'
 
 export interface WorkspaceContextSavePayload {
-  workspacePath: string;
-  draft: ProjectContextDraft;
-  mode?: ContextSaveMode;
+  workspacePath: string
+  draft: ProjectContextDraft
+  mode?: ContextSaveMode
 }
 
 export interface WorkspaceContextSavedPayload {
-  contextStatus: WorkspaceContextStatus;
-  context: ProjectContextDraft;
+  contextStatus: WorkspaceContextStatus
+  context: ProjectContextDraft
 }

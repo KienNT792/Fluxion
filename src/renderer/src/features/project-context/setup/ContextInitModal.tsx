@@ -14,6 +14,7 @@ import { StatusChip } from '@renderer/components/ui/StatusChip'
 import { ContextSetupStepContent } from './components/ContextSetupStepContent'
 import { PreviewTabButton } from './components/PreviewTabButton'
 import { useAgentConfigPreview } from './hooks/useAgentConfigPreview'
+import { useContextEnrichment } from './hooks/useContextEnrichment'
 import { useContextSetup } from './hooks/useContextSetup'
 import {
   getContextStatusState,
@@ -70,6 +71,19 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
     isApplyingAgentConfigPreview,
     isCreatingAgentConfigPreview
   } = useAgentConfigPreview({ draft, workspacePath })
+  const {
+    clearContextEnrichment,
+    contextEnrichmentError,
+    contextEnrichmentResult,
+    handleAcceptContextEnrichment,
+    handleRunContextEnrichment,
+    isEnrichingContext
+  } = useContextEnrichment({
+    draft,
+    scanResult,
+    updateDraft,
+    workspacePath
+  })
 
   const statusState = useMemo(
     () => getContextStatusState(draft.contextStatus),
@@ -262,9 +276,15 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                   currentStep={currentStep}
                   draft={draft}
                   handleApplyAgentConfigPreview={handleApplyAgentConfigPreview}
+                  handleAcceptContextEnrichment={handleAcceptContextEnrichment}
                   handleCreateAgentConfigPreview={handleCreateAgentConfigPreview}
+                  handleRunContextEnrichment={handleRunContextEnrichment}
+                  clearContextEnrichment={clearContextEnrichment}
+                  contextEnrichmentError={contextEnrichmentError}
+                  contextEnrichmentResult={contextEnrichmentResult}
                   isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
                   isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
+                  isEnrichingContext={isEnrichingContext}
                   missingRequirements={missingRequirements}
                   scanResult={scanResult}
                   statusState={statusState}
