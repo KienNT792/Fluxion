@@ -193,7 +193,7 @@ Files likely touched:
 - `src/main/services/workflow-engine.ts`
 - `src/main/services/workflow-trace-store.ts`
 
-### FX-WO-005 Add trace smoke assertions to tests [READY]
+### FX-WO-005 Add trace smoke assertions to tests [DONE]
 
 Priority: `P1`
 
@@ -213,9 +213,9 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Tests verify event type order for A -> B.
-- [ ] Tests verify failed node emits failure event before workflow completed.
-- [ ] Tests verify review pause does not emit workflow completed until approve/reject.
+- [x] Tests verify event type order for A -> B.
+- [x] Tests verify failed node emits failure event before workflow completed.
+- [x] Tests verify review pause does not emit workflow completed until approve/reject.
 
 Files likely touched:
 
@@ -432,7 +432,7 @@ Acceptance:
 | FX-WO-002 Instrument WorkflowEngine trace events | P0 | DONE | 1 |
 | FX-WO-003 Codex process telemetry counters | P0 | DONE | 1 |
 | FX-WO-004 Persist process telemetry into trace | P1 | DONE | 1 |
-| FX-WO-005 Trace smoke assertions | P1 | READY | 1 |
+| FX-WO-005 Trace smoke assertions | P1 | DONE | 1 |
 | FX-WO-006 Memory source report | P1 | READY | 2 |
 | FX-WO-007 Output lineage across attempts | P1 | DISCOVERY | 2 |
 | FX-WO-008 Memory index schema | P2 | BLOCKED | 2 |

@@ -212,6 +212,31 @@ async function readTrace(workspacePath: string, runId: string): Promise<Workflow
     .map((line) => WorkflowTraceEventSchema.parse(JSON.parse(line) as unknown));
 }
 
+function traceKeys(trace: WorkflowTraceEvent[]): string[] {
+  return trace.map((event) => `${event.nodeId ?? 'workflow'}:${event.type}`);
+}
+
+function expectTraceOrder(trace: WorkflowTraceEvent[], expectedKeys: string[]): void {
+  const keys = traceKeys(trace);
+  let previousIndex = -1;
+
+  for (const key of expectedKeys) {
+    const index = keys.indexOf(key);
+    expect(index).toBeGreaterThan(previousIndex);
+    previousIndex = index;
+  }
+}
+
+function expectNoTraceType(
+  trace: WorkflowTraceEvent[],
+  type: WorkflowTraceEvent['type'],
+  nodeId?: string
+): void {
+  expect(
+    trace.some((event) => event.type === type && (nodeId === undefined || event.nodeId === nodeId))
+  ).toBe(false);
+}
+
 function reviewAction(runId: string, nodeId: string): WorkflowReviewActionPayload {
   return {
     workflowId: 'workflow-1',
@@ -292,17 +317,21 @@ describe('WorkflowEngine', () => {
     });
 
     const trace = await readTrace(workspacePath, runState.runId);
-    const eventKeys = trace.map((event) => `${event.nodeId ?? 'workflow'}:${event.type}`);
+    const eventKeys = traceKeys(trace);
     expect(eventKeys[0]).toBe('workflow:workflow.started');
-    expect(eventKeys).toContain('node-a:node.output_saved');
-    expect(eventKeys).toContain('node-b:node.running');
     expect(eventKeys.at(-1)).toBe('workflow:workflow.completed');
-    expect(eventKeys.indexOf('node-a:node.output_saved')).toBeLessThan(
-      eventKeys.indexOf('node-b:node.running')
-    );
-    expect(eventKeys.indexOf('node-a:node.process_spawned')).toBeLessThan(
-      eventKeys.indexOf('node-a:node.process_exited')
-    );
+    expectTraceOrder(trace, [
+      'workflow:workflow.started',
+      'node-a:node.ready',
+      'node-a:node.running',
+      'node-a:node.process_spawned',
+      'node-a:node.process_exited',
+      'node-a:node.output_saved',
+      'node-b:node.ready',
+      'node-b:node.running',
+      'node-b:node.output_saved',
+      'workflow:workflow.completed',
+    ]);
     expect(trace.find((event) => event.type === 'node.process_spawned')).toMatchObject({
       nodeId: 'node-a',
       data: {
@@ -356,6 +385,7 @@ describe('WorkflowEngine', () => {
       .map((event) => event.nodeId)
       .sort();
     expect(runningNodeIds).toEqual(['node-a', 'node-b']);
+    expectNoTraceType(traceWhileRunning, 'workflow.completed');
 
     releaseA.resolve();
     releaseB.resolve();
@@ -389,9 +419,14 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.status).toBe('failed');
 
     const trace = await readTrace(workspacePath, runState.runId);
-    expect(trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.failed')).toBe(
-      true
-    );
+    expectTraceOrder(trace, [
+      'workflow:workflow.started',
+      'node-a:node.ready',
+      'node-a:node.failed',
+      'workflow:workflow.failed',
+    ]);
+    expectNoTraceType(trace, 'node.running', 'node-a');
+    expectNoTraceType(trace, 'workflow.completed');
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.failed' });
   });
 
@@ -428,6 +463,22 @@ describe('WorkflowEngine', () => {
     expect(runState.status).toBe('failed');
     expect(runState.nodes['node-a']?.status).toBe('failed');
     expect(runState.nodes['node-b']?.status).toBe('pending');
+
+    const trace = await readTrace(workspacePath, runState.runId);
+    expectTraceOrder(trace, [
+      'workflow:workflow.started',
+      'node-a:node.ready',
+      'node-a:node.running',
+      'node-a:node.execution_started',
+      'node-a:node.execution_completed',
+      'node-a:node.failed',
+      'workflow:workflow.failed',
+    ]);
+    expectNoTraceType(trace, 'node.produces_validated', 'node-a');
+    expectNoTraceType(trace, 'node.output_saved', 'node-a');
+    expectNoTraceType(trace, 'node.ready', 'node-b');
+    expectNoTraceType(trace, 'node.running', 'node-b');
+    expectNoTraceType(trace, 'workflow.completed');
   });
 
   it('marks active nodes as aborted when the workflow is aborted', async () => {
@@ -477,7 +528,12 @@ describe('WorkflowEngine', () => {
     ]);
 
     const trace = await readTrace(workspacePath, runState.runId);
-    const eventKeys = trace.map((event) => `${event.nodeId ?? 'workflow'}:${event.type}`);
+    expectTraceOrder(trace, [
+      'node-a:node.process_spawned',
+      'node-a:node.process_exited',
+      'node-a:node.aborted',
+      'workflow:workflow.aborted',
+    ]);
     expect(trace.find((event) => event.type === 'node.process_spawned')).toMatchObject({
       nodeId: 'node-a',
       data: {
@@ -496,12 +552,6 @@ describe('WorkflowEngine', () => {
         abortReason: AbortReason.USER_REQUESTED,
       },
     });
-    expect(eventKeys.indexOf('node-a:node.process_spawned')).toBeLessThan(
-      eventKeys.indexOf('node-a:node.process_exited')
-    );
-    expect(eventKeys.indexOf('node-a:node.process_exited')).toBeLessThan(
-      eventKeys.indexOf('node-a:node.aborted')
-    );
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.aborted' });
   });
 
@@ -608,11 +658,21 @@ describe('WorkflowEngine', () => {
     ).toBe(false);
 
     let trace = await readTrace(workspacePath, runState.runId);
-    expect(
-      trace.some(
-        (event) => event.nodeId === 'node-a' && event.type === 'node.review_requested'
-      )
-    ).toBe(true);
+    expectTraceOrder(trace, [
+      'workflow:workflow.started',
+      'node-a:node.ready',
+      'node-a:node.running',
+      'node-a:node.output_saved',
+      'node-a:node.review_requested',
+    ]);
+    expect(trace.find((event) => event.type === 'node.review_requested')).toMatchObject({
+      nodeId: 'node-a',
+      data: {
+        reviewSource: 'node',
+      },
+    });
+    expectNoTraceType(trace, 'node.ready', 'node-b');
+    expectNoTraceType(trace, 'workflow.completed');
 
     await engine.approveReview(reviewAction(runState.runId, 'node-a'));
 
@@ -624,9 +684,13 @@ describe('WorkflowEngine', () => {
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
 
     trace = await readTrace(workspacePath, runState.runId);
-    expect(
-      trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.review_approved')
-    ).toBe(true);
+    expectTraceOrder(trace, [
+      'node-a:node.review_requested',
+      'node-a:node.review_approved',
+      'node-b:node.ready',
+      'node-b:node.running',
+      'workflow:workflow.completed',
+    ]);
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.completed' });
   });
 
@@ -744,6 +808,24 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.humanReview).toBe(false);
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a']);
 
+    let trace = await readTrace(workspacePath, runState.runId);
+    expectTraceOrder(trace, [
+      'workflow:workflow.started',
+      'node-a:node.ready',
+      'node-a:node.running',
+      'node-a:node.output_saved',
+      'node-a:node.review_requested',
+    ]);
+    expect(
+      trace.find((event) => event.nodeId === 'node-a' && event.type === 'node.review_requested')
+    ).toMatchObject({
+      data: {
+        reviewSource: 'manual',
+      },
+    });
+    expectNoTraceType(trace, 'node.ready', 'node-b');
+    expectNoTraceType(trace, 'workflow.completed');
+
     await engine.approveReview(reviewAction(runState.runId, 'node-a'));
 
     runState = await readSingleRunState(workspacePath);
@@ -752,11 +834,37 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-b']?.reviewSource).toBe('manual');
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
 
+    trace = await readTrace(workspacePath, runState.runId);
+    expectTraceOrder(trace, [
+      'node-a:node.review_requested',
+      'node-a:node.review_approved',
+      'node-b:node.ready',
+      'node-b:node.running',
+      'node-b:node.output_saved',
+      'node-b:node.review_requested',
+    ]);
+    expect(
+      trace.find((event) => event.nodeId === 'node-b' && event.type === 'node.review_requested')
+    ).toMatchObject({
+      data: {
+        reviewSource: 'manual',
+      },
+    });
+    expectNoTraceType(trace, 'workflow.completed');
+
     await engine.approveReview(reviewAction(runState.runId, 'node-b'));
 
     const finalState = await readSingleRunState(workspacePath);
     expect(finalState.status).toBe('completed');
     expect(finalState.awaitingReviewNodeIds).toEqual([]);
+
+    trace = await readTrace(workspacePath, finalState.runId);
+    expectTraceOrder(trace, [
+      'node-b:node.review_requested',
+      'node-b:node.review_approved',
+      'workflow:workflow.completed',
+    ]);
+    expect(trace.at(-1)).toMatchObject({ type: 'workflow.completed' });
   });
 
   it('re-pauses a rerun review node in manual execution mode', async () => {
