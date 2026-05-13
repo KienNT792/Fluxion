@@ -222,7 +222,40 @@ Files likely touched:
 - `src/main/test/workflow-engine.test.ts`
 - `src/main/test/workflow-trace-store.test.ts`
 
-## Proposed Sprint 2 - Memory Provenance and Context Injection
+## Proposed Sprint 2 - Provenance, Lineage, and Trace Eval Baseline
+
+Sprint 2 goal:
+
+Sau Sprint 1, Fluxion da co structured runtime trace va process telemetry. Sprint 2 nen bien trace do thanh nen tang audit/eval co ich hon bang cach lam ro context provenance, giu output lineage qua rerun/retry, va them local deterministic trace evaluator toi thieu.
+
+Ket qua mong muon:
+
+- Moi `node.context_compiled` trace co source list, hash, byte/char count.
+- Upstream output va global/long-term context duoc source-labeled khi inject vao node.
+- Review/rerun attempt cu khong bi mat evidence, trong khi latest output path van tuong thich nguoc.
+- Trace evaluator doc duoc `.fluxion/runs/<runId>.trace.jsonl` va tra pass/fail deterministic.
+- Trace write failures va process record lifecycle co diagnostic/hardening toi thieu.
+- Existing `.fluxion/runs/<runId>.json`, IPC renderer/preload, va UI trace viewer khong nam trong scope.
+
+### S2-000 Sprint 1 checkpoint and backlog hygiene [READY]
+
+Priority: `P1`
+
+Outcome: Sprint 2 bat dau tren backlog/checkpoint dung voi hien trang Sprint 1.
+
+Deliverable:
+
+- Update `docs/runtime/agent-workflow-memory-checkpoint.md` voi actual trace schema/event names.
+- Update `docs/backlog/fluxion-master-backlog.md` neu cac `FX-WO-*` da duoc chap nhan vao master backlog.
+- Add runtime smoke checklist step de inspect trace file.
+- Chuyen `FX-WO-009` tu blocked sang READY vi `FX-WO-001` va `FX-WO-002` da DONE.
+
+Acceptance:
+
+- [ ] Checkpoint doc reflect actual trace schema version and event names.
+- [ ] Backlog khong con mark `FX-WO-009` blocked by completed work.
+- [ ] Runtime smoke checklist co buoc inspect `.trace.jsonl`.
+- [ ] Khong thay doi runtime behavior.
 
 ### FX-WO-006 Add memory source report for compiled context [READY]
 
@@ -284,6 +317,7 @@ Acceptance:
 - [ ] Attempt history file is written for every completed/paused attempt.
 - [ ] Review rerun keeps previous output available.
 - [ ] UI can still preview latest output without changes.
+- [ ] Trace/run evidence can identify which attempt produced which output file.
 
 Files likely touched:
 
@@ -292,38 +326,9 @@ Files likely touched:
 - `src/main/test/workflow-engine.test.ts`
 - `src/main/test/memory-manager.test.ts`
 
-### FX-WO-008 Add memory index schema [BLOCKED]
+### FX-WO-009 Add local workflow trace evaluator [READY]
 
 Priority: `P2`
-Blocked by: `FX-WO-006`
-
-Outcome: Fluxion co structured index cho raw output, summaries, decisions, facts, procedures.
-
-Deliverable:
-
-- Add `.fluxion/memory/index.json`.
-- Schema-versioned entries.
-- Support at least `raw_output` entries created from node output.
-
-Acceptance:
-
-- [ ] Index initialized on workspace memory init.
-- [ ] Node output save can append/update memory index entry.
-- [ ] Entries include workflowId, runId, nodeId, sourcePath, type, createdAt.
-- [ ] Invalid index file degrades safely with clear warning.
-
-Files likely touched:
-
-- `src/main/services/memory-manager.ts`
-- `src/core/schema/memory-index.schema.ts`
-- `src/shared/memory.types.ts`
-
-## Proposed Sprint 3 - Deterministic Workflow Evals
-
-### FX-WO-009 Add local workflow trace evaluator [BLOCKED]
-
-Priority: `P2`
-Blocked by: `FX-WO-001`, `FX-WO-002`
 
 Outcome: Co the score mot run trace bang deterministic checks.
 
@@ -356,6 +361,66 @@ Files likely touched:
 - `scripts/eval/workflow-trace-eval.mjs`
 - `package.json`
 - `src/core/test` or script tests if pattern exists
+
+### FX-WO-013 Trace health diagnostics and process cleanup hardening [READY]
+
+Priority: `P1`
+
+Outcome: Trace/process evidence khong bi im lang hong trong long-running desktop session.
+
+Problem:
+
+- `WorkflowTraceStore.append` hien warn va degrade dung huong, nhung warning chua du diagnostic context de debug nhanh.
+- `ProcessManager` marks completed/error records but can keep them in memory until `killAll()`.
+
+Deliverable:
+
+- Keep trace append failure non-fatal.
+- Make trace append warnings include useful context such as runId/type/trace path.
+- Add or update tests to keep trace append failure behavior non-fatal.
+- Cleanup completed/error process records, or add bounded cleanup path, without breaking active process concurrency checks.
+
+Acceptance:
+
+- [ ] Trace append failure still does not fail workflow execution.
+- [ ] Trace warning includes enough run/path/event context for diagnosis.
+- [ ] Completed/error process records do not accumulate indefinitely in normal runs.
+- [ ] Abort and `killAll()` behavior remain Windows-safe.
+
+Files likely touched:
+
+- `src/main/services/workflow-trace-store.ts`
+- `src/main/services/process-manager.ts`
+- `src/main/test/workflow-trace-store.test.ts`
+- `src/main/test/codex-cli-runner.test.ts`
+
+## Proposed Sprint 3 - Memory Index and Manual Eval Assets
+
+### FX-WO-008 Add memory index schema [BLOCKED]
+
+Priority: `P2`
+Blocked by: `FX-WO-006`
+
+Outcome: Fluxion co structured index cho raw output, summaries, decisions, facts, procedures.
+
+Deliverable:
+
+- Add `.fluxion/memory/index.json`.
+- Schema-versioned entries.
+- Support at least `raw_output` entries created from node output.
+
+Acceptance:
+
+- [ ] Index initialized on workspace memory init.
+- [ ] Node output save can append/update memory index entry.
+- [ ] Entries include workflowId, runId, nodeId, sourcePath, type, createdAt.
+- [ ] Invalid index file degrades safely with clear warning.
+
+Files likely touched:
+
+- `src/main/services/memory-manager.ts`
+- `src/core/schema/memory-index.schema.ts`
+- `src/shared/memory.types.ts`
 
 ### FX-WO-010 Add node rubric markdown template [READY]
 
@@ -433,10 +498,12 @@ Acceptance:
 | FX-WO-003 Codex process telemetry counters | P0 | DONE | 1 |
 | FX-WO-004 Persist process telemetry into trace | P1 | DONE | 1 |
 | FX-WO-005 Trace smoke assertions | P1 | DONE | 1 |
+| S2-000 Sprint 1 checkpoint/backlog hygiene | P1 | READY | 2 |
 | FX-WO-006 Memory source report | P1 | READY | 2 |
 | FX-WO-007 Output lineage across attempts | P1 | DISCOVERY | 2 |
-| FX-WO-008 Memory index schema | P2 | BLOCKED | 2 |
-| FX-WO-009 Local workflow trace evaluator | P2 | BLOCKED | 3 |
+| FX-WO-009 Local workflow trace evaluator | P2 | READY | 2 |
+| FX-WO-013 Trace health diagnostics and process cleanup | P1 | READY | 2 |
+| FX-WO-008 Memory index schema | P2 | BLOCKED | 3 |
 | FX-WO-010 Node rubric markdown template | P2 | READY | 3 |
 | FX-WO-011 Paused review recovery design | P1 | DISCOVERY | 4 |
 | FX-WO-012 Memory promotion guardrails | P3 | BLOCKED | 4 |
@@ -490,6 +557,61 @@ npm test -- src/main/test/workflow-engine.test.ts src/main/test/codex-cli-runner
 - Relevant main-process tests pass.
 - Any skipped verification is documented in the final implementation note.
 
+## Suggested Sprint 2 Task Breakdown
+
+### Day 0 - Checkpoint and backlog hygiene
+
+- Complete `S2-000`.
+- Update runtime checkpoint with actual trace schema and event names.
+- Move `FX-WO-009` to READY in any related backlog source.
+- Add runtime smoke checklist step for `.trace.jsonl` inspection.
+
+### Day 1-2 - Context provenance
+
+- Implement `FX-WO-006`.
+- Return compiled context plus source report/hash/size from memory compilation.
+- Emit source report in `node.context_compiled`.
+- Preserve existing `MEMORY_CONTEXT_READY` IPC behavior.
+
+### Day 3 - Attempt lineage
+
+- Finish discovery decision for `FX-WO-007` attempt history path.
+- Keep latest short-term output path stable for downstream context.
+- Write sidecar/history output for each completed or review-paused attempt.
+- Cover review rerun output history in tests.
+
+### Day 4 - Local trace evaluator
+
+- Implement `FX-WO-009` script and npm command.
+- Check required event presence, start/end consistency, review order, artifact validation order, and downstream halt behavior.
+- Return pass/fail plus JSON summary.
+
+### Day 5 - Hardening and stabilization
+
+- Implement `FX-WO-013`.
+- Improve trace append diagnostic context while keeping trace writes non-fatal.
+- Cleanup completed/error process records without breaking abort/killAll.
+- Run targeted tests and `npm run typecheck`.
+
+Suggested verification:
+
+```powershell
+npm test -- src/main/test/memory-manager.test.ts src/main/test/workflow-engine.test.ts src/main/test/workflow-trace-store.test.ts src/main/test/codex-cli-runner.test.ts
+npm run typecheck
+```
+
+## Sprint 2 Definition of Done
+
+- `node.context_compiled` includes context sources, stable hash, and byte/char size.
+- Global context, long-term context when present, and upstream outputs are source-labeled.
+- Review/rerun attempt history exists without breaking latest output path compatibility.
+- Local trace evaluator can score a saved run trace without model calls.
+- Trace append failures remain non-fatal but include enough diagnostic context.
+- Completed/error process records do not accumulate indefinitely in normal runs.
+- Existing `.fluxion/runs/<runId>.json` shape is preserved.
+- Typecheck and relevant main-process tests pass.
+- Any skipped verification is documented in the final implementation note.
+
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
@@ -500,6 +622,9 @@ npm test -- src/main/test/workflow-engine.test.ts src/main/test/codex-cli-runner
 | Process telemetry differs by platform | Windows-first complexity | Start with universal fields; add Windows Working Set later. |
 | Run-state schema gets overloaded | Compatibility risk | Keep detailed evidence in trace JSONL, not run-state JSON. |
 | Memory index too early | Scope creep | Defer memory index until context source report is stable. |
+| Trace exists but no evaluator consumes it | False confidence after Sprint 1 | Pull `FX-WO-009` into Sprint 2 after checkpoint hygiene. |
+| Attempt lineage breaks downstream context | Workflow regression | Keep latest output path stable and add history as sidecar storage. |
+| Completed process records accumulate | Long-session memory/diagnostic noise | Cleanup completed/error records while preserving active process tracking. |
 
 ## Non-Goals For Sprint 1
 
@@ -513,10 +638,10 @@ npm test -- src/main/test/workflow-engine.test.ts src/main/test/codex-cli-runner
 
 ## Follow-Up After Sprint 1
 
-After Sprint 1 lands, update:
+After Sprint 1 lands, `S2-000` tracks:
 
 - `docs/runtime/agent-workflow-memory-checkpoint.md` with actual trace schema.
 - `docs/backlog/fluxion-master-backlog.md` with new `FX-WO-*` status if accepted into master backlog.
 - Runtime smoke checklist to include trace file inspection.
 
-Then start Sprint 2 with memory source reports and attempt lineage.
+Then start Sprint 2 with `S2-000`, `FX-WO-006`, `FX-WO-007`, `FX-WO-009`, and `FX-WO-013`.
