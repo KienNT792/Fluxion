@@ -40,11 +40,22 @@ export interface AgentConfig {
 /**
  * A single data chunk yielded by an Agent Adapter's AsyncGenerator.
  */
-export interface AgentChunk {
+export interface AgentTextChunk {
   type: 'stdout' | 'stderr' | 'status';
   content: string;
   timestamp: number;
 }
+
+export interface AgentProcessStartedChunk {
+  type: 'process-started';
+  pid?: number;
+  displayCommand: string;
+  startedAt: string;
+  timestamp: number;
+  content?: never;
+}
+
+export type AgentChunk = AgentTextChunk | AgentProcessStartedChunk;
 
 export interface AgentProcessTelemetry {
   pid?: number;

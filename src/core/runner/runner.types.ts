@@ -22,7 +22,15 @@ export interface RunnerJsonEvent {
   timestamp: number;
 }
 
-export type RunnerEvent = RunnerTextEvent | RunnerJsonEvent;
+export interface RunnerProcessStartedEvent {
+  type: 'process-started';
+  pid?: number;
+  displayCommand: string;
+  startedAt: string;
+  timestamp: number;
+}
+
+export type RunnerEvent = RunnerTextEvent | RunnerJsonEvent | RunnerProcessStartedEvent;
 
 export interface RunnerProcessTelemetry {
   pid?: number;

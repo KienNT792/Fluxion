@@ -11,6 +11,7 @@ export const WORKFLOW_TRACE_EVENT_TYPES = [
   'node.context_compiled',
   'node.execution_started',
   'node.execution_completed',
+  'node.process_spawned',
   'node.process_exited',
   'node.produces_validated',
   'node.output_saved',

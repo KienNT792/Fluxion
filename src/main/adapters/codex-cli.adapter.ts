@@ -120,6 +120,16 @@ export function translateRunnerEventToChunk(
   event: RunnerEvent,
   now: () => number = Date.now
 ): AgentChunk | null {
+  if (event.type === 'process-started') {
+    return {
+      type: 'process-started',
+      pid: event.pid,
+      displayCommand: event.displayCommand,
+      startedAt: event.startedAt,
+      timestamp: now(),
+    };
+  }
+
   // stdout/stderr pass through unchanged
   if (event.type === 'stdout' || event.type === 'stderr') {
     return { type: event.type, content: event.content, timestamp: now() };

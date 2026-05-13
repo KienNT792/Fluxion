@@ -180,6 +180,16 @@ function createRunnerEvent(type: 'stdout' | 'stderr' | 'status', content: string
   };
 }
 
+function createProcessStartedEvent(telemetry: RunnerProcessTelemetry): RunnerEvent {
+  return {
+    type: 'process-started',
+    pid: telemetry.pid,
+    displayCommand: telemetry.displayCommand,
+    startedAt: telemetry.startedAt,
+    timestamp: Date.now(),
+  };
+}
+
 function countChunkBytes(chunk: Buffer | string): number {
   return Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk, 'utf8');
 }
@@ -338,6 +348,7 @@ export class CodexCliRunner implements FluxionRunner {
       telemetry: processTelemetry,
     });
 
+    queue.push(createProcessStartedEvent(processTelemetry));
     queue.push(createRunnerEvent('status', `Starting Codex CLI via ${selectedCli.displayCommand}.`));
 
     let fallbackStdout = '';

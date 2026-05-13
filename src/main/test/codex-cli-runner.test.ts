@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { PassThrough } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunnerContext, RunnerResult, WorkflowNodeSchema } from '@core';
+import { RunnerContext, RunnerEvent, RunnerResult, WorkflowNodeSchema } from '@core';
 import {
   buildCodexExecArgs,
   CodexCliRunner,
@@ -89,6 +89,22 @@ function createRunner(processManager: FakeProcessManager, outputDirectory: strin
       source: 'node-script',
     }),
     modelSupportsReasoning: async () => false,
+  });
+}
+
+async function expectProcessStarted(
+  iterator: AsyncGenerator<RunnerEvent, RunnerResult, void>,
+  processManager: FakeProcessManager
+): Promise<void> {
+  const event = await iterator.next();
+
+  expect(event.done).toBe(false);
+  expect(event.value).toMatchObject({
+    type: 'process-started',
+    pid: processManager.child.pid,
+    displayCommand: 'node codex.js',
+    startedAt: expect.any(String),
+    timestamp: expect.any(Number),
   });
 }
 
@@ -225,9 +241,10 @@ describe('CodexCliRunner', () => {
     });
 
     const iterator = runner.run(ctx);
-    const firstEvent = await iterator.next();
+    await expectProcessStarted(iterator, processManager);
+    const statusEvent = await iterator.next();
 
-    expect(firstEvent.value).toMatchObject({ type: 'status' });
+    expect(statusEvent.value).toMatchObject({ type: 'status' });
     expect(stdin).toBe(ctx.prompt);
     expect(processManager.spawnCalls[0].args).not.toContain(ctx.prompt);
 
@@ -240,6 +257,7 @@ describe('CodexCliRunner', () => {
     const runner = createRunner(processManager, outputDirectory);
     const iterator = runner.run(createContext());
 
+    await expectProcessStarted(iterator, processManager);
     await iterator.next();
     processManager.child.stdout.write('{"type":"started"}\n{"type":"delta"');
 
@@ -285,6 +303,7 @@ describe('CodexCliRunner', () => {
     const runner = createRunner(processManager, outputDirectory);
     const iterator = runner.run(createNonJsonContext());
 
+    await expectProcessStarted(iterator, processManager);
     await iterator.next();
     processManager.child.stdout.write('plain output\n');
     processManager.child.stderr.write('warning output\n');
@@ -320,6 +339,7 @@ describe('CodexCliRunner', () => {
     const runner = createRunner(processManager, outputDirectory);
     const iterator = runner.run(createContext());
 
+    await expectProcessStarted(iterator, processManager);
     await iterator.next();
     const args = processManager.spawnCalls[0].args;
     const outputPath = args[args.indexOf('--output-last-message') + 1];
@@ -375,6 +395,7 @@ describe('CodexCliRunner', () => {
     const ctx = createContext();
     const iterator = runner.run(ctx);
 
+    await expectProcessStarted(iterator, processManager);
     await iterator.next();
     await runner.abort(ctx.runId, ctx.node.id, 'USER_REQUESTED');
 

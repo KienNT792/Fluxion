@@ -893,11 +893,20 @@ export class WorkflowEngine {
           break;
         }
 
+        const chunk = next.value;
+        if (chunk.type === 'process-started') {
+          await this.trace(runtime, 'node.process_spawned', node.id, {
+            pid: chunk.pid,
+            displayCommand: chunk.displayCommand,
+            startedAt: chunk.startedAt,
+          });
+          continue;
+        }
+
         if (this.isHalted && this.haltReason === 'aborted') {
           continue;
         }
 
-        const chunk = next.value;
         if (chunk.type === 'stdout' || chunk.type === 'stderr') {
           batches[chunk.type].push(chunk.content);
           fullOutput += chunk.content;

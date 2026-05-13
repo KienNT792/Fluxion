@@ -6,6 +6,7 @@ import { WorkflowTraceEvent, WorkflowTraceEventSchema } from '@core';
 import {
   AbortReason,
   AgentChunk,
+  AgentProcessStartedChunk,
   AgentNodeData,
   AgentResult,
   IpcChannels,
@@ -32,6 +33,7 @@ interface AdapterBehavior {
   onExecute?: (ctx: { nodeId: string; prompt: string; workspacePath: string }) => Promise<void> | void;
   runnerSessionId?: string;
   abortable?: boolean;
+  processStarted?: Omit<AgentProcessStartedChunk, 'type' | 'timestamp'>;
   processTelemetry?: AgentResult['processTelemetry'];
 }
 
@@ -62,6 +64,14 @@ class FakeAdapter implements IAgentAdapter {
     const behavior = this.behaviors[nodeId] ?? {};
     behavior.onStart?.();
 
+    if (behavior.processStarted) {
+      yield {
+        type: 'process-started',
+        ...behavior.processStarted,
+        timestamp: Date.now(),
+      };
+    }
+
     yield {
       type: 'stdout',
       content: `${nodeId}: started\n`,
@@ -89,6 +99,13 @@ class FakeAdapter implements IAgentAdapter {
         error: 'Execution aborted.',
         exitCode: 1,
         abortReason,
+        processTelemetry: behavior.processTelemetry
+          ? {
+              ...behavior.processTelemetry,
+              aborted: true,
+              abortReason,
+            }
+          : undefined,
       };
     }
 
@@ -219,6 +236,11 @@ describe('WorkflowEngine', () => {
       'node-a': {
         output: 'Node A output',
         runnerSessionId: 'session-a',
+        processStarted: {
+          pid: 1234,
+          displayCommand: 'node codex.js',
+          startedAt: '2026-05-10T00:00:00.000Z',
+        },
         processTelemetry: {
           pid: 1234,
           displayCommand: 'node codex.js',
@@ -255,6 +277,7 @@ describe('WorkflowEngine', () => {
     expect(runState.currentNodeIds).toEqual([]);
     expect(runState.nodes['node-a']?.status).toBe('completed');
     expect(runState.nodes['node-b']?.status).toBe('completed');
+    expect(runState.nodes['node-a']).not.toHaveProperty('processTelemetry');
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b']);
     expect(adapter.executeCalls[1]?.prompt).toContain('Output from Node node-a (codex / gpt-5.5)');
 
@@ -277,6 +300,16 @@ describe('WorkflowEngine', () => {
     expect(eventKeys.indexOf('node-a:node.output_saved')).toBeLessThan(
       eventKeys.indexOf('node-b:node.running')
     );
+    expect(eventKeys.indexOf('node-a:node.process_spawned')).toBeLessThan(
+      eventKeys.indexOf('node-a:node.process_exited')
+    );
+    expect(trace.find((event) => event.type === 'node.process_spawned')).toMatchObject({
+      nodeId: 'node-a',
+      data: {
+        pid: 1234,
+        displayCommand: 'node codex.js',
+      },
+    });
     expect(
       trace.some(
         (event) =>
@@ -403,6 +436,23 @@ describe('WorkflowEngine', () => {
       'node-a': {
         abortable: true,
         onStart: () => started.resolve(),
+        processStarted: {
+          pid: 5678,
+          displayCommand: 'node codex.js',
+          startedAt: '2026-05-10T00:00:00.000Z',
+        },
+        processTelemetry: {
+          pid: 5678,
+          displayCommand: 'node codex.js',
+          startedAt: '2026-05-10T00:00:00.000Z',
+          completedAt: '2026-05-10T00:00:03.000Z',
+          durationMs: 3000,
+          exitCode: 1,
+          aborted: true,
+          abortReason: AbortReason.USER_REQUESTED,
+          stdoutBytes: 0,
+          stderrBytes: 0,
+        },
       },
     });
     const engine = WorkflowEngine.createForTesting({
@@ -427,8 +477,30 @@ describe('WorkflowEngine', () => {
     ]);
 
     const trace = await readTrace(workspacePath, runState.runId);
-    expect(trace.some((event) => event.nodeId === 'node-a' && event.type === 'node.aborted')).toBe(
-      true
+    const eventKeys = trace.map((event) => `${event.nodeId ?? 'workflow'}:${event.type}`);
+    expect(trace.find((event) => event.type === 'node.process_spawned')).toMatchObject({
+      nodeId: 'node-a',
+      data: {
+        pid: 5678,
+        displayCommand: 'node codex.js',
+      },
+    });
+    expect(trace.find((event) => event.type === 'node.process_exited')).toMatchObject({
+      nodeId: 'node-a',
+      data: {
+        durationMs: 3000,
+        exitCode: 1,
+        stdoutBytes: 0,
+        stderrBytes: 0,
+        aborted: true,
+        abortReason: AbortReason.USER_REQUESTED,
+      },
+    });
+    expect(eventKeys.indexOf('node-a:node.process_spawned')).toBeLessThan(
+      eventKeys.indexOf('node-a:node.process_exited')
+    );
+    expect(eventKeys.indexOf('node-a:node.process_exited')).toBeLessThan(
+      eventKeys.indexOf('node-a:node.aborted')
     );
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.aborted' });
   });

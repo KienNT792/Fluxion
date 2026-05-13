@@ -163,7 +163,7 @@ Files likely touched:
 - `src/main/services/process-manager.ts`
 - `src/main/test/codex-cli-runner.test.ts`
 
-### FX-WO-004 Persist process telemetry into run state or trace [READY]
+### FX-WO-004 Persist process telemetry into run state or trace [DONE]
 
 Priority: `P1`
 
@@ -182,10 +182,10 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Trace co PID khi process spawn thanh cong.
-- [ ] Trace co durationMs va byte counts khi process close.
-- [ ] Abort workflow co process exit/abort trace.
-- [ ] Existing run-state schema compatibility duoc giu.
+- [x] Trace co PID khi process spawn thanh cong.
+- [x] Trace co durationMs va byte counts khi process close.
+- [x] Abort workflow co process exit/abort trace.
+- [x] Existing run-state schema compatibility duoc giu.
 
 Files likely touched:
 
@@ -431,7 +431,7 @@ Acceptance:
 | FX-WO-001 Structured runtime trace writer | P0 | DONE | 1 |
 | FX-WO-002 Instrument WorkflowEngine trace events | P0 | DONE | 1 |
 | FX-WO-003 Codex process telemetry counters | P0 | DONE | 1 |
-| FX-WO-004 Persist process telemetry into trace | P1 | READY | 1 |
+| FX-WO-004 Persist process telemetry into trace | P1 | DONE | 1 |
 | FX-WO-005 Trace smoke assertions | P1 | READY | 1 |
 | FX-WO-006 Memory source report | P1 | READY | 2 |
 | FX-WO-007 Output lineage across attempts | P1 | DISCOVERY | 2 |

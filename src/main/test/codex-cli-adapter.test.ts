@@ -27,9 +27,32 @@ function jsonEvent(event: unknown, raw = ''): RunnerEvent {
   return { type: 'json-event', event, raw, timestamp: NOW };
 }
 
+function processStarted(): RunnerEvent {
+  return {
+    type: 'process-started',
+    pid: 1234,
+    displayCommand: 'node codex.js',
+    startedAt: '2026-05-10T00:00:00.000Z',
+    timestamp: NOW,
+  };
+}
+
 // ─── translateRunnerEventToChunk ──────────────────────────────────────────────
 
 describe('translateRunnerEventToChunk', () => {
+  it('forwards process-started events without terminal text', () => {
+    const result = translateRunnerEventToChunk(processStarted(), now);
+
+    expect(result).toEqual<AgentChunk>({
+      type: 'process-started',
+      pid: 1234,
+      displayCommand: 'node codex.js',
+      startedAt: '2026-05-10T00:00:00.000Z',
+      timestamp: NOW,
+    });
+    expect('content' in result!).toBe(false);
+  });
+
   describe('stdout passthrough', () => {
     it('returns stdout chunk unchanged', () => {
       const result = translateRunnerEventToChunk(stdout('hello\n'), now);

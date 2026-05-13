@@ -8,7 +8,13 @@ describe('RunnerEvent', () => {
       | { type: 'stderr'; content: string; timestamp: number }
       | { type: 'status'; content: string; timestamp: number }
       | { type: 'json-event'; event: unknown; raw: string; timestamp: number }
+      | {
+          type: 'process-started';
+          pid?: number;
+          displayCommand: string;
+          startedAt: string;
+          timestamp: number;
+        }
     >();
   });
 });
-

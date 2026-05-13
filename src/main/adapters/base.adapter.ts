@@ -1,4 +1,4 @@
-import { AgentChunk, AgentResult, AbortReason, AgentNodeData, NodeId } from '@shared';
+import { AgentChunk, AgentResult, AbortReason, AgentNodeData, AgentTextChunk, NodeId } from '@shared';
 
 export interface IAgentAdapter {
   /**
@@ -37,7 +37,7 @@ export abstract class BaseAdapter implements IAgentAdapter {
   /**
    * Helper to create a standard chunk.
    */
-  protected createChunk(type: AgentChunk['type'], content: string): AgentChunk {
+  protected createChunk(type: AgentTextChunk['type'], content: string): AgentTextChunk {
     return {
       type,
       content,
