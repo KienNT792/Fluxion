@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { NodeId, NodeStatus } from '@shared';
+import { create } from 'zustand'
+import { NodeId, NodeStatus } from '@shared'
 
-// We split into slices conceptually, but keep them in one store for easy access 
+// We split into slices conceptually, but keep them in one store for easy access
 // since Zustand handles partial updates very well.
 
 export type WorkflowRuntimeStatus =
@@ -11,72 +11,72 @@ export type WorkflowRuntimeStatus =
   | 'paused'
   | 'aborted'
   | 'completed'
-  | 'error';
+  | 'error'
 
-export type ReviewActionKind = 'approve' | 'reject' | 'rerun';
+export type ReviewActionKind = 'approve' | 'reject' | 'rerun'
 
 interface LogSlice {
-  terminalLogs: Record<NodeId, string[]>;
-  terminalLogCursors: Record<NodeId, number>;
-  nodeAttemptCounts: Record<NodeId, number>;
-  appendLogs: (nodeId: NodeId, newBatch: string[]) => void;
-  appendAttemptSeparator: (nodeId: NodeId, message: string) => number;
-  clearLogs: (nodeId: NodeId) => void;
+  terminalLogs: Record<NodeId, string[]>
+  terminalLogCursors: Record<NodeId, number>
+  nodeAttemptCounts: Record<NodeId, number>
+  appendLogs: (nodeId: NodeId, newBatch: string[]) => void
+  appendAttemptSeparator: (nodeId: NodeId, message: string) => number
+  clearLogs: (nodeId: NodeId) => void
 }
 
 interface StatusSlice {
-  workflowStatus: WorkflowRuntimeStatus;
-  workflowError: string | null;
-  activeRunId?: string;
-  reviewNodeIds: NodeId[];
-  reviewActionInFlightByNodeId: Record<NodeId, ReviewActionKind | undefined>;
-  nodeStatuses: Record<NodeId, NodeStatus>;
-  nodeErrors: Record<NodeId, string | undefined>;
-  nodeExitCodes: Record<NodeId, number | null | undefined>;
-  nodeOutputPaths: Record<NodeId, string | undefined>;
-  compiledContexts: Record<NodeId, string>;
-  
-  setWorkflowStatus: (status: WorkflowRuntimeStatus) => void;
-  setWorkflowError: (error: string | null) => void;
-  setActiveRunId: (runId?: string) => void;
-  addReviewNode: (nodeId: NodeId) => void;
-  removeReviewNode: (nodeId: NodeId) => void;
-  clearReviewNodes: () => void;
-  setReviewActionInFlight: (nodeId: NodeId, action?: ReviewActionKind) => void;
-  setNodeStatus: (nodeId: NodeId, status: NodeStatus) => void;
-  setNodeError: (nodeId: NodeId, error?: string) => void;
-  setNodeExitCode: (nodeId: NodeId, exitCode?: number | null) => void;
-  setNodeOutputPath: (nodeId: NodeId, outputFilePath?: string) => void;
-  setCompiledContext: (nodeId: NodeId, context: string) => void;
-  resetNodeExecution: (nodeIds: NodeId[]) => void;
-  resetExecution: (nodeIds: NodeId[]) => void;
+  workflowStatus: WorkflowRuntimeStatus
+  workflowError: string | null
+  activeRunId?: string
+  reviewNodeIds: NodeId[]
+  reviewActionInFlightByNodeId: Record<NodeId, ReviewActionKind | undefined>
+  nodeStatuses: Record<NodeId, NodeStatus>
+  nodeErrors: Record<NodeId, string | undefined>
+  nodeExitCodes: Record<NodeId, number | null | undefined>
+  nodeOutputPaths: Record<NodeId, string | undefined>
+  compiledContexts: Record<NodeId, string>
+
+  setWorkflowStatus: (status: WorkflowRuntimeStatus) => void
+  setWorkflowError: (error: string | null) => void
+  setActiveRunId: (runId?: string) => void
+  addReviewNode: (nodeId: NodeId) => void
+  removeReviewNode: (nodeId: NodeId) => void
+  clearReviewNodes: () => void
+  setReviewActionInFlight: (nodeId: NodeId, action?: ReviewActionKind) => void
+  setNodeStatus: (nodeId: NodeId, status: NodeStatus) => void
+  setNodeError: (nodeId: NodeId, error?: string) => void
+  setNodeExitCode: (nodeId: NodeId, exitCode?: number | null) => void
+  setNodeOutputPath: (nodeId: NodeId, outputFilePath?: string) => void
+  setCompiledContext: (nodeId: NodeId, context: string) => void
+  resetNodeExecution: (nodeIds: NodeId[]) => void
+  resetExecution: (nodeIds: NodeId[]) => void
 }
 
-type ExecutionState = LogSlice & StatusSlice;
+type ExecutionState = LogSlice & StatusSlice
 
-const MAX_LOG_LINES = 1000;
+const MAX_LOG_LINES = 1000
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   // --- Log Slice ---
   terminalLogs: {},
   terminalLogCursors: {},
   nodeAttemptCounts: {},
-  
+
   appendLogs: (nodeId, newBatch) => {
     if (newBatch.length === 0) {
-      return;
+      return
     }
 
     set((state) => {
-      const existingLogs = state.terminalLogs[nodeId] || [];
-      const existingCursor = state.terminalLogCursors[nodeId] ?? existingLogs.length;
+      const existingLogs = state.terminalLogs[nodeId] || []
+      const existingCursor = state.terminalLogCursors[nodeId] ?? existingLogs.length
       // Combine and slice to MAX_LOG_LINES to prevent RAM overflow
-      let updatedLogs = [...existingLogs, ...newBatch];
-      
+      let updatedLogs = [...existingLogs, ...newBatch]
+
       if (updatedLogs.length > MAX_LOG_LINES) {
-        updatedLogs = updatedLogs.slice(updatedLogs.length - MAX_LOG_LINES);
+        updatedLogs = updatedLogs.slice(updatedLogs.length - MAX_LOG_LINES)
       }
-      
+
       return {
         terminalLogCursors: {
           ...state.terminalLogCursors,
@@ -86,23 +86,22 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           ...state.terminalLogs,
           [nodeId]: updatedLogs
         }
-      };
-    });
+      }
+    })
   },
 
   appendAttemptSeparator: (nodeId, message) => {
-    const state = get();
-    const nextAttempt = (state.nodeAttemptCounts[nodeId] ?? 1) + 1;
-    const separator = `\x1b[2m[attempt ${nextAttempt}] ${message}\x1b[0m`;
+    const state = get()
+    const nextAttempt = (state.nodeAttemptCounts[nodeId] ?? 1) + 1
+    const separator = `\x1b[2m[attempt ${nextAttempt}] ${message}\x1b[0m`
 
     set((currentState) => {
-      const existingLogs = currentState.terminalLogs[nodeId] || [];
-      const existingCursor =
-        currentState.terminalLogCursors[nodeId] ?? existingLogs.length;
-      let updatedLogs = [...existingLogs, separator];
+      const existingLogs = currentState.terminalLogs[nodeId] || []
+      const existingCursor = currentState.terminalLogCursors[nodeId] ?? existingLogs.length
+      let updatedLogs = [...existingLogs, separator]
 
       if (updatedLogs.length > MAX_LOG_LINES) {
-        updatedLogs = updatedLogs.slice(updatedLogs.length - MAX_LOG_LINES);
+        updatedLogs = updatedLogs.slice(updatedLogs.length - MAX_LOG_LINES)
       }
 
       return {
@@ -118,10 +117,10 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           ...currentState.terminalLogs,
           [nodeId]: updatedLogs
         }
-      };
-    });
+      }
+    })
 
-    return nextAttempt;
+    return nextAttempt
   },
 
   clearLogs: (nodeId) => {
@@ -134,7 +133,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.terminalLogs,
         [nodeId]: []
       }
-    }));
+    }))
   },
 
   // --- Status Slice ---
@@ -178,7 +177,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.reviewActionInFlightByNodeId,
         [nodeId]: action
       }
-    }));
+    }))
   },
 
   setNodeStatus: (nodeId, status) => {
@@ -194,7 +193,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.nodeStatuses,
         [nodeId]: status
       }
-    }));
+    }))
   },
 
   setNodeError: (nodeId, error) => {
@@ -203,7 +202,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.nodeErrors,
         [nodeId]: error
       }
-    }));
+    }))
   },
 
   setNodeExitCode: (nodeId, exitCode) => {
@@ -212,7 +211,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.nodeExitCodes,
         [nodeId]: exitCode
       }
-    }));
+    }))
   },
 
   setNodeOutputPath: (nodeId, outputFilePath) => {
@@ -221,7 +220,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.nodeOutputPaths,
         [nodeId]: outputFilePath
       }
-    }));
+    }))
   },
 
   setCompiledContext: (nodeId, context) => {
@@ -230,24 +229,24 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.compiledContexts,
         [nodeId]: context
       }
-    }));
+    }))
   },
 
   resetNodeExecution: (nodeIds) => {
     set((state) => {
-      const nextNodeStatuses = { ...state.nodeStatuses };
-      const nextContexts = { ...state.compiledContexts };
-      const nextNodeErrors = { ...state.nodeErrors };
-      const nextNodeExitCodes = { ...state.nodeExitCodes };
-      const nextNodeOutputPaths = { ...state.nodeOutputPaths };
+      const nextNodeStatuses = { ...state.nodeStatuses }
+      const nextContexts = { ...state.compiledContexts }
+      const nextNodeErrors = { ...state.nodeErrors }
+      const nextNodeExitCodes = { ...state.nodeExitCodes }
+      const nextNodeOutputPaths = { ...state.nodeOutputPaths }
 
       nodeIds.forEach((id) => {
-        nextNodeStatuses[id] = 'idle';
-        nextContexts[id] = '';
-        nextNodeErrors[id] = undefined;
-        nextNodeExitCodes[id] = undefined;
-        nextNodeOutputPaths[id] = undefined;
-      });
+        nextNodeStatuses[id] = 'idle'
+        nextContexts[id] = ''
+        nextNodeErrors[id] = undefined
+        nextNodeExitCodes[id] = undefined
+        nextNodeOutputPaths[id] = undefined
+      })
 
       return {
         reviewNodeIds: state.reviewNodeIds.filter((id) => !nodeIds.includes(id)),
@@ -256,30 +255,30 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nodeExitCodes: nextNodeExitCodes,
         nodeOutputPaths: nextNodeOutputPaths,
         compiledContexts: nextContexts
-      };
-    });
+      }
+    })
   },
 
   resetExecution: (nodeIds) => {
-    const newNodeStatuses: Record<NodeId, NodeStatus> = {};
-    const newLogs: Record<NodeId, string[]> = {};
-    const newLogCursors: Record<NodeId, number> = {};
-    const newAttemptCounts: Record<NodeId, number> = {};
-    const newContexts: Record<NodeId, string> = {};
-    const newNodeErrors: Record<NodeId, string | undefined> = {};
-    const newNodeExitCodes: Record<NodeId, number | null | undefined> = {};
-    const newNodeOutputPaths: Record<NodeId, string | undefined> = {};
+    const newNodeStatuses: Record<NodeId, NodeStatus> = {}
+    const newLogs: Record<NodeId, string[]> = {}
+    const newLogCursors: Record<NodeId, number> = {}
+    const newAttemptCounts: Record<NodeId, number> = {}
+    const newContexts: Record<NodeId, string> = {}
+    const newNodeErrors: Record<NodeId, string | undefined> = {}
+    const newNodeExitCodes: Record<NodeId, number | null | undefined> = {}
+    const newNodeOutputPaths: Record<NodeId, string | undefined> = {}
 
-    nodeIds.forEach(id => {
-      newNodeStatuses[id] = 'idle';
-      newLogs[id] = [];
-      newLogCursors[id] = 0;
-      newAttemptCounts[id] = 1;
-      newContexts[id] = '';
-      newNodeErrors[id] = undefined;
-      newNodeExitCodes[id] = undefined;
-      newNodeOutputPaths[id] = undefined;
-    });
+    nodeIds.forEach((id) => {
+      newNodeStatuses[id] = 'idle'
+      newLogs[id] = []
+      newLogCursors[id] = 0
+      newAttemptCounts[id] = 1
+      newContexts[id] = ''
+      newNodeErrors[id] = undefined
+      newNodeExitCodes[id] = undefined
+      newNodeOutputPaths[id] = undefined
+    })
 
     set({
       workflowStatus: 'idle',
@@ -295,6 +294,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       terminalLogCursors: newLogCursors,
       nodeAttemptCounts: newAttemptCounts,
       compiledContexts: newContexts
-    });
+    })
   }
-}));
+}))

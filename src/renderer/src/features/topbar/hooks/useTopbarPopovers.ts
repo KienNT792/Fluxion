@@ -59,12 +59,7 @@ export function useTopbarPopovers({
       window.removeEventListener('mousedown', handlePointerDown)
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [
-    isProjectMenuOpen,
-    isReadinessPopoverOpen,
-    setIsProjectMenuOpen,
-    setIsReadinessPopoverOpen
-  ])
+  }, [isProjectMenuOpen, isReadinessPopoverOpen, setIsProjectMenuOpen, setIsReadinessPopoverOpen])
 
   return {
     projectMenuRef,

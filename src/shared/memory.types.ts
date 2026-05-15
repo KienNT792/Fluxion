@@ -1,4 +1,4 @@
-import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types';
+import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types'
 
 // ─── Memory Tier ──────────────────────────────────────────────────────────────
 
@@ -11,7 +11,7 @@ import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types';
 export enum MemoryTier {
   GLOBAL = 'GLOBAL',
   SHORT_TERM = 'SHORT_TERM',
-  LONG_TERM = 'LONG_TERM',
+  LONG_TERM = 'LONG_TERM'
 }
 
 // ─── Frontmatter Metadata ────────────────────────────────────────────────────
@@ -25,38 +25,38 @@ export enum MemoryTier {
  */
 export interface FrontmatterMetadataV1 {
   /** Version of this Frontmatter schema. Increment only on breaking changes. */
-  schemaVersion: '1.0';
-  nodeId: NodeId;
-  provider: ProviderType;
-  model: ModelId;
+  schemaVersion: '1.0'
+  nodeId: NodeId
+  provider: ProviderType
+  model: ModelId
   /**
    * - completed: Output is valid and safe to use as context for subsequent nodes.
    * - aborted:   Execution was cut short. Output is partial — subsequent nodes MUST NOT use this as context.
    */
-  status: 'completed' | 'aborted';
+  status: 'completed' | 'aborted'
   /** Unix ms timestamp when the agent finished writing this file. */
-  timestamp: number;
+  timestamp: number
   /** Human-readable model name used for this execution (e.g. 'gpt-5.5'). */
-  modelName?: string;
+  modelName?: string
 }
 
 export interface FrontmatterMetadataV2 {
-  schemaVersion: '2.0';
-  nodeId: NodeId;
-  runId: string;
-  attempt?: number;
-  runner: RunnerId | string;
-  model: ModelId;
-  status: 'completed';
-  startedAt: string;
-  completedAt: string;
-  exitCode?: number;
-  runnerSessionId?: string;
+  schemaVersion: '2.0'
+  nodeId: NodeId
+  runId: string
+  attempt?: number
+  runner: RunnerId | string
+  model: ModelId
+  status: 'completed'
+  startedAt: string
+  completedAt: string
+  exitCode?: number
+  runnerSessionId?: string
   /** Transitional field retained for older readers during migration. */
-  provider?: ProviderType;
+  provider?: ProviderType
 }
 
-export type FrontmatterMetadata = FrontmatterMetadataV1 | FrontmatterMetadataV2;
+export type FrontmatterMetadata = FrontmatterMetadataV1 | FrontmatterMetadataV2
 
 // ─── Memory Records ──────────────────────────────────────────────────────────
 
@@ -65,49 +65,49 @@ export type FrontmatterMetadata = FrontmatterMetadataV1 | FrontmatterMetadataV2;
  * Mirrors the Frontmatter YAML + content of a short-term .md file.
  */
 export interface NodeMemoryOutput {
-  meta: FrontmatterMetadata;
+  meta: FrontmatterMetadata
   /** Raw markdown content (the body below the frontmatter block). */
-  content: string;
+  content: string
 }
 
 export interface SaveNodeOutputParams {
-  runId: string;
-  nodeId: NodeId;
-  attempt?: number;
-  runner: RunnerId | string;
-  model: ModelId;
-  status: 'completed';
-  startedAt: string;
-  completedAt: string;
-  exitCode?: number;
-  runnerSessionId?: string;
-  provider?: ProviderType;
-  content: string;
+  runId: string
+  nodeId: NodeId
+  attempt?: number
+  runner: RunnerId | string
+  model: ModelId
+  status: 'completed'
+  startedAt: string
+  completedAt: string
+  exitCode?: number
+  runnerSessionId?: string
+  provider?: ProviderType
+  content: string
 }
 
 export interface WorkspaceMemory {
-  workspacePath: string;
+  workspacePath: string
   /** Raw content of global-context.md (the Pinned context). */
-  globalContext: string;
+  globalContext: string
 }
 
-export type MemoryContextSourceType = 'global' | 'short-term' | 'long-term';
+export type MemoryContextSourceType = 'global' | 'short-term' | 'long-term'
 
 export interface MemoryContextSource {
-  type: MemoryContextSourceType;
-  path: string;
-  included: boolean;
-  nodeId?: NodeId;
-  runId?: string;
-  bytes?: number;
-  hash?: string;
-  warning?: string;
+  type: MemoryContextSourceType
+  path: string
+  included: boolean
+  nodeId?: NodeId
+  runId?: string
+  bytes?: number
+  hash?: string
+  warning?: string
 }
 
 export interface CompiledMemoryContext {
-  compiledContext: string;
-  sources: MemoryContextSource[];
-  contextHash: string;
-  contextBytes: number;
-  contextChars: number;
+  compiledContext: string
+  sources: MemoryContextSource[]
+  contextHash: string
+  contextBytes: number
+  contextChars: number
 }

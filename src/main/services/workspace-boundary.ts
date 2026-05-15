@@ -52,10 +52,7 @@ export function assertWorkspaceBound(workspacePath: string, absolutePath: string
   const targetRealPath = resolveWriteTargetRealPath(targetPath)
 
   if (
-    !isSameOrInside(
-      normalizeForBoundary(workspaceRealPath),
-      normalizeForBoundary(targetRealPath)
-    )
+    !isSameOrInside(normalizeForBoundary(workspaceRealPath), normalizeForBoundary(targetRealPath))
   ) {
     throw new Error(`Refusing to write outside the workspace: ${absolutePath}`)
   }

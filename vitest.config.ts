@@ -1,17 +1,17 @@
-import { defineConfig } from 'vitest/config';
-import { resolve } from 'path';
+import { defineConfig } from 'vitest/config'
+import { resolve } from 'path'
 
 export default defineConfig({
   resolve: {
     alias: {
       '@core': resolve(__dirname, 'src/core'),
-      '@shared': resolve(__dirname, 'src/shared'),
-    },
+      '@shared': resolve(__dirname, 'src/shared')
+    }
   },
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     pool: 'threads',
     fileParallelism: false,
-    maxWorkers: 1,
-  },
-});
+    maxWorkers: 1
+  }
+})

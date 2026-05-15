@@ -56,7 +56,7 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong'))
 
   // Register Fluxion IPC Handlers
-  registerWorkflowHandlers();
+  registerWorkflowHandlers()
 
   createWindow()
 

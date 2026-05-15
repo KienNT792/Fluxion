@@ -1,19 +1,18 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useState } from 'react'
 import {
   FormControlFont,
   FormControlSize,
   FormControlSurface,
   FormControlTone,
-  getFormControlStyle,
-} from './form-control';
+  getFormControlStyle
+} from './form-control'
 
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  size?: FormControlSize;
-  font?: FormControlFont;
-  tone?: FormControlTone;
-  surface?: FormControlSurface;
-  invalid?: boolean;
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  size?: FormControlSize
+  font?: FormControlFont
+  tone?: FormControlTone
+  surface?: FormControlSurface
+  invalid?: boolean
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
@@ -34,7 +33,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     },
     ref
   ) => {
-    const [isFocused, setIsFocused] = useState(false);
+    const [isFocused, setIsFocused] = useState(false)
 
     return (
       <textarea
@@ -52,22 +51,22 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             disabled,
             isFocused,
             multiline: true,
-            resize: style?.resize,
+            resize: style?.resize
           }),
-          ...style,
+          ...style
         }}
         onFocus={(event) => {
-          setIsFocused(true);
-          onFocus?.(event);
+          setIsFocused(true)
+          onFocus?.(event)
         }}
         onBlur={(event) => {
-          setIsFocused(false);
-          onBlur?.(event);
+          setIsFocused(false)
+          onBlur?.(event)
         }}
         {...props}
       />
-    );
+    )
   }
-);
+)
 
-Textarea.displayName = 'Textarea';
+Textarea.displayName = 'Textarea'

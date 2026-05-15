@@ -1,27 +1,27 @@
-import { ContextSourceEvidence } from '@shared';
-import { ulid } from 'ulid';
+import { ContextSourceEvidence } from '@shared'
+import { ulid } from 'ulid'
 
 export class EvidenceStore {
-  private readonly evidenceByFingerprint = new Map<string, ContextSourceEvidence>();
+  private readonly evidenceByFingerprint = new Map<string, ContextSourceEvidence>()
 
   public add(evidence: ContextSourceEvidence): ContextSourceEvidence {
-    const fingerprint = this.fingerprint(evidence);
-    const existing = this.evidenceByFingerprint.get(fingerprint);
+    const fingerprint = this.fingerprint(evidence)
+    const existing = this.evidenceByFingerprint.get(fingerprint)
 
     if (existing) {
-      return existing;
+      return existing
     }
 
     const stored = {
       ...evidence,
-      id: evidence.id?.trim() || ulid(),
-    };
-    this.evidenceByFingerprint.set(fingerprint, stored);
-    return stored;
+      id: evidence.id?.trim() || ulid()
+    }
+    this.evidenceByFingerprint.set(fingerprint, stored)
+    return stored
   }
 
   public addAll(evidence: ContextSourceEvidence[]): ContextSourceEvidence[] {
-    return evidence.map((item) => this.add(item));
+    return evidence.map((item) => this.add(item))
   }
 
   private fingerprint(evidence: ContextSourceEvidence): string {
@@ -31,13 +31,13 @@ export class EvidenceStore {
       evidence.sourcePath,
       evidence.rawValue ?? '',
       evidence.matchedSignals?.join('|') ?? '',
-      evidence.note ?? '',
-    ].join('::');
+      evidence.note ?? ''
+    ].join('::')
   }
 }
 
 export function normalizeContextEvidence(
   evidence: ContextSourceEvidence[]
 ): ContextSourceEvidence[] {
-  return new EvidenceStore().addAll(evidence);
+  return new EvidenceStore().addAll(evidence)
 }

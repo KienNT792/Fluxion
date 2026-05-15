@@ -1,39 +1,31 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import {
   AgentConfigApplyPreviewResult,
   AgentConfigExportPreview,
-  AgentConfigFileOperation,
-} from '@shared';
-import { assertWorkspaceBound } from '../workspace-boundary';
+  AgentConfigFileOperation
+} from '@shared'
+import { assertWorkspaceBound } from '../workspace-boundary'
 
 const MARKER_PATTERNS = {
   markdown: {
     start: '<!-- BEGIN FLUXION CONTEXT -->',
-    end: '<!-- END FLUXION CONTEXT -->',
+    end: '<!-- END FLUXION CONTEXT -->'
   },
   toml: {
     start: '# BEGIN FLUXION CODEX CONFIG',
-    end: '# END FLUXION CODEX CONFIG',
-  },
-} as const;
+    end: '# END FLUXION CODEX CONFIG'
+  }
+} as const
 
 export function wrapMarkdownFluxionSection(content: string): string {
-  return [
-    MARKER_PATTERNS.markdown.start,
-    content.trim(),
-    MARKER_PATTERNS.markdown.end,
-    '',
-  ].join('\n');
+  return [MARKER_PATTERNS.markdown.start, content.trim(), MARKER_PATTERNS.markdown.end, ''].join(
+    '\n'
+  )
 }
 
 export function wrapTomlFluxionSection(content: string): string {
-  return [
-    MARKER_PATTERNS.toml.start,
-    content.trim(),
-    MARKER_PATTERNS.toml.end,
-    '',
-  ].join('\n');
+  return [MARKER_PATTERNS.toml.start, content.trim(), MARKER_PATTERNS.toml.end, ''].join('\n')
 }
 
 export function mergeMarkedSection(
@@ -41,30 +33,30 @@ export function mergeMarkedSection(
   nextSection: string,
   markerType: keyof typeof MARKER_PATTERNS
 ): { content: string; action: 'update' | 'appendSection' } {
-  const markers = MARKER_PATTERNS[markerType];
-  const startIndex = existingContent.indexOf(markers.start);
-  const endIndex = existingContent.indexOf(markers.end);
+  const markers = MARKER_PATTERNS[markerType]
+  const startIndex = existingContent.indexOf(markers.start)
+  const endIndex = existingContent.indexOf(markers.end)
 
   if (startIndex >= 0 && endIndex > startIndex) {
-    const sectionEnd = endIndex + markers.end.length;
+    const sectionEnd = endIndex + markers.end.length
     return {
       action: 'update',
-      content: `${existingContent.slice(0, startIndex)}${nextSection.trimEnd()}${existingContent.slice(sectionEnd)}`,
-    };
+      content: `${existingContent.slice(0, startIndex)}${nextSection.trimEnd()}${existingContent.slice(sectionEnd)}`
+    }
   }
 
-  const separator = existingContent.trim().length > 0 ? '\n\n' : '';
+  const separator = existingContent.trim().length > 0 ? '\n\n' : ''
   return {
     action: 'appendSection',
-    content: `${existingContent.trimEnd()}${separator}${nextSection}`,
-  };
+    content: `${existingContent.trimEnd()}${separator}${nextSection}`
+  }
 }
 
 export async function readExistingFile(filePath: string): Promise<string | null> {
   try {
-    return await fs.readFile(filePath, 'utf-8');
+    return await fs.readFile(filePath, 'utf-8')
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -72,24 +64,24 @@ export class AgentConfigMergeService {
   public async applyPreview(
     preview: AgentConfigExportPreview
   ): Promise<AgentConfigApplyPreviewResult> {
-    const applied: AgentConfigFileOperation[] = [];
-    const skipped: AgentConfigFileOperation[] = [];
+    const applied: AgentConfigFileOperation[] = []
+    const skipped: AgentConfigFileOperation[] = []
 
     for (const operation of preview.operations) {
-      assertWorkspaceBound(preview.workspacePath, operation.absolutePath);
+      assertWorkspaceBound(preview.workspacePath, operation.absolutePath)
 
       if (operation.action === 'skip' || operation.action === 'conflict') {
-        skipped.push(operation);
-        continue;
+        skipped.push(operation)
+        continue
       }
 
-      await fs.mkdir(path.dirname(operation.absolutePath), { recursive: true });
-      await fs.writeFile(operation.absolutePath, operation.content, 'utf-8');
-      applied.push(operation);
+      await fs.mkdir(path.dirname(operation.absolutePath), { recursive: true })
+      await fs.writeFile(operation.absolutePath, operation.content, 'utf-8')
+      applied.push(operation)
     }
 
-    return { applied, skipped };
+    return { applied, skipped }
   }
 }
 
-export const agentConfigMergeService = new AgentConfigMergeService();
+export const agentConfigMergeService = new AgentConfigMergeService()

@@ -1,75 +1,75 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import {
   NodeRunState,
   ReviewSource,
   RunStatus,
   WorkflowRunState,
-  WorkflowRunStateSchema,
-} from '@core';
-import { ExecutionMode, NodeId, Workflow } from '@shared';
+  WorkflowRunStateSchema
+} from '@core'
+import { ExecutionMode, NodeId, Workflow } from '@shared'
 
 export interface InitializeRunOptions {
-  workspacePath: string;
-  workflow: Workflow;
-  executionNodeIds: Set<NodeId>;
-  runId: string;
-  executionMode?: ExecutionMode;
-  startedAt?: string;
+  workspacePath: string
+  workflow: Workflow
+  executionNodeIds: Set<NodeId>
+  runId: string
+  executionMode?: ExecutionMode
+  startedAt?: string
 }
 
 export interface NodeCompletionUpdate {
-  exitCode?: number;
-  runnerSessionId?: string;
-  outputArtifactPaths?: string[];
-  completedAt?: string;
-  reviewSource?: ReviewSource;
+  exitCode?: number
+  runnerSessionId?: string
+  outputArtifactPaths?: string[]
+  completedAt?: string
+  reviewSource?: ReviewSource
 }
 
 export interface NodeFailureUpdate {
-  error: string;
-  exitCode?: number;
-  completedAt?: string;
+  error: string
+  exitCode?: number
+  completedAt?: string
 }
 
 export interface ReviewResolutionUpdate {
-  comment?: string;
-  resolvedAt?: string;
+  comment?: string
+  resolvedAt?: string
 }
 
-type RunMutation<T> = (state: WorkflowRunState) => T | Promise<T>;
+type RunMutation<T> = (state: WorkflowRunState) => T | Promise<T>
 
 function nowIso(): string {
-  return new Date().toISOString();
+  return new Date().toISOString()
 }
 
 function runFilePath(workspacePath: string, runId: string): string {
-  return path.join(workspacePath, '.fluxion', 'runs', `${runId}.json`);
+  return path.join(workspacePath, '.fluxion', 'runs', `${runId}.json`)
 }
 
 function sortNodeIds(nodeIds: string[]): string[] {
-  return [...new Set(nodeIds)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(nodeIds)].sort((a, b) => a.localeCompare(b))
 }
 
 function removeNodeId(nodeIds: string[], nodeId: string): string[] {
-  return sortNodeIds(nodeIds.filter((id) => id !== nodeId));
+  return sortNodeIds(nodeIds.filter((id) => id !== nodeId))
 }
 
 function isWorkflowPendingReview(state: WorkflowRunState): boolean {
-  return state.awaitingReviewNodeIds.length > 0;
+  return state.awaitingReviewNodeIds.length > 0
 }
 
 export class RunStateStore {
-  private readonly writeQueues = new Map<string, Promise<unknown>>();
-  private readonly states = new Map<string, WorkflowRunState>();
+  private readonly writeQueues = new Map<string, Promise<unknown>>()
+  private readonly states = new Map<string, WorkflowRunState>()
 
   public async initializeRun(options: InitializeRunOptions): Promise<WorkflowRunState> {
-    const startedAt = options.startedAt ?? nowIso();
-    const nodes: Record<string, NodeRunState> = {};
+    const startedAt = options.startedAt ?? nowIso()
+    const nodes: Record<string, NodeRunState> = {}
 
     for (const node of options.workflow.nodes) {
       if (!options.executionNodeIds.has(node.id)) {
-        continue;
+        continue
       }
 
       nodes[node.id] = {
@@ -79,8 +79,8 @@ export class RunStateStore {
         attempts: 0,
         model: node.data.model,
         outputArtifactPaths: [],
-        humanReview: node.data.humanReview ?? false,
-      };
+        humanReview: node.data.humanReview ?? false
+      }
     }
 
     const state = WorkflowRunStateSchema.parse({
@@ -94,24 +94,24 @@ export class RunStateStore {
       completedAt: undefined,
       currentNodeIds: [],
       awaitingReviewNodeIds: [],
-      nodes,
-    });
+      nodes
+    })
 
-    this.states.set(this.key(options.workspacePath, options.runId), state);
-    await this.writeState(options.workspacePath, state);
-    return state;
+    this.states.set(this.key(options.workspacePath, options.runId), state)
+    await this.writeState(options.workspacePath, state)
+    return state
   }
 
   public async readRun(workspacePath: string, runId: string): Promise<WorkflowRunState> {
-    const existing = this.states.get(this.key(workspacePath, runId));
+    const existing = this.states.get(this.key(workspacePath, runId))
     if (existing) {
-      return structuredClone(existing);
+      return structuredClone(existing)
     }
 
-    const content = await fs.readFile(runFilePath(workspacePath, runId), 'utf8');
-    const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown);
-    this.states.set(this.key(workspacePath, runId), state);
-    return structuredClone(state);
+    const content = await fs.readFile(runFilePath(workspacePath, runId), 'utf8')
+    const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+    this.states.set(this.key(workspacePath, runId), state)
+    return structuredClone(state)
   }
 
   public async markNodeRunning(
@@ -121,25 +121,25 @@ export class RunStateStore {
     startedAt = nowIso()
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'running';
-      node.startedAt = node.startedAt ?? startedAt;
-      node.completedAt = undefined;
-      node.exitCode = undefined;
-      node.error = undefined;
-      node.runnerSessionId = undefined;
-      node.outputArtifactPaths = [];
-      node.reviewStatus = undefined;
-      node.reviewSource = undefined;
-      node.reviewRequestedAt = undefined;
-      node.reviewResolvedAt = undefined;
-      node.reviewComment = undefined;
-      node.attempts += 1;
-      state.status = 'running';
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      state.currentNodeIds = sortNodeIds([...state.currentNodeIds, nodeId]);
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'running'
+      node.startedAt = node.startedAt ?? startedAt
+      node.completedAt = undefined
+      node.exitCode = undefined
+      node.error = undefined
+      node.runnerSessionId = undefined
+      node.outputArtifactPaths = []
+      node.reviewStatus = undefined
+      node.reviewSource = undefined
+      node.reviewRequestedAt = undefined
+      node.reviewResolvedAt = undefined
+      node.reviewComment = undefined
+      node.attempts += 1
+      state.status = 'running'
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      state.currentNodeIds = sortNodeIds([...state.currentNodeIds, nodeId])
+      return state
+    })
   }
 
   public async markNodeCompleted(
@@ -149,20 +149,20 @@ export class RunStateStore {
     update: NodeCompletionUpdate = {}
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'completed';
-      node.completedAt = update.completedAt ?? nowIso();
-      node.exitCode = update.exitCode;
-      node.error = undefined;
-      node.runnerSessionId = update.runnerSessionId;
-      node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? []);
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
+      const node = this.requireNode(state, nodeId)
+      node.status = 'completed'
+      node.completedAt = update.completedAt ?? nowIso()
+      node.exitCode = update.exitCode
+      node.error = undefined
+      node.runnerSessionId = update.runnerSessionId
+      node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? [])
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
       if (!isWorkflowPendingReview(state)) {
-        state.status = 'running';
+        state.status = 'running'
       }
-      return state;
-    });
+      return state
+    })
   }
 
   public async markNodeAwaitingReview(
@@ -172,23 +172,23 @@ export class RunStateStore {
     update: NodeCompletionUpdate = {}
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'awaiting_review';
-      node.completedAt = update.completedAt ?? nowIso();
-      node.exitCode = update.exitCode;
-      node.error = undefined;
-      node.runnerSessionId = update.runnerSessionId;
-      node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? []);
-      node.reviewSource = update.reviewSource ?? 'node';
-      node.reviewStatus = 'pending';
-      node.reviewRequestedAt = node.completedAt;
-      node.reviewResolvedAt = undefined;
-      node.reviewComment = undefined;
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      state.awaitingReviewNodeIds = sortNodeIds([...state.awaitingReviewNodeIds, nodeId]);
-      state.status = 'awaiting_review';
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'awaiting_review'
+      node.completedAt = update.completedAt ?? nowIso()
+      node.exitCode = update.exitCode
+      node.error = undefined
+      node.runnerSessionId = update.runnerSessionId
+      node.outputArtifactPaths = sortNodeIds(update.outputArtifactPaths ?? [])
+      node.reviewSource = update.reviewSource ?? 'node'
+      node.reviewStatus = 'pending'
+      node.reviewRequestedAt = node.completedAt
+      node.reviewResolvedAt = undefined
+      node.reviewComment = undefined
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      state.awaitingReviewNodeIds = sortNodeIds([...state.awaitingReviewNodeIds, nodeId])
+      state.status = 'awaiting_review'
+      return state
+    })
   }
 
   public async markReviewApproved(
@@ -198,15 +198,15 @@ export class RunStateStore {
     update: ReviewResolutionUpdate = {}
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'completed';
-      node.reviewStatus = 'approved';
-      node.reviewResolvedAt = update.resolvedAt ?? nowIso();
-      node.reviewComment = update.comment;
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running';
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'completed'
+      node.reviewStatus = 'approved'
+      node.reviewResolvedAt = update.resolvedAt ?? nowIso()
+      node.reviewComment = update.comment
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running'
+      return state
+    })
   }
 
   public async markReviewRejected(
@@ -216,16 +216,16 @@ export class RunStateStore {
     update: ReviewResolutionUpdate = {}
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'rejected';
-      node.reviewStatus = 'rejected';
-      node.reviewResolvedAt = update.resolvedAt ?? nowIso();
-      node.reviewComment = update.comment;
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      state.status = 'rejected';
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'rejected'
+      node.reviewStatus = 'rejected'
+      node.reviewResolvedAt = update.resolvedAt ?? nowIso()
+      node.reviewComment = update.comment
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      state.status = 'rejected'
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      return state
+    })
   }
 
   public async resetNodeForRerun(
@@ -234,23 +234,23 @@ export class RunStateStore {
     nodeId: NodeId
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'pending';
-      node.completedAt = undefined;
-      node.exitCode = undefined;
-      node.error = undefined;
-      node.runnerSessionId = undefined;
-      node.outputArtifactPaths = [];
-      node.reviewStatus = undefined;
-      node.reviewSource = undefined;
-      node.reviewRequestedAt = undefined;
-      node.reviewResolvedAt = undefined;
-      node.reviewComment = undefined;
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running';
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'pending'
+      node.completedAt = undefined
+      node.exitCode = undefined
+      node.error = undefined
+      node.runnerSessionId = undefined
+      node.outputArtifactPaths = []
+      node.reviewStatus = undefined
+      node.reviewSource = undefined
+      node.reviewRequestedAt = undefined
+      node.reviewResolvedAt = undefined
+      node.reviewComment = undefined
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running'
+      return state
+    })
   }
 
   public async markNodeFailed(
@@ -260,16 +260,16 @@ export class RunStateStore {
     update: NodeFailureUpdate
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'failed';
-      node.completedAt = update.completedAt ?? nowIso();
-      node.exitCode = update.exitCode;
-      node.error = update.error;
-      state.status = 'failed';
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'failed'
+      node.completedAt = update.completedAt ?? nowIso()
+      node.exitCode = update.exitCode
+      node.error = update.error
+      state.status = 'failed'
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      return state
+    })
   }
 
   public async markNodeAborted(
@@ -280,16 +280,16 @@ export class RunStateStore {
     exitCode?: number
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId);
-      node.status = 'aborted';
-      node.completedAt = nowIso();
-      node.exitCode = exitCode;
-      node.error = error;
-      state.status = 'aborted';
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId);
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId);
-      return state;
-    });
+      const node = this.requireNode(state, nodeId)
+      node.status = 'aborted'
+      node.completedAt = nowIso()
+      node.exitCode = exitCode
+      node.error = error
+      state.status = 'aborted'
+      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      return state
+    })
   }
 
   public async finalizeWorkflow(
@@ -299,11 +299,11 @@ export class RunStateStore {
     completedAt = nowIso()
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      state.status = status;
-      state.completedAt = completedAt;
-      state.currentNodeIds = [];
-      return state;
-    });
+      state.status = status
+      state.completedAt = completedAt
+      state.currentNodeIds = []
+      return state
+    })
   }
 
   private async updateRun(
@@ -312,54 +312,61 @@ export class RunStateStore {
     mutation: RunMutation<WorkflowRunState>
   ): Promise<WorkflowRunState> {
     return this.enqueue(workspacePath, runId, async () => {
-      const mapKey = this.key(workspacePath, runId);
-      const state = this.states.get(mapKey) ?? (await this.readRun(workspacePath, runId));
-      const updated = await mutation(structuredClone(state));
-      updated.currentNodeIds = sortNodeIds(updated.currentNodeIds);
-      updated.awaitingReviewNodeIds = sortNodeIds(updated.awaitingReviewNodeIds);
-      updated.updatedAt = nowIso();
-      const parsed = WorkflowRunStateSchema.parse(updated);
-      this.states.set(mapKey, parsed);
-      await this.writeState(workspacePath, parsed);
-      return structuredClone(parsed);
-    });
+      const mapKey = this.key(workspacePath, runId)
+      const state = this.states.get(mapKey) ?? (await this.readRun(workspacePath, runId))
+      const updated = await mutation(structuredClone(state))
+      updated.currentNodeIds = sortNodeIds(updated.currentNodeIds)
+      updated.awaitingReviewNodeIds = sortNodeIds(updated.awaitingReviewNodeIds)
+      updated.updatedAt = nowIso()
+      const parsed = WorkflowRunStateSchema.parse(updated)
+      this.states.set(mapKey, parsed)
+      await this.writeState(workspacePath, parsed)
+      return structuredClone(parsed)
+    })
   }
 
-  private enqueue<T>(workspacePath: string, runId: string, operation: () => Promise<T>): Promise<T> {
-    const queueKey = this.key(workspacePath, runId);
-    const previous = this.writeQueues.get(queueKey) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(operation);
-    this.writeQueues.set(queueKey, next.catch(() => undefined));
-    return next;
+  private enqueue<T>(
+    workspacePath: string,
+    runId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const queueKey = this.key(workspacePath, runId)
+    const previous = this.writeQueues.get(queueKey) ?? Promise.resolve()
+    const next = previous.catch(() => undefined).then(operation)
+    this.writeQueues.set(
+      queueKey,
+      next.catch(() => undefined)
+    )
+    return next
   }
 
   private async writeState(workspacePath: string, state: WorkflowRunState): Promise<void> {
-    const parsed = WorkflowRunStateSchema.parse(state);
-    const filePath = runFilePath(workspacePath, parsed.runId);
-    const directory = path.dirname(filePath);
-    const tempPath = `${filePath}.tmp`;
-    await fs.mkdir(directory, { recursive: true });
-    await fs.writeFile(tempPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+    const parsed = WorkflowRunStateSchema.parse(state)
+    const filePath = runFilePath(workspacePath, parsed.runId)
+    const directory = path.dirname(filePath)
+    const tempPath = `${filePath}.tmp`
+    await fs.mkdir(directory, { recursive: true })
+    await fs.writeFile(tempPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
 
     try {
-      await fs.rename(tempPath, filePath);
+      await fs.rename(tempPath, filePath)
     } catch {
-      await fs.rm(filePath, { force: true });
-      await fs.rename(tempPath, filePath);
+      await fs.rm(filePath, { force: true })
+      await fs.rename(tempPath, filePath)
     }
   }
 
   private requireNode(state: WorkflowRunState, nodeId: NodeId): NodeRunState {
-    const node = state.nodes[nodeId];
+    const node = state.nodes[nodeId]
     if (!node) {
-      throw new Error(`Node ${nodeId} is not part of run ${state.runId}.`);
+      throw new Error(`Node ${nodeId} is not part of run ${state.runId}.`)
     }
-    return node;
+    return node
   }
 
   private key(workspacePath: string, runId: string): string {
-    return `${path.resolve(workspacePath)}:${runId}`;
+    return `${path.resolve(workspacePath)}:${runId}`
   }
 }
 
-export const runStateStore = new RunStateStore();
+export const runStateStore = new RunStateStore()

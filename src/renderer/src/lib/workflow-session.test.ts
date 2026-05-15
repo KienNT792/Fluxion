@@ -1,29 +1,29 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceOpenedPayload } from '@shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorkspaceOpenedPayload } from '@shared'
 import {
   getContextEntryBehavior,
   markWorkspaceAsTrusted,
   openWorkspaceFromDialog,
   runCurrentWorkflow,
-  shouldPromptWorkspaceTrust,
-} from './workflow-session';
-import { useExecutionStore } from '../stores/execution.store';
-import { useWorkflowStore } from '../stores/workflow.store';
+  shouldPromptWorkspaceTrust
+} from './workflow-session'
+import { useExecutionStore } from '../stores/execution.store'
+import { useWorkflowStore } from '../stores/workflow.store'
 
 describe('runCurrentWorkflow approval guardrail', () => {
   beforeEach(() => {
-    const localStorageStore = new Map<string, string>();
-    const trustedWorkspaces = new Set<string>();
-    const normalizePath = (value: string): string => value.replace(/\\/g, '/').toLowerCase();
+    const localStorageStore = new Map<string, string>()
+    const trustedWorkspaces = new Set<string>()
+    const normalizePath = (value: string): string => value.replace(/\\/g, '/').toLowerCase()
     vi.stubGlobal('window', {
       localStorage: {
         getItem: vi.fn((key: string) => localStorageStore.get(key) ?? null),
         setItem: vi.fn((key: string, value: string) => {
-          localStorageStore.set(key, value);
+          localStorageStore.set(key, value)
         }),
         removeItem: vi.fn((key: string) => {
-          localStorageStore.delete(key);
-        }),
+          localStorageStore.delete(key)
+        })
       },
       api: {
         openWorkspaceDialog: vi.fn(),
@@ -32,18 +32,18 @@ describe('runCurrentWorkflow approval guardrail', () => {
           trustedWorkspaces.has(normalizePath(workspacePath))
         ),
         trustWorkspace: vi.fn(async (workspacePath: string) => {
-          trustedWorkspaces.add(normalizePath(workspacePath));
+          trustedWorkspaces.add(normalizePath(workspacePath))
         }),
         migrateRendererTrustedWorkspaceCache: vi.fn(async (workspacePaths: string[]) => {
           workspacePaths.forEach((workspacePath) => {
-            trustedWorkspaces.add(normalizePath(workspacePath));
-          });
+            trustedWorkspaces.add(normalizePath(workspacePath))
+          })
         }),
         fetchProviderCapabilities: vi.fn(),
         getProviderCapabilities: vi.fn().mockResolvedValue({}),
-        runWorkflow: vi.fn(),
-      },
-    });
+        runWorkflow: vi.fn()
+      }
+    })
 
     useWorkflowStore.setState({
       workflowId: 'workflow-a',
@@ -64,30 +64,28 @@ describe('runCurrentWorkflow approval guardrail', () => {
             model: 'gpt-5.5',
             prompt: 'Run tests',
             codex: {
-              approvalPolicy: 'on-request',
-            },
-          },
-        },
+              approvalPolicy: 'on-request'
+            }
+          }
+        }
       ],
       edges: [],
       providerCapabilities: {},
-      hasFetchedProviderCapabilities: true,
-    });
+      hasFetchedProviderCapabilities: true
+    })
 
-    useExecutionStore.getState().resetExecution(['node-a']);
-    useExecutionStore.getState().appendLogs('node-a', ['existing log']);
-  });
+    useExecutionStore.getState().resetExecution(['node-a'])
+    useExecutionStore.getState().appendLogs('node-a', ['existing log'])
+  })
 
   it('blocks before reset or run IPC when an interactive approval policy is selected', async () => {
-    await runCurrentWorkflow();
+    await runCurrentWorkflow()
 
-    expect(window.api.runWorkflow).not.toHaveBeenCalled();
-    expect(useExecutionStore.getState().workflowStatus).toBe('error');
-    expect(useExecutionStore.getState().workflowError).toContain(
-      'approval_policy=on-request'
-    );
-    expect(useExecutionStore.getState().terminalLogs['node-a']).toEqual(['existing log']);
-  });
+    expect(window.api.runWorkflow).not.toHaveBeenCalled()
+    expect(useExecutionStore.getState().workflowStatus).toBe('error')
+    expect(useExecutionStore.getState().workflowError).toContain('approval_policy=on-request')
+    expect(useExecutionStore.getState().terminalLogs['node-a']).toEqual(['existing log'])
+  })
 
   it('allows interactive approval policy when protocol status is supported', async () => {
     useWorkflowStore.setState({
@@ -99,37 +97,37 @@ describe('runCurrentWorkflow approval guardrail', () => {
           auth: {
             type: 'cli-login',
             status: 'authenticated',
-            loginCommand: 'codex login',
+            loginCommand: 'codex login'
           },
           readiness: {
             code: 'ready',
             blocking: false,
             title: 'Codex CLI ready.',
             message: 'Ready.',
-            catalogSource: 'live',
+            catalogSource: 'live'
           },
           models: [
             {
               id: 'gpt-5.5',
               displayName: 'GPT-5.5',
               visibility: 'list',
-              supportedReasoningLevels: [],
-            },
+              supportedReasoningLevels: []
+            }
           ],
           parameters: [],
           approvalProtocol: {
             status: 'supported',
-            message: 'Probe supported.',
-          },
-        },
-      },
-    });
+            message: 'Probe supported.'
+          }
+        }
+      }
+    })
 
-    await runCurrentWorkflow();
+    await runCurrentWorkflow()
 
-    expect(window.api.runWorkflow).toHaveBeenCalledTimes(1);
-    expect(useExecutionStore.getState().workflowStatus).toBe('running');
-  });
+    expect(window.api.runWorkflow).toHaveBeenCalledTimes(1)
+    expect(useExecutionStore.getState().workflowStatus).toBe('running')
+  })
 
   it('resets terminal follow mode and active terminal node for a brand-new workflow run', async () => {
     useWorkflowStore.setState({
@@ -143,42 +141,42 @@ describe('runCurrentWorkflow approval guardrail', () => {
           auth: {
             type: 'cli-login',
             status: 'authenticated',
-            loginCommand: 'codex login',
+            loginCommand: 'codex login'
           },
           readiness: {
             code: 'ready',
             blocking: false,
             title: 'Codex CLI ready.',
             message: 'Ready.',
-            catalogSource: 'live',
+            catalogSource: 'live'
           },
           models: [
             {
               id: 'gpt-5.5',
               displayName: 'GPT-5.5',
               visibility: 'list',
-              supportedReasoningLevels: [],
-            },
+              supportedReasoningLevels: []
+            }
           ],
           parameters: [],
           approvalProtocol: {
             status: 'supported',
-            message: 'Probe supported.',
-          },
-        },
-      },
-    });
+            message: 'Probe supported.'
+          }
+        }
+      }
+    })
 
-    await runCurrentWorkflow();
+    await runCurrentWorkflow()
 
-    expect(window.api.runWorkflow).toHaveBeenCalledTimes(1);
-    expect(useWorkflowStore.getState().terminalFollowMode).toBe('auto');
-    expect(useWorkflowStore.getState().terminalNodeId).toBeNull();
-  });
+    expect(window.api.runWorkflow).toHaveBeenCalledTimes(1)
+    expect(useWorkflowStore.getState().terminalFollowMode).toBe('auto')
+    expect(useWorkflowStore.getState().terminalNodeId).toBeNull()
+  })
 
   it('prompts for trust before opening an untrusted workspace', async () => {
-    const requestWorkspaceTrust = vi.fn(async () => true);
-    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Workspace');
+    const requestWorkspaceTrust = vi.fn(async () => true)
+    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Workspace')
     window.api.loadWorkspace = vi.fn().mockResolvedValue({
       workspacePath: 'C:\\Workspace',
       workflow: { id: 'w1', name: 'Workflow', executionMode: 'auto', nodes: [], edges: [] },
@@ -188,20 +186,20 @@ describe('runCurrentWorkflow approval guardrail', () => {
       isNewWorkspace: true,
       contextStatus: 'missing',
       contextSummary: null,
-      legacyWorkflowDetected: false,
-    });
+      legacyWorkflowDetected: false
+    })
 
-    await openWorkspaceFromDialog(requestWorkspaceTrust);
+    await openWorkspaceFromDialog(requestWorkspaceTrust)
 
-    expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Workspace');
-    expect(window.api.loadWorkspace).toHaveBeenCalledWith('C:\\Workspace');
-    await expect(shouldPromptWorkspaceTrust('C:\\Workspace')).resolves.toBe(false);
-  });
+    expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Workspace')
+    expect(window.api.loadWorkspace).toHaveBeenCalledWith('C:\\Workspace')
+    await expect(shouldPromptWorkspaceTrust('C:\\Workspace')).resolves.toBe(false)
+  })
 
   it('skips trust prompt for a trusted workspace path', async () => {
-    await markWorkspaceAsTrusted('C:\\Trusted');
-    const requestWorkspaceTrust = vi.fn(async () => true);
-    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Trusted');
+    await markWorkspaceAsTrusted('C:\\Trusted')
+    const requestWorkspaceTrust = vi.fn(async () => true)
+    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Trusted')
     window.api.loadWorkspace = vi.fn().mockResolvedValue({
       workspacePath: 'C:\\Trusted',
       workflow: { id: 'w2', name: 'Workflow', executionMode: 'auto', nodes: [], edges: [] },
@@ -211,26 +209,26 @@ describe('runCurrentWorkflow approval guardrail', () => {
       isNewWorkspace: false,
       contextStatus: 'missing',
       contextSummary: null,
-      legacyWorkflowDetected: false,
-    });
+      legacyWorkflowDetected: false
+    })
 
-    await openWorkspaceFromDialog(requestWorkspaceTrust);
+    await openWorkspaceFromDialog(requestWorkspaceTrust)
 
-    expect(requestWorkspaceTrust).not.toHaveBeenCalled();
-    expect(window.api.loadWorkspace).toHaveBeenCalledWith('C:\\Trusted');
-  });
+    expect(requestWorkspaceTrust).not.toHaveBeenCalled()
+    expect(window.api.loadWorkspace).toHaveBeenCalledWith('C:\\Trusted')
+  })
 
   it('does not open the workspace when trust is declined', async () => {
-    const requestWorkspaceTrust = vi.fn(async () => false);
-    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Declined');
-    window.api.loadWorkspace = vi.fn();
+    const requestWorkspaceTrust = vi.fn(async () => false)
+    window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Declined')
+    window.api.loadWorkspace = vi.fn()
 
-    await openWorkspaceFromDialog(requestWorkspaceTrust);
+    await openWorkspaceFromDialog(requestWorkspaceTrust)
 
-    expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Declined');
-    expect(window.api.loadWorkspace).not.toHaveBeenCalled();
-    await expect(shouldPromptWorkspaceTrust('C:\\Declined')).resolves.toBe(true);
-  });
+    expect(requestWorkspaceTrust).toHaveBeenCalledWith('C:\\Declined')
+    expect(window.api.loadWorkspace).not.toHaveBeenCalled()
+    await expect(shouldPromptWorkspaceTrust('C:\\Declined')).resolves.toBe(true)
+  })
 
   it('maps context entry behavior without auto-opening incomplete or legacy context', () => {
     const basePayload: Omit<WorkspaceOpenedPayload, 'contextStatus'> = {
@@ -241,34 +239,34 @@ describe('runCurrentWorkflow approval guardrail', () => {
       workflows: [],
       isNewWorkspace: false,
       contextSummary: null,
-      legacyWorkflowDetected: false,
-    };
+      legacyWorkflowDetected: false
+    }
 
     expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'missing' })).toMatchObject({
       autoOpenModal: true,
       showIncompleteBanner: false,
-      showLegacyBanner: false,
-    });
+      showLegacyBanner: false
+    })
     expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'incomplete' })).toMatchObject({
       autoOpenModal: false,
       showIncompleteBanner: true,
-      showLegacyBanner: false,
-    });
+      showLegacyBanner: false
+    })
     expect(
       getContextEntryBehavior({
         ...basePayload,
         contextStatus: 'legacy',
-        legacyWorkflowDetected: true,
+        legacyWorkflowDetected: true
       })
     ).toMatchObject({
       autoOpenModal: false,
       showIncompleteBanner: false,
-      showLegacyBanner: true,
-    });
+      showLegacyBanner: true
+    })
     expect(getContextEntryBehavior({ ...basePayload, contextStatus: 'ready' })).toMatchObject({
       autoOpenModal: false,
       showIncompleteBanner: false,
-      showLegacyBanner: false,
-    });
-  });
-});
+      showLegacyBanner: false
+    })
+  })
+})

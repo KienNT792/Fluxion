@@ -1,20 +1,20 @@
-import React, { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle } from 'lucide-react';
-import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
-import { Button } from './Button';
+import React, { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { AlertTriangle } from 'lucide-react'
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap'
+import { Button } from './Button'
 
 interface ConfirmDialogProps {
-  isOpen: boolean;
-  title: string;
-  description: React.ReactNode;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  confirmVariant?: 'primary' | 'secondary' | 'danger';
-  confirmDisabled?: boolean;
-  iconTone?: 'danger' | 'accent';
-  onConfirm: () => void | Promise<void>;
-  onCancel: () => void;
+  isOpen: boolean
+  title: string
+  description: React.ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  confirmVariant?: 'primary' | 'secondary' | 'danger'
+  confirmDisabled?: boolean
+  iconTone?: 'danger' | 'accent'
+  onConfirm: () => void | Promise<void>
+  onCancel: () => void
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -27,41 +27,41 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmDisabled = false,
   iconTone = 'danger',
   onConfirm,
-  onCancel,
+  onCancel
 }) => {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null)
 
-  useModalFocusTrap(isOpen, dialogRef);
+  useModalFocusTrap(isOpen, dialogRef)
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        onCancel();
+        onCancel()
       }
-    };
+    }
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onCancel]);
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onCancel])
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return
     }
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
+      document.body.style.overflow = originalOverflow
+    }
+  }, [isOpen])
 
   if (!isOpen || typeof document === 'undefined') {
-    return null;
+    return null
   }
 
   return createPortal(
@@ -80,7 +80,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         className="flex max-h-[calc(100vh-32px)] w-full max-w-md flex-col overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',
-          border: '1px solid var(--color-hairline)',
+          border: '1px solid var(--color-hairline)'
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -93,10 +93,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             style={{
               background: 'var(--color-canvas-soft)',
               border: '1px solid var(--color-hairline)',
-              color:
-                iconTone === 'danger'
-                  ? 'var(--color-semantic-error)'
-                  : 'var(--color-primary)',
+              color: iconTone === 'danger' ? 'var(--color-semantic-error)' : 'var(--color-primary)'
             }}
           >
             <AlertTriangle size={16} />
@@ -122,5 +119,5 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </div>
     </div>,
     document.body
-  );
-};
+  )
+}

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useExecutionStore } from '../stores/execution.store';
+import { useEffect } from 'react'
+import { useExecutionStore } from '../stores/execution.store'
 import {
   MemoryContextReadyPayload,
   TerminalDataBatchPayload,
@@ -11,14 +11,14 @@ import {
   WorkflowNodeStatusPayload,
   WorkspaceFileChangedPayload,
   WorkspaceLoadingEvent
-} from '@shared';
-import { useWorkflowStore } from '../stores/workflow.store';
+} from '@shared'
+import { useWorkflowStore } from '../stores/workflow.store'
 import {
   formatTerminalErrorEntry,
   formatTerminalExitEntry,
-  formatTerminalStderrEntry,
-} from '../lib/terminal';
-import { logRuntimeDebug } from '../lib/runtime-debug';
+  formatTerminalStderrEntry
+} from '../lib/terminal'
+import { logRuntimeDebug } from '../lib/runtime-debug'
 
 export function useIpcListeners(): void {
   const {
@@ -52,14 +52,14 @@ export function useIpcListeners(): void {
 
       const currentTerminalNodeId = workflowState.terminalNodeId
       const currentTerminalStatus = currentTerminalNodeId
-        ? useExecutionStore.getState().nodeStatuses[currentTerminalNodeId] ?? 'idle'
+        ? (useExecutionStore.getState().nodeStatuses[currentTerminalNodeId] ?? 'idle')
         : 'idle'
 
       if (!currentTerminalNodeId) {
         workflowState.followTerminalNode(nodeId)
         logRuntimeDebug('AutoFollow', 'auto-follow switched to first running node', {
           nextNodeId: nodeId,
-          reason: 'no-followed-node',
+          reason: 'no-followed-node'
         })
         return
       }
@@ -76,7 +76,7 @@ export function useIpcListeners(): void {
       logRuntimeDebug('AutoFollow', 'auto-follow switched to newly running node', {
         previousNodeId: currentTerminalNodeId,
         previousStatus: currentTerminalStatus,
-        nextNodeId: nodeId,
+        nextNodeId: nodeId
       })
     }
 
@@ -94,7 +94,7 @@ export function useIpcListeners(): void {
       logRuntimeDebug('AutoFollow', 'auto-follow switched to error node', {
         previousNodeId: workflowState.terminalNodeId,
         nextNodeId: nodeId,
-        error,
+        error
       })
     }
 

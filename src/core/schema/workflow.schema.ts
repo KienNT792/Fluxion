@@ -1,15 +1,15 @@
-import { z } from 'zod';
-import { ArtifactRefSchema } from './artifact.schema';
-import { CodexExecutionOptionsSchema } from './codex.schema';
+import { z } from 'zod'
+import { ArtifactRefSchema } from './artifact.schema'
+import { CodexExecutionOptionsSchema } from './codex.schema'
 
-export const RunnerIdSchema = z.enum(['codex', 'custom']);
-export const ExecutionModeSchema = z.enum(['auto', 'manual']);
+export const RunnerIdSchema = z.enum(['codex', 'custom'])
+export const ExecutionModeSchema = z.enum(['auto', 'manual'])
 
 export const RetryPolicySchema = z
   .object({
-    maxAttempts: z.number().int().min(1).optional(),
+    maxAttempts: z.number().int().min(1).optional()
   })
-  .passthrough();
+  .passthrough()
 
 export const AgentNodeDataSchema = z
   .object({
@@ -26,9 +26,9 @@ export const AgentNodeDataSchema = z
     retryPolicy: RetryPolicySchema.optional(),
     maxTokens: z.number().optional(),
     temperature: z.number().optional(),
-    reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+    reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional()
   })
-  .passthrough();
+  .passthrough()
 
 export const WorkflowNodeSchema = z.object({
   id: z.string().min(1),
@@ -37,16 +37,16 @@ export const WorkflowNodeSchema = z.object({
   data: AgentNodeDataSchema,
   position: z.object({
     x: z.number(),
-    y: z.number(),
-  }),
-});
+    y: z.number()
+  })
+})
 
 export const WorkflowEdgeSchema = z.object({
   id: z.string().min(1),
   source: z.string().min(1),
   target: z.string().min(1),
-  label: z.string().optional(),
-});
+  label: z.string().optional()
+})
 
 export const WorkflowSchema = z.object({
   id: z.string().min(1),
@@ -58,11 +58,11 @@ export const WorkflowSchema = z.object({
   nodes: z.array(WorkflowNodeSchema),
   edges: z.array(WorkflowEdgeSchema),
   createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-});
+  updatedAt: z.string().optional()
+})
 
-export type RunnerId = z.infer<typeof RunnerIdSchema>;
-export type AgentNodeData = z.infer<typeof AgentNodeDataSchema>;
-export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>;
-export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>;
-export type Workflow = z.infer<typeof WorkflowSchema>;
+export type RunnerId = z.infer<typeof RunnerIdSchema>
+export type AgentNodeData = z.infer<typeof AgentNodeDataSchema>
+export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>
+export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>
+export type Workflow = z.infer<typeof WorkflowSchema>

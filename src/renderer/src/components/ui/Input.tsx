@@ -1,20 +1,19 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useState } from 'react'
 import {
   FormControlFont,
   FormControlSize,
   FormControlSurface,
   FormControlTone,
-  getFormControlStyle,
-} from './form-control';
+  getFormControlStyle
+} from './form-control'
 
-export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  size?: FormControlSize;
-  font?: FormControlFont;
-  tone?: FormControlTone;
-  surface?: FormControlSurface;
-  invalid?: boolean;
-  htmlSize?: number;
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
+  size?: FormControlSize
+  font?: FormControlFont
+  tone?: FormControlTone
+  surface?: FormControlSurface
+  invalid?: boolean
+  htmlSize?: number
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -36,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const [isFocused, setIsFocused] = useState(false);
+    const [isFocused, setIsFocused] = useState(false)
 
     return (
       <input
@@ -53,22 +52,22 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             surface,
             invalid,
             disabled,
-            isFocused,
+            isFocused
           }),
-          ...style,
+          ...style
         }}
         onFocus={(event) => {
-          setIsFocused(true);
-          onFocus?.(event);
+          setIsFocused(true)
+          onFocus?.(event)
         }}
         onBlur={(event) => {
-          setIsFocused(false);
-          onBlur?.(event);
+          setIsFocused(false)
+          onBlur?.(event)
         }}
         {...props}
       />
-    );
+    )
   }
-);
+)
 
-Input.displayName = 'Input';
+Input.displayName = 'Input'

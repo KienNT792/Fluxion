@@ -4,19 +4,19 @@ import {
   AgentConfigExporterId,
   AgentConfigExporterStatus,
   AgentConfigExporterSummary,
-  ProjectContextDraft,
-} from '@shared';
+  ProjectContextDraft
+} from '@shared'
 
 export interface AgentConfigExporter {
-  id: AgentConfigExporterId;
-  label: string;
-  status: AgentConfigExporterStatus;
-  description: string;
+  id: AgentConfigExporterId
+  label: string
+  status: AgentConfigExporterStatus
+  description: string
   createPreview(
     workspacePath: string,
     context: ProjectContextDraft,
     options?: AgentConfigExportOptions
-  ): Promise<AgentConfigExportPreview>;
+  ): Promise<AgentConfigExportPreview>
 }
 
 export function summarizeAgentConfigExporter(
@@ -26,6 +26,6 @@ export function summarizeAgentConfigExporter(
     id: exporter.id,
     label: exporter.label,
     status: exporter.status,
-    description: exporter.description,
-  };
+    description: exporter.description
+  }
 }

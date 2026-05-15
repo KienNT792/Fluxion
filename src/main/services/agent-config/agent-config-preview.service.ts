@@ -4,14 +4,14 @@ import {
   AgentConfigExportPreview,
   AgentConfigExporterId,
   AgentConfigExporterSummary,
-  ProjectContextDraft,
-} from '@shared';
-import { agentConfigExportRegistry } from './agent-config-export-registry';
-import { agentConfigMergeService } from './agent-config-merge.service';
+  ProjectContextDraft
+} from '@shared'
+import { agentConfigExportRegistry } from './agent-config-export-registry'
+import { agentConfigMergeService } from './agent-config-merge.service'
 
 export class AgentConfigPreviewService {
   public listExporters(): AgentConfigExporterSummary[] {
-    return agentConfigExportRegistry.listExporters();
+    return agentConfigExportRegistry.listExporters()
   }
 
   public createPreview(
@@ -20,14 +20,12 @@ export class AgentConfigPreviewService {
     context: ProjectContextDraft,
     options?: AgentConfigExportOptions
   ): Promise<AgentConfigExportPreview> {
-    return agentConfigExportRegistry.createPreview(workspacePath, exporterId, context, options);
+    return agentConfigExportRegistry.createPreview(workspacePath, exporterId, context, options)
   }
 
-  public applyPreview(
-    preview: AgentConfigExportPreview
-  ): Promise<AgentConfigApplyPreviewResult> {
-    return agentConfigMergeService.applyPreview(preview);
+  public applyPreview(preview: AgentConfigExportPreview): Promise<AgentConfigApplyPreviewResult> {
+    return agentConfigMergeService.applyPreview(preview)
   }
 }
 
-export const agentConfigPreviewService = new AgentConfigPreviewService();
+export const agentConfigPreviewService = new AgentConfigPreviewService()

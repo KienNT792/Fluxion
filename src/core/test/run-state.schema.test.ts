@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { WorkflowRunStateSchema } from '../schema/run-state.schema';
+import { describe, expect, it } from 'vitest'
+import { WorkflowRunStateSchema } from '../schema/run-state.schema'
 
 describe('WorkflowRunStateSchema', () => {
   it('accepts a valid initial run state', () => {
@@ -20,41 +20,41 @@ describe('WorkflowRunStateSchema', () => {
           attempts: 0,
           runnerSessionId: 'session-123',
           model: 'gpt-5.5',
-          outputArtifactPaths: [],
-        },
-      },
-    });
+          outputArtifactPaths: []
+        }
+      }
+    })
 
-    expect(parsed.status).toBe('pending');
-    expect(parsed.executionMode).toBe('auto');
-    expect(parsed.nodes['node-a']?.runner).toBe('codex');
-    expect(parsed.nodes['node-a']?.runnerSessionId).toBe('session-123');
-    expect(parsed.nodes['node-a']?.model).toBe('gpt-5.5');
-  });
+    expect(parsed.status).toBe('pending')
+    expect(parsed.executionMode).toBe('auto')
+    expect(parsed.nodes['node-a']?.runner).toBe('codex')
+    expect(parsed.nodes['node-a']?.runnerSessionId).toBe('session-123')
+    expect(parsed.nodes['node-a']?.model).toBe('gpt-5.5')
+  })
 
   it('rejects an unsupported status', () => {
     expect(() =>
       WorkflowRunStateSchema.parse({
         schemaVersion: 1,
         runId: 'run-1',
-      workflowId: 'workflow-1',
-      executionMode: 'auto',
-      status: 'idle',
-      updatedAt: '2026-05-05T00:00:00.000Z',
-      currentNodeIds: [],
-      awaitingReviewNodeIds: [],
-      nodes: {
-        'node-a': {
+        workflowId: 'workflow-1',
+        executionMode: 'auto',
+        status: 'idle',
+        updatedAt: '2026-05-05T00:00:00.000Z',
+        currentNodeIds: [],
+        awaitingReviewNodeIds: [],
+        nodes: {
+          'node-a': {
             nodeId: 'node-a',
             runner: 'codex',
             status: 'pending',
             attempts: 0,
-            outputArtifactPaths: [],
-          },
-        },
+            outputArtifactPaths: []
+          }
+        }
       })
-    ).toThrow();
-  });
+    ).toThrow()
+  })
 
   it('accepts awaiting review metadata for human review checkpoints', () => {
     const parsed = WorkflowRunStateSchema.parse({
@@ -77,14 +77,14 @@ describe('WorkflowRunStateSchema', () => {
           reviewStatus: 'pending',
           reviewSource: 'manual',
           reviewRequestedAt: '2026-05-05T00:00:00.000Z',
-          outputArtifactPaths: ['docs/review.md'],
-        },
-      },
-    });
+          outputArtifactPaths: ['docs/review.md']
+        }
+      }
+    })
 
-    expect(parsed.awaitingReviewNodeIds).toEqual(['node-a']);
-    expect(parsed.executionMode).toBe('manual');
-    expect(parsed.nodes['node-a']?.reviewStatus).toBe('pending');
-    expect(parsed.nodes['node-a']?.reviewSource).toBe('manual');
-  });
-});
+    expect(parsed.awaitingReviewNodeIds).toEqual(['node-a'])
+    expect(parsed.executionMode).toBe('manual')
+    expect(parsed.nodes['node-a']?.reviewStatus).toBe('pending')
+    expect(parsed.nodes['node-a']?.reviewSource).toBe('manual')
+  })
+})

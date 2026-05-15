@@ -1,20 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest'
 import {
   getCodexCapabilities,
   parseCodexDebugModelsOutput,
-  parseCodexVersionOutput,
-} from '../services/provider-registry.service';
+  parseCodexVersionOutput
+} from '../services/provider-registry.service'
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => 'C:\\FluxionTest',
+    getPath: () => 'C:\\FluxionTest'
   },
   safeStorage: {
     decryptString: () => '',
     encryptString: () => Buffer.from(''),
-    isEncryptionAvailable: () => false,
-  },
-}));
+    isEncryptionAvailable: () => false
+  }
+}))
 
 describe('provider-registry.service', () => {
   it('parses codex debug model output into provider models', () => {
@@ -32,12 +32,12 @@ describe('provider-registry.service', () => {
               { effort: 'low' },
               { effort: 'medium' },
               { effort: 'high' },
-              { effort: 'xhigh' },
-            ],
-          },
-        ],
+              { effort: 'xhigh' }
+            ]
+          }
+        ]
       })
-    );
+    )
 
     expect(models).toEqual([
       {
@@ -47,26 +47,26 @@ describe('provider-registry.service', () => {
         visibility: 'list',
         supportedInApi: true,
         supportedReasoningLevels: ['low', 'medium', 'high', 'xhigh'],
-        defaultReasoningLevel: 'medium',
-      },
-    ]);
-  });
+        defaultReasoningLevel: 'medium'
+      }
+    ])
+  })
 
   it('returns unavailable when the Codex CLI cannot be resolved', async () => {
     const capabilities = await getCodexCapabilities({
       resolveCli: async () => {
-        throw new Error('Codex CLI not found. Install @openai/codex and run codex login.');
-      },
-    });
+        throw new Error('Codex CLI not found. Install @openai/codex and run codex login.')
+      }
+    })
 
-    expect(capabilities.available).toBe(false);
-    expect(capabilities.auth.status).toBe('missing');
+    expect(capabilities.available).toBe(false)
+    expect(capabilities.auth.status).toBe('missing')
     expect(capabilities.readiness).toMatchObject({
       code: 'cli_missing',
-      blocking: true,
-    });
-    expect(capabilities.models).toEqual([]);
-  });
+      blocking: true
+    })
+    expect(capabilities.models).toEqual([])
+  })
 
   it('returns auth missing when discovery requires codex login', async () => {
     const capabilities = await getCodexCapabilities({
@@ -75,25 +75,25 @@ describe('provider-registry.service', () => {
           command: 'codex',
           argsPrefix: [],
           displayCommand: 'codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async () => {
         throw Object.assign(new Error('not authenticated'), {
           stderr: 'Please run codex login to continue.',
-          stdout: '',
-        });
-      },
-    });
+          stdout: ''
+        })
+      }
+    })
 
-    expect(capabilities.available).toBe(true);
-    expect(capabilities.auth.status).toBe('missing');
+    expect(capabilities.available).toBe(true)
+    expect(capabilities.auth.status).toBe('missing')
     expect(capabilities.readiness).toMatchObject({
       code: 'auth_missing',
-      blocking: true,
-    });
-    expect(capabilities.models).toEqual([]);
-  });
+      blocking: true
+    })
+    expect(capabilities.models).toEqual([])
+  })
 
   it('returns authenticated codex capabilities from debug models output', async () => {
     const capabilities = await getCodexCapabilities({
@@ -102,16 +102,16 @@ describe('provider-registry.service', () => {
           command: 'codex',
           argsPrefix: [],
           displayCommand: 'codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async (_command, args) => {
         if (args.join(' ') === '--version') {
-          return { stdout: 'codex-cli 0.128.0', stderr: '' };
+          return { stdout: 'codex-cli 0.128.0', stderr: '' }
         }
 
         if (args.join(' ') === 'login status') {
-          return { stdout: 'Logged in', stderr: '' };
+          return { stdout: 'Logged in', stderr: '' }
         }
 
         return {
@@ -121,98 +121,98 @@ describe('provider-registry.service', () => {
                 slug: 'gpt-5.4-mini',
                 display_name: 'GPT-5.4-Mini',
                 visibility: 'list',
-                supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }],
+                supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }]
               },
               {
                 slug: 'gpt-5.5',
                 display_name: 'GPT-5.5',
                 visibility: 'list',
                 default_reasoning_level: 'medium',
-                supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }],
-              },
-            ],
+                supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }]
+              }
+            ]
           }),
-          stderr: '',
-        };
-      },
-    });
+          stderr: ''
+        }
+      }
+    })
 
-    expect(capabilities.available).toBe(true);
-    expect(capabilities.auth.status).toBe('authenticated');
-    expect(capabilities.version).toBe('0.128.0');
+    expect(capabilities.available).toBe(true)
+    expect(capabilities.auth.status).toBe('authenticated')
+    expect(capabilities.version).toBe('0.128.0')
     expect(capabilities.readiness).toMatchObject({
       code: 'ready',
       blocking: false,
-      catalogSource: 'live',
-    });
-    expect(capabilities.defaultModel).toBe('gpt-5.5');
-    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini', 'gpt-5.5']);
+      catalogSource: 'live'
+    })
+    expect(capabilities.defaultModel).toBe('gpt-5.5')
+    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini', 'gpt-5.5'])
     expect(capabilities.approvalProtocol).toMatchObject({
-      status: 'unknown',
-    });
-  });
+      status: 'unknown'
+    })
+  })
 
   it('reuses the first working Codex CLI candidate across discovery commands', async () => {
-    const calls: string[] = [];
+    const calls: string[] = []
     const capabilities = await getCodexCapabilities({
       resolveCli: async () => [
         {
           command: 'blocked-codex',
           argsPrefix: [],
           displayCommand: 'blocked-codex',
-          source: 'direct',
+          source: 'direct'
         },
         {
           command: 'working-codex',
           argsPrefix: [],
           displayCommand: 'working-codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async (command, args) => {
-        calls.push(`${command} ${args.join(' ')}`);
+        calls.push(`${command} ${args.join(' ')}`)
 
         if (command === 'blocked-codex') {
           throw Object.assign(new Error('permission denied'), {
             code: 'EACCES',
             stderr: '',
-            stdout: '',
-          });
+            stdout: ''
+          })
         }
 
         if (args.join(' ') === 'login status') {
-          return { stdout: 'Logged in', stderr: '' };
+          return { stdout: 'Logged in', stderr: '' }
         }
 
         return {
           stdout: JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }],
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }]
           }),
-          stderr: '',
-        };
-      },
-    });
+          stderr: ''
+        }
+      }
+    })
 
     expect(capabilities.readiness).toMatchObject({
       code: 'ready',
-      blocking: false,
-    });
+      blocking: false
+    })
     expect(calls).toEqual([
       'blocked-codex --version',
       'working-codex --version',
       'working-codex login status',
-      'working-codex debug models',
-    ]);
-  });
+      'working-codex debug models'
+    ])
+  })
 
   it('parses Codex CLI version output', () => {
-    expect(parseCodexVersionOutput('codex-cli 0.128.0')).toBe('0.128.0');
-    expect(parseCodexVersionOutput('codex v1.2.3-beta.1')).toBe('1.2.3-beta.1');
-  });
+    expect(parseCodexVersionOutput('codex-cli 0.128.0')).toBe('0.128.0')
+    expect(parseCodexVersionOutput('codex v1.2.3-beta.1')).toBe('1.2.3-beta.1')
+  })
 
   it('falls back from a blocked WindowsApps alias to a working Codex CLI candidate', async () => {
-    const calls: string[] = [];
-    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe';
+    const calls: string[] = []
+    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe'
 
     const capabilities = await getCodexCapabilities({
       resolveCli: async () => [
@@ -220,82 +220,84 @@ describe('provider-registry.service', () => {
           command: windowsAppsCodex,
           argsPrefix: [],
           displayCommand: windowsAppsCodex,
-          source: 'direct',
+          source: 'direct'
         },
         {
           command: 'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe',
-          argsPrefix: ['C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js'],
+          argsPrefix: [
+            'C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js'
+          ],
           displayCommand:
             'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
-          source: 'node-script',
-        },
+          source: 'node-script'
+        }
       ],
       runCommand: async (command, args) => {
-        calls.push(`${command} ${args.join(' ')}`);
+        calls.push(`${command} ${args.join(' ')}`)
 
         if (command === windowsAppsCodex) {
           throw Object.assign(new Error('operation not permitted'), {
             code: 'EPERM',
             stderr: '',
-            stdout: '',
-          });
+            stdout: ''
+          })
         }
 
         if (args.slice(-2).join(' ') === 'login status') {
-          return { stdout: 'Logged in', stderr: '' };
+          return { stdout: 'Logged in', stderr: '' }
         }
 
         return {
           stdout: JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }],
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }]
           }),
-          stderr: '',
-        };
-      },
-    });
+          stderr: ''
+        }
+      }
+    })
 
     expect(capabilities.readiness).toMatchObject({
       code: 'ready',
-      blocking: false,
-    });
+      blocking: false
+    })
     expect(calls).toEqual([
       `${windowsAppsCodex} --version`,
       'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js --version',
       'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js login status',
-      'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js debug models',
-    ]);
-  });
+      'C:\\Users\\Test\\AppData\\Roaming\\npm\\node.exe C:\\Users\\Test\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js debug models'
+    ])
+  })
 
   it('returns a dedicated readiness state when every Codex candidate is a blocked WindowsApps alias', async () => {
-    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe';
+    const windowsAppsCodex = 'C:\\Program Files\\WindowsApps\\codex.exe'
     const capabilities = await getCodexCapabilities({
       resolveCli: async () => [
         {
           command: windowsAppsCodex,
           argsPrefix: [],
           displayCommand: windowsAppsCodex,
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async () => {
         throw Object.assign(new Error('operation not permitted'), {
           code: 'EPERM',
           stderr: '',
-          stdout: '',
-        });
-      },
-    });
+          stdout: ''
+        })
+      }
+    })
 
-    expect(capabilities.available).toBe(false);
-    expect(capabilities.auth.status).toBe('unknown');
+    expect(capabilities.available).toBe(false)
+    expect(capabilities.auth.status).toBe('unknown')
     expect(capabilities.readiness).toMatchObject({
       code: 'windowsapps_alias_blocked',
       blocking: true,
       actionCommand: 'npm i -g @openai/codex',
-      catalogSource: 'none',
-    });
-    expect(capabilities.refreshHint).toContain('App Execution Alias');
-  });
+      catalogSource: 'none'
+    })
+    expect(capabilities.refreshHint).toContain('App Execution Alias')
+  })
 
   it('keeps running non-blocking when auth status is unknown but catalog loads', async () => {
     const capabilities = await getCodexCapabilities({
@@ -304,34 +306,34 @@ describe('provider-registry.service', () => {
           command: 'codex',
           argsPrefix: [],
           displayCommand: 'codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async (_command, args) => {
         if (args.join(' ') === 'login status') {
           throw Object.assign(new Error('status failed'), {
             stderr: 'Unexpected auth status failure.',
-            stdout: '',
-          });
+            stdout: ''
+          })
         }
 
         return {
           stdout: JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }],
+            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', visibility: 'list' }]
           }),
-          stderr: '',
-        };
-      },
-    });
+          stderr: ''
+        }
+      }
+    })
 
-    expect(capabilities.auth.status).toBe('unknown');
+    expect(capabilities.auth.status).toBe('unknown')
     expect(capabilities.readiness).toMatchObject({
       code: 'auth_unknown',
       blocking: false,
-      catalogSource: 'live',
-    });
-    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.5']);
-  });
+      catalogSource: 'live'
+    })
+    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.5'])
+  })
 
   it('falls back to the bundled catalog when live model discovery fails', async () => {
     const capabilities = await getCodexCapabilities({
@@ -340,38 +342,38 @@ describe('provider-registry.service', () => {
           command: 'codex',
           argsPrefix: [],
           displayCommand: 'codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async (_command, args) => {
-        const commandLine = args.join(' ');
+        const commandLine = args.join(' ')
         if (commandLine === 'login status') {
-          return { stdout: 'Logged in', stderr: '' };
+          return { stdout: 'Logged in', stderr: '' }
         }
 
         if (commandLine === 'debug models') {
           throw Object.assign(new Error('network failed'), {
             stderr: 'Could not refresh model catalog.',
-            stdout: '',
-          });
+            stdout: ''
+          })
         }
 
         return {
           stdout: JSON.stringify({
-            models: [{ slug: 'gpt-5.4-mini', display_name: 'GPT-5.4-Mini', visibility: 'list' }],
+            models: [{ slug: 'gpt-5.4-mini', display_name: 'GPT-5.4-Mini', visibility: 'list' }]
           }),
-          stderr: '',
-        };
-      },
-    });
+          stderr: ''
+        }
+      }
+    })
 
     expect(capabilities.readiness).toMatchObject({
       code: 'ready',
       blocking: false,
-      catalogSource: 'bundled',
-    });
-    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini']);
-  });
+      catalogSource: 'bundled'
+    })
+    expect(capabilities.models.map((model) => model.id)).toEqual(['gpt-5.4-mini'])
+  })
 
   it('returns a non-blocking catalog failure when auth is valid but discovery fails', async () => {
     const capabilities = await getCodexCapabilities({
@@ -380,27 +382,27 @@ describe('provider-registry.service', () => {
           command: 'codex',
           argsPrefix: [],
           displayCommand: 'codex',
-          source: 'direct',
-        },
+          source: 'direct'
+        }
       ],
       runCommand: async (_command, args) => {
         if (args.join(' ') === 'login status') {
-          return { stdout: 'Logged in', stderr: '' };
+          return { stdout: 'Logged in', stderr: '' }
         }
 
         throw Object.assign(new Error('catalog failed'), {
           stderr: 'Catalog unavailable.',
-          stdout: '',
-        });
-      },
-    });
+          stdout: ''
+        })
+      }
+    })
 
-    expect(capabilities.auth.status).toBe('authenticated');
+    expect(capabilities.auth.status).toBe('authenticated')
     expect(capabilities.readiness).toMatchObject({
       code: 'catalog_failed',
       blocking: false,
-      catalogSource: 'none',
-    });
-    expect(capabilities.models).toEqual([]);
-  });
-});
+      catalogSource: 'none'
+    })
+    expect(capabilities.models).toEqual([])
+  })
+})

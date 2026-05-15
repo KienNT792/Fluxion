@@ -146,7 +146,10 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
       </div>
 
       {promptPreview && (
-        <div className="px-3.5 py-2.5 pl-4" style={{ borderTop: '1px solid var(--color-hairline-soft)' }}>
+        <div
+          className="px-3.5 py-2.5 pl-4"
+          style={{ borderTop: '1px solid var(--color-hairline-soft)' }}
+        >
           <p
             className="text-[11px] leading-4"
             style={{

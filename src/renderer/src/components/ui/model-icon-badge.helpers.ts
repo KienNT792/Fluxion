@@ -35,8 +35,7 @@ export function getModelIconSignature(modelId: string, displayName = modelId): M
     const suffix = gptMatch[2] ? suffixMap[gptMatch[2]] : undefined
 
     return {
-      accentColor:
-        gptMatch[2] === 'codex' ? 'var(--color-primary)' : 'var(--color-timeline-read)',
+      accentColor: gptMatch[2] === 'codex' ? 'var(--color-primary)' : 'var(--color-timeline-read)',
       background:
         gptMatch[2] === 'codex'
           ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-canvas-soft))'

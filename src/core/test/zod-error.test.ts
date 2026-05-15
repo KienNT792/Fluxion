@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { WorkflowSchema } from '../schema/workflow.schema';
-import { formatZodError } from '../schema/zod-error';
+import { describe, expect, it } from 'vitest'
+import { WorkflowSchema } from '../schema/workflow.schema'
+import { formatZodError } from '../schema/zod-error'
 
 describe('formatZodError', () => {
   it('formats malformed workflow payload errors without throwing', () => {
@@ -18,20 +18,19 @@ describe('formatZodError', () => {
             model: 'gpt-5.5',
             prompt: 'Do the thing',
             codex: {
-              approvalPolicy: 'on-failure',
-            },
-          },
-        },
+              approvalPolicy: 'on-failure'
+            }
+          }
+        }
       ],
-      edges: [],
-    });
+      edges: []
+    })
 
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(false)
     if (parsed.success) {
-      return;
+      return
     }
 
-    expect(formatZodError(parsed.error)).toContain('nodes.0.data.codex.approvalPolicy');
-  });
-});
-
+    expect(formatZodError(parsed.error)).toContain('nodes.0.data.codex.approvalPolicy')
+  })
+})

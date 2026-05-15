@@ -1,28 +1,26 @@
-import React from 'react';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import React from 'react'
+import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 
 export interface TooltipProps {
-  content: React.ReactNode;
-  children: React.ReactNode;
-  side?: 'top' | 'right' | 'bottom' | 'left';
-  align?: 'start' | 'center' | 'end';
-  delayDuration?: number;
+  content: React.ReactNode
+  children: React.ReactNode
+  side?: 'top' | 'right' | 'bottom' | 'left'
+  align?: 'start' | 'center' | 'end'
+  delayDuration?: number
 }
 
-export const TooltipProvider = TooltipPrimitive.Provider;
+export const TooltipProvider = TooltipPrimitive.Provider
 
 export const Tooltip: React.FC<TooltipProps> = ({
   content,
   children,
   side = 'top',
   align = 'center',
-  delayDuration = 300,
+  delayDuration = 300
 }) => {
   return (
     <TooltipPrimitive.Root delayDuration={delayDuration}>
-      <TooltipPrimitive.Trigger asChild>
-        {children}
-      </TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           side={side}
@@ -36,13 +34,18 @@ export const Tooltip: React.FC<TooltipProps> = ({
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
             maxWidth: '300px',
-            wordWrap: 'break-word',
+            wordWrap: 'break-word'
           }}
         >
           {content}
-          <TooltipPrimitive.Arrow className="fill-current" style={{ color: 'var(--color-ink)' }} width={8} height={4} />
+          <TooltipPrimitive.Arrow
+            className="fill-current"
+            style={{ color: 'var(--color-ink)' }}
+            width={8}
+            height={4}
+          />
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
-  );
-};
+  )
+}

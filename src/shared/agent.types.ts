@@ -1,4 +1,4 @@
-import { ProviderType, ModelId } from './workflow.types';
+import { ProviderType, ModelId } from './workflow.types'
 
 // ─── Abort Reason ─────────────────────────────────────────────────────────────
 
@@ -14,7 +14,7 @@ import { ProviderType, ModelId } from './workflow.types';
 export enum AbortReason {
   USER_REQUESTED = 'USER_REQUESTED',
   ENGINE_HALTED = 'ENGINE_HALTED',
-  PROCESS_TIMEOUT = 'PROCESS_TIMEOUT',
+  PROCESS_TIMEOUT = 'PROCESS_TIMEOUT'
 }
 
 // ─── Agent Config ─────────────────────────────────────────────────────────────
@@ -25,14 +25,14 @@ export enum AbortReason {
  * Use `apiKeyEnvVar` to name the environment variable that holds the key.
  */
 export interface AgentConfig {
-  provider: ProviderType;
-  model: ModelId;
+  provider: ProviderType
+  model: ModelId
   /** Absolute path to the CLI executable when needed. Optional for API-based agents. */
-  cliPath?: string;
+  cliPath?: string
   /** Name of the OS environment variable that holds the API key (e.g. 'OPENAI_API_KEY'). */
-  apiKeyEnvVar: string;
+  apiKeyEnvVar: string
   /** Additional flags to pass to the CLI. */
-  extraFlags?: string[];
+  extraFlags?: string[]
 }
 
 // ─── Streaming Types ─────────────────────────────────────────────────────────
@@ -41,48 +41,48 @@ export interface AgentConfig {
  * A single data chunk yielded by an Agent Adapter's AsyncGenerator.
  */
 export interface AgentTextChunk {
-  type: 'stdout' | 'stderr' | 'status';
-  content: string;
-  timestamp: number;
+  type: 'stdout' | 'stderr' | 'status'
+  content: string
+  timestamp: number
 }
 
 export interface AgentProcessStartedChunk {
-  type: 'process-started';
-  pid?: number;
-  displayCommand: string;
-  startedAt: string;
-  timestamp: number;
-  content?: never;
+  type: 'process-started'
+  pid?: number
+  displayCommand: string
+  startedAt: string
+  timestamp: number
+  content?: never
 }
 
-export type AgentChunk = AgentTextChunk | AgentProcessStartedChunk;
+export type AgentChunk = AgentTextChunk | AgentProcessStartedChunk
 
 export interface AgentProcessTelemetry {
-  pid?: number;
-  displayCommand: string;
-  startedAt: string;
-  completedAt: string;
-  durationMs: number;
-  exitCode?: number;
-  aborted: boolean;
-  abortReason?: string;
-  stdoutBytes: number;
-  stderrBytes: number;
+  pid?: number
+  displayCommand: string
+  startedAt: string
+  completedAt: string
+  durationMs: number
+  exitCode?: number
+  aborted: boolean
+  abortReason?: string
+  stdoutBytes: number
+  stderrBytes: number
 }
 
 /**
  * The final return value of an Agent Adapter's AsyncGenerator.
  */
 export interface AgentResult {
-  success: boolean;
+  success: boolean
   /** Final text output produced by the agent, when available. */
-  output?: string;
+  output?: string
   /** Absolute path to the .md output file (only set if execution completed). */
-  outputFilePath?: string;
-  error?: string;
-  exitCode?: number;
+  outputFilePath?: string
+  error?: string
+  exitCode?: number
   /** Runner-native session identifier, reserved for future resume support. */
-  runnerSessionId?: string;
-  abortReason?: AbortReason;
-  processTelemetry?: AgentProcessTelemetry;
+  runnerSessionId?: string
+  abortReason?: AbortReason
+  processTelemetry?: AgentProcessTelemetry
 }

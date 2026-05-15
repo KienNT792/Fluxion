@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from 'zustand'
 import {
   addEdge,
   applyEdgeChanges,
@@ -7,8 +7,8 @@ import {
   Edge,
   EdgeChange,
   Node,
-  NodeChange,
-} from '@xyflow/react';
+  NodeChange
+} from '@xyflow/react'
 import {
   AgentNodeData,
   CODEX_DEFAULT_MODEL,
@@ -22,126 +22,123 @@ import {
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
-  WorkflowMetadata,
-} from '@shared';
-import {
-  getCodexModelById,
-  getDefaultCodexModel,
-} from '../lib/provider-capabilities';
-import { logRuntimeDebug } from '../lib/runtime-debug';
-import { getNextDefaultNodeLabel } from './workflow-node-labels';
+  WorkflowMetadata
+} from '@shared'
+import { getCodexModelById, getDefaultCodexModel } from '../lib/provider-capabilities'
+import { logRuntimeDebug } from '../lib/runtime-debug'
+import { getNextDefaultNodeLabel } from './workflow-node-labels'
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
-  receivedAt: number;
+  receivedAt: number
 }
 
 interface ReviewFocusRequest {
-  nodeId: string;
-  requestId: number;
+  nodeId: string
+  requestId: number
 }
 
-type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
-type ContextSetupInitialStep = 'detect' | 'onboarding' | 'rules' | 'brief' | 'focus' | 'review';
+type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error'
+type ContextSetupInitialStep = 'detect' | 'onboarding' | 'rules' | 'brief' | 'focus' | 'review'
 
 interface WorkspaceOpenState {
-  phase: WorkspaceOpenPhase;
-  workspacePath?: string;
-  error?: string;
+  phase: WorkspaceOpenPhase
+  workspacePath?: string
+  error?: string
 }
 
 interface WorkflowState {
-  workflowId: string;
-  workflowName: string;
-  workflowRevision: number;
-  lastSavedRevision: number;
-  executionMode: ExecutionMode;
-  nodes: Node<WorkflowNode['data']>[];
-  edges: Edge[];
-  workspacePath: string | null;
-  selectedNodeId: string | null;
-  terminalNodeId: string | null;
-  terminalFollowMode: 'auto' | 'manual';
-  terminalViewRequestId: number;
-  reviewFocusRequest: ReviewFocusRequest | null;
-  lastSavedAt: string | null;
-  isDirty: boolean;
-  isSaving: boolean;
-  saveError: string | null;
-  hasExternalWorkflowChange: boolean;
-  recentWorkspaceChanges: WorkspaceChangeRecord[];
-  contextStatus: WorkspaceContextStatus;
-  contextSummary: ProjectContextDraft | null;
-  isContextSetupOpen: boolean;
-  contextSetupInitialStep: ContextSetupInitialStep;
-  activeWorkflowFilePath: string | null;
-  workflows: WorkflowMetadata[];
-  isNewWorkspace: boolean;
-  legacyWorkflowDetected: boolean;
-  legacyWorkflowBackupFilePath: string | null;
-  workspaceLoadingEvents: WorkspaceLoadingEvent[];
-  workspaceLoadingPath: string | null;
-  workspaceLoadingError: string | null;
-  workspaceOpenState: WorkspaceOpenState;
-  providerCapabilities: ProviderCapabilitiesMap;
-  isProviderCapabilitiesLoading: boolean;
-  hasFetchedProviderCapabilities: boolean;
+  workflowId: string
+  workflowName: string
+  workflowRevision: number
+  lastSavedRevision: number
+  executionMode: ExecutionMode
+  nodes: Node<WorkflowNode['data']>[]
+  edges: Edge[]
+  workspacePath: string | null
+  selectedNodeId: string | null
+  terminalNodeId: string | null
+  terminalFollowMode: 'auto' | 'manual'
+  terminalViewRequestId: number
+  reviewFocusRequest: ReviewFocusRequest | null
+  lastSavedAt: string | null
+  isDirty: boolean
+  isSaving: boolean
+  saveError: string | null
+  hasExternalWorkflowChange: boolean
+  recentWorkspaceChanges: WorkspaceChangeRecord[]
+  contextStatus: WorkspaceContextStatus
+  contextSummary: ProjectContextDraft | null
+  isContextSetupOpen: boolean
+  contextSetupInitialStep: ContextSetupInitialStep
+  activeWorkflowFilePath: string | null
+  workflows: WorkflowMetadata[]
+  isNewWorkspace: boolean
+  legacyWorkflowDetected: boolean
+  legacyWorkflowBackupFilePath: string | null
+  workspaceLoadingEvents: WorkspaceLoadingEvent[]
+  workspaceLoadingPath: string | null
+  workspaceLoadingError: string | null
+  workspaceOpenState: WorkspaceOpenState
+  providerCapabilities: ProviderCapabilitiesMap
+  isProviderCapabilitiesLoading: boolean
+  hasFetchedProviderCapabilities: boolean
 
-  setWorkspacePath: (path: string | null) => void;
-  setWorkflowName: (name: string) => void;
-  setExecutionMode: (mode: ExecutionMode) => void;
-  fetchProviderCapabilities: (forceRefresh?: boolean) => Promise<ProviderCapabilitiesMap>;
-  hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void;
-  setNodes: (nodes: Node<WorkflowNode['data']>[]) => void;
-  setEdges: (edges: Edge[]) => void;
-  onNodesChange: (changes: NodeChange<Node<WorkflowNode['data']>>[]) => void;
-  onEdgesChange: (changes: EdgeChange[]) => void;
-  onConnect: (connection: Connection) => void;
-  addNode: (preset: Partial<AgentNodeData>, position: { x: number; y: number }) => void;
-  setSelectedNode: (id: string | null) => void;
-  setTerminalNodeId: (id: string | null) => void;
-  setTerminalFollowMode: (mode: 'auto' | 'manual') => void;
-  followTerminalNode: (id: string | null) => void;
-  requestReviewFocus: (id: string) => void;
-  updateNodeData: (id: string, newData: Partial<WorkflowNode['data']>) => void;
-  deleteNode: (id: string) => void;
-  markSaveStarted: () => void;
-  markSaveCompleted: (savedAt: string, savedRevision: number) => void;
-  markSaveFailed: (error: string) => void;
-  recordWorkspaceChange: (change: WorkspaceFileChangedPayload) => void;
-  clearExternalWorkflowChange: () => void;
-  setContextSetupOpen: (isOpen: boolean, initialStep?: ContextSetupInitialStep) => void;
+  setWorkspacePath: (path: string | null) => void
+  setWorkflowName: (name: string) => void
+  setExecutionMode: (mode: ExecutionMode) => void
+  fetchProviderCapabilities: (forceRefresh?: boolean) => Promise<ProviderCapabilitiesMap>
+  hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void
+  setNodes: (nodes: Node<WorkflowNode['data']>[]) => void
+  setEdges: (edges: Edge[]) => void
+  onNodesChange: (changes: NodeChange<Node<WorkflowNode['data']>>[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
+  onConnect: (connection: Connection) => void
+  addNode: (preset: Partial<AgentNodeData>, position: { x: number; y: number }) => void
+  setSelectedNode: (id: string | null) => void
+  setTerminalNodeId: (id: string | null) => void
+  setTerminalFollowMode: (mode: 'auto' | 'manual') => void
+  followTerminalNode: (id: string | null) => void
+  requestReviewFocus: (id: string) => void
+  updateNodeData: (id: string, newData: Partial<WorkflowNode['data']>) => void
+  deleteNode: (id: string) => void
+  markSaveStarted: () => void
+  markSaveCompleted: (savedAt: string, savedRevision: number) => void
+  markSaveFailed: (error: string) => void
+  recordWorkspaceChange: (change: WorkspaceFileChangedPayload) => void
+  clearExternalWorkflowChange: () => void
+  setContextSetupOpen: (isOpen: boolean, initialStep?: ContextSetupInitialStep) => void
   setContextState: (
     status: WorkspaceContextStatus,
     contextSummary: ProjectContextDraft | null
-  ) => void;
-  recordWorkspaceLoadingEvent: (event: WorkspaceLoadingEvent) => void;
-  resetWorkspaceLoadingEvents: () => void;
-  setWorkspaceOpenState: (state: WorkspaceOpenState) => void;
-  clearLegacyWorkflowBackup: () => void;
+  ) => void
+  recordWorkspaceLoadingEvent: (event: WorkspaceLoadingEvent) => void
+  resetWorkspaceLoadingEvents: () => void
+  setWorkspaceOpenState: (state: WorkspaceOpenState) => void
+  clearLegacyWorkflowBackup: () => void
 }
 
-const MAX_WORKSPACE_CHANGES = 5;
-const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitiesMap = {};
+const MAX_WORKSPACE_CHANGES = 5
+const EMPTY_PROVIDER_CAPABILITIES: ProviderCapabilitiesMap = {}
 const WORKSPACE_LOADING_STEP_ORDER: WorkspaceLoadingEvent['step'][] = [
   'init',
   'loadWorkflows',
   'loadContext',
   'watcher',
-  'ready',
-];
+  'ready'
+]
 
 function normalizeNodeData(data: WorkflowNode['data']): WorkflowNode['data'] {
   const model =
     typeof data.model === 'string' && data.model.trim().length > 0
       ? data.model.trim()
-      : CODEX_DEFAULT_MODEL;
+      : CODEX_DEFAULT_MODEL
 
   return {
     ...data,
     provider: 'codex',
     model,
-    prompt: typeof data.prompt === 'string' ? data.prompt : '',
-  };
+    prompt: typeof data.prompt === 'string' ? data.prompt : ''
+  }
 }
 
 function applySelectionState(
@@ -150,25 +147,23 @@ function applySelectionState(
 ): Node<WorkflowNode['data']>[] {
   return nodes.map((node) => ({
     ...node,
-    selected: node.id === selectedNodeId,
-  }));
+    selected: node.id === selectedNodeId
+  }))
 }
 
 function hasSelectionState(
   nodes: Node<WorkflowNode['data']>[],
   selectedNodeId: string | null
 ): boolean {
-  return nodes.every((node) => Boolean(node.selected) === (node.id === selectedNodeId));
+  return nodes.every((node) => Boolean(node.selected) === (node.id === selectedNodeId))
 }
 
-function shouldMarkNodeChangesDirty(
-  changes: NodeChange<Node<WorkflowNode['data']>>[]
-): boolean {
-  return changes.some((change) => change.type !== 'select' && change.type !== 'dimensions');
+function shouldMarkNodeChangesDirty(changes: NodeChange<Node<WorkflowNode['data']>>[]): boolean {
+  return changes.some((change) => change.type !== 'select' && change.type !== 'dimensions')
 }
 
 function shouldMarkEdgeChangesDirty(changes: EdgeChange[]): boolean {
-  return changes.some((change) => change.type !== 'select');
+  return changes.some((change) => change.type !== 'select')
 }
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
@@ -215,21 +210,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflowName: name,
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
+      saveError: null
     })),
 
   setExecutionMode: (mode) =>
     set((state) => {
       if (state.executionMode === mode) {
-        return state;
+        return state
       }
 
       return {
         executionMode: mode,
         workflowRevision: state.workflowRevision + 1,
         isDirty: true,
-        saveError: null,
-      };
+        saveError: null
+      }
     }),
 
   fetchProviderCapabilities: async (forceRefresh = false) => {
@@ -237,32 +232,32 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       set({
         providerCapabilities: EMPTY_PROVIDER_CAPABILITIES,
         isProviderCapabilitiesLoading: false,
-        hasFetchedProviderCapabilities: true,
-      });
+        hasFetchedProviderCapabilities: true
+      })
 
-      return EMPTY_PROVIDER_CAPABILITIES;
+      return EMPTY_PROVIDER_CAPABILITIES
     }
 
-    set({ isProviderCapabilitiesLoading: true });
+    set({ isProviderCapabilitiesLoading: true })
 
     try {
-      const capabilities = await window.api.getProviderCapabilities({ forceRefresh });
+      const capabilities = await window.api.getProviderCapabilities({ forceRefresh })
       set({
         providerCapabilities: capabilities,
         isProviderCapabilitiesLoading: false,
-        hasFetchedProviderCapabilities: true,
-      });
-      return capabilities;
+        hasFetchedProviderCapabilities: true
+      })
+      return capabilities
     } catch {
-      const previousCapabilities = get().providerCapabilities;
+      const previousCapabilities = get().providerCapabilities
 
       set({
         providerCapabilities: previousCapabilities,
         isProviderCapabilitiesLoading: false,
-        hasFetchedProviderCapabilities: true,
-      });
+        hasFetchedProviderCapabilities: true
+      })
 
-      return previousCapabilities;
+      return previousCapabilities
     }
   },
 
@@ -278,13 +273,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           id: node.id,
           position: node.position,
           data: normalizeNodeData(node.data),
-          type: node.type ?? 'agentNode',
+          type: node.type ?? 'agentNode'
         })),
         null
       ),
       edges: payload.workflow.edges.map((edge) => ({
         ...edge,
-        type: 'animatedEdge',
+        type: 'animatedEdge'
       })),
       workspacePath: payload.workspacePath,
       selectedNodeId: null,
@@ -305,7 +300,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       legacyWorkflowBackupFilePath: payload.legacyWorkflowBackupFilePath ?? null,
       contextStatus: payload.contextStatus,
       contextSummary: payload.contextSummary ?? null,
-      isContextSetupOpen: false,
+      isContextSetupOpen: false
     }),
 
   setNodes: (nodes) =>
@@ -313,13 +308,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: applySelectionState(
         nodes.map((node) => ({
           ...node,
-          data: normalizeNodeData(node.data),
+          data: normalizeNodeData(node.data)
         })),
         state.selectedNodeId
       ),
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
+      saveError: null
     })),
 
   setEdges: (edges) =>
@@ -327,12 +322,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges,
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
+      saveError: null
     })),
 
   onNodesChange: (changes) => {
     set((state) => {
-      const updatedNodes = applyNodeChanges(changes, state.nodes) as Node<WorkflowNode['data']>[];
+      const updatedNodes = applyNodeChanges(changes, state.nodes) as Node<WorkflowNode['data']>[]
 
       return {
         nodes: applySelectionState(updatedNodes, state.selectedNodeId),
@@ -340,9 +335,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           ? state.workflowRevision + 1
           : state.workflowRevision,
         isDirty: shouldMarkNodeChangesDirty(changes) ? true : state.isDirty,
-        saveError: shouldMarkNodeChangesDirty(changes) ? null : state.saveError,
-      };
-    });
+        saveError: shouldMarkNodeChangesDirty(changes) ? null : state.saveError
+      }
+    })
   },
 
   onEdgesChange: (changes) => {
@@ -352,8 +347,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         ? state.workflowRevision + 1
         : state.workflowRevision,
       isDirty: shouldMarkEdgeChangesDirty(changes) ? true : state.isDirty,
-      saveError: shouldMarkEdgeChangesDirty(changes) ? null : state.saveError,
-    }));
+      saveError: shouldMarkEdgeChangesDirty(changes) ? null : state.saveError
+    }))
   },
 
   onConnect: (connection) => {
@@ -361,26 +356,26 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: addEdge({ ...connection, type: 'animatedEdge' }, state.edges),
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
-    }));
+      saveError: null
+    }))
   },
 
   addNode: (_preset, position) => {
-    const preset = _preset;
-    const providerCapabilities = get().providerCapabilities;
+    const preset = _preset
+    const providerCapabilities = get().providerCapabilities
     const requestedModel =
       typeof preset.model === 'string' && preset.model.trim().length > 0
         ? preset.model.trim()
-        : getDefaultCodexModel(providerCapabilities);
-    const model = requestedModel || CODEX_DEFAULT_MODEL;
+        : getDefaultCodexModel(providerCapabilities)
+    const model = requestedModel || CODEX_DEFAULT_MODEL
     const reasoningLevels = getCodexModelById(
       providerCapabilities,
       model
     )?.supportedReasoningLevels.filter(
       (level): level is ReasoningLevel =>
         level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh'
-    );
-    const newNodeId = `node-${Date.now()}`;
+    )
+    const newNodeId = `node-${Date.now()}`
     const newNode: Node<WorkflowNode['data']> = {
       id: newNodeId,
       position,
@@ -393,33 +388,34 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             : getNextDefaultNodeLabel(get().nodes),
         prompt: '',
         systemInstruction: '',
-        reasoningLevel: reasoningLevels && reasoningLevels.length > 0
-          ? reasoningLevels.includes(CODEX_DEFAULT_REASONING_LEVEL)
-            ? CODEX_DEFAULT_REASONING_LEVEL
-            : reasoningLevels[0]
-          : undefined,
+        reasoningLevel:
+          reasoningLevels && reasoningLevels.length > 0
+            ? reasoningLevels.includes(CODEX_DEFAULT_REASONING_LEVEL)
+              ? CODEX_DEFAULT_REASONING_LEVEL
+              : reasoningLevels[0]
+            : undefined
       },
-      type: 'agentNode',
-    };
+      type: 'agentNode'
+    }
 
     set((state) => ({
       nodes: applySelectionState([...state.nodes, newNode], state.selectedNodeId),
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
-    }));
+      saveError: null
+    }))
   },
 
   setSelectedNode: (id) =>
     set((state) => {
       if (state.selectedNodeId === id && hasSelectionState(state.nodes, id)) {
-        return state;
+        return state
       }
 
       return {
         selectedNodeId: id,
-        nodes: applySelectionState(state.nodes, id),
-      };
+        nodes: applySelectionState(state.nodes, id)
+      }
     }),
 
   setTerminalNodeId: (id) => set({ terminalNodeId: id }),
@@ -427,24 +423,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setTerminalFollowMode: (mode) =>
     set((state) => {
       if (state.terminalFollowMode === mode) {
-        return state;
+        return state
       }
 
       logRuntimeDebug('WorkflowStore', 'terminal follow mode changed', {
         previousMode: state.terminalFollowMode,
         nextMode: mode,
-        terminalNodeId: state.terminalNodeId,
-      });
+        terminalNodeId: state.terminalNodeId
+      })
 
-      return { terminalFollowMode: mode };
+      return { terminalFollowMode: mode }
     }),
 
   followTerminalNode: (id) =>
     set((state) => {
       return {
         terminalNodeId: id,
-        terminalViewRequestId: state.terminalViewRequestId + 1,
-      };
+        terminalViewRequestId: state.terminalViewRequestId + 1
+      }
     }),
 
   requestReviewFocus: (id) =>
@@ -453,8 +449,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: applySelectionState(state.nodes, id),
       reviewFocusRequest: {
         nodeId: id,
-        requestId: Date.now(),
-      },
+        requestId: Date.now()
+      }
     })),
 
   updateNodeData: (id, newData) => {
@@ -462,23 +458,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       nodes: applySelectionState(
         state.nodes.map((node) => {
           if (node.id !== id) {
-            return node;
+            return node
           }
 
           return {
             ...node,
             data: normalizeNodeData({
               ...node.data,
-              ...newData,
-            }),
-          };
+              ...newData
+            })
+          }
         }),
         state.selectedNodeId
       ),
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
-    }));
+      saveError: null
+    }))
   },
 
   deleteNode: (id) => {
@@ -490,18 +486,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
       terminalNodeId: state.terminalNodeId === id ? null : state.terminalNodeId,
-      reviewFocusRequest:
-        state.reviewFocusRequest?.nodeId === id ? null : state.reviewFocusRequest,
+      reviewFocusRequest: state.reviewFocusRequest?.nodeId === id ? null : state.reviewFocusRequest,
       workflowRevision: state.workflowRevision + 1,
       isDirty: true,
-      saveError: null,
-    }));
+      saveError: null
+    }))
   },
 
   markSaveStarted: () =>
     set({
       isSaving: true,
-      saveError: null,
+      saveError: null
     }),
 
   markSaveCompleted: (savedAt, savedRevision) =>
@@ -511,22 +506,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       lastSavedAt: savedAt,
       lastSavedRevision: Math.max(state.lastSavedRevision, savedRevision),
       hasExternalWorkflowChange: false,
-      isDirty: state.workflowRevision > savedRevision,
+      isDirty: state.workflowRevision > savedRevision
     })),
 
   markSaveFailed: (error) =>
     set({
       isSaving: false,
       saveError: error,
-      isDirty: true,
+      isDirty: true
     }),
 
   recordWorkspaceChange: (change) =>
     set((state) => {
       const nextChange: WorkspaceChangeRecord = {
         ...change,
-        receivedAt: Date.now(),
-      };
+        receivedAt: Date.now()
+      }
 
       return {
         recentWorkspaceChanges: [nextChange, ...state.recentWorkspaceChanges].slice(
@@ -536,42 +531,39 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         hasExternalWorkflowChange:
           state.hasExternalWorkflowChange ||
           (state.activeWorkflowFilePath != null &&
-            change.filePath.toLowerCase().replace(/\\/g, '/')
-            === state.activeWorkflowFilePath.toLowerCase().replace(/\\/g, '/')),
-      };
+            change.filePath.toLowerCase().replace(/\\/g, '/') ===
+              state.activeWorkflowFilePath.toLowerCase().replace(/\\/g, '/'))
+      }
     }),
 
   clearExternalWorkflowChange: () => set({ hasExternalWorkflowChange: false }),
   setContextSetupOpen: (isContextSetupOpen, contextSetupInitialStep = 'detect') =>
     set({ isContextSetupOpen, contextSetupInitialStep }),
-  setContextState: (contextStatus, contextSummary) =>
-    set({ contextStatus, contextSummary }),
+  setContextState: (contextStatus, contextSummary) => set({ contextStatus, contextSummary }),
   recordWorkspaceLoadingEvent: (event) =>
     set((state) => {
       const nextEvents = [
         ...state.workspaceLoadingEvents.filter((candidate) => candidate.step !== event.step),
-        event,
+        event
       ].sort(
         (a, b) =>
-          WORKSPACE_LOADING_STEP_ORDER.indexOf(a.step)
-          - WORKSPACE_LOADING_STEP_ORDER.indexOf(b.step)
-      );
+          WORKSPACE_LOADING_STEP_ORDER.indexOf(a.step) -
+          WORKSPACE_LOADING_STEP_ORDER.indexOf(b.step)
+      )
 
       return {
         workspaceLoadingEvents: nextEvents,
         workspaceLoadingPath: event.workspacePath,
         workspaceLoadingError:
-          event.status === 'error'
-            ? event.message ?? 'Failed to load workspace.'
-            : null,
-      };
+          event.status === 'error' ? (event.message ?? 'Failed to load workspace.') : null
+      }
     }),
   resetWorkspaceLoadingEvents: () =>
     set({
       workspaceLoadingEvents: [],
       workspaceLoadingPath: null,
-      workspaceLoadingError: null,
+      workspaceLoadingError: null
     }),
   setWorkspaceOpenState: (workspaceOpenState) => set({ workspaceOpenState }),
-  clearLegacyWorkflowBackup: () => set({ legacyWorkflowBackupFilePath: null }),
-}));
+  clearLegacyWorkflowBackup: () => set({ legacyWorkflowBackupFilePath: null })
+}))

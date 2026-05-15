@@ -1,27 +1,27 @@
-import React from 'react';
+import React from 'react'
 
-export type FormControlSize = 'sm' | 'md';
-export type FormControlFont = 'sans' | 'mono';
-export type FormControlTone = 'default' | 'accent';
-export type FormControlSurface = 'card' | 'canvas';
+export type FormControlSize = 'sm' | 'md'
+export type FormControlFont = 'sans' | 'mono'
+export type FormControlTone = 'default' | 'accent'
+export type FormControlSurface = 'card' | 'canvas'
 
 interface FormControlStyleOptions {
-  size?: FormControlSize;
-  font?: FormControlFont;
-  tone?: FormControlTone;
-  surface?: FormControlSurface;
-  disabled?: boolean;
-  invalid?: boolean;
-  isFocused?: boolean;
-  multiline?: boolean;
-  resize?: React.CSSProperties['resize'];
+  size?: FormControlSize
+  font?: FormControlFont
+  tone?: FormControlTone
+  surface?: FormControlSurface
+  disabled?: boolean
+  invalid?: boolean
+  isFocused?: boolean
+  multiline?: boolean
+  resize?: React.CSSProperties['resize']
 }
 
 interface FormControlMetrics {
-  fontSize: string;
-  height: string;
-  paddingInline: string;
-  paddingBlock: string;
+  fontSize: string
+  height: string
+  paddingInline: string
+  paddingBlock: string
 }
 
 const CONTROL_METRICS: Record<FormControlSize, FormControlMetrics> = {
@@ -29,24 +29,22 @@ const CONTROL_METRICS: Record<FormControlSize, FormControlMetrics> = {
     fontSize: '13px',
     height: '32px',
     paddingInline: '12px',
-    paddingBlock: '8px',
+    paddingBlock: '8px'
   },
   md: {
     fontSize: '14px',
     height: '36px',
     paddingInline: '12px',
-    paddingBlock: '10px',
-  },
-};
+    paddingBlock: '10px'
+  }
+}
 
 function getBackground(surface: FormControlSurface, disabled: boolean | undefined): string {
   if (disabled) {
-    return 'var(--color-canvas-soft)';
+    return 'var(--color-canvas-soft)'
   }
 
-  return surface === 'canvas'
-    ? 'var(--color-canvas)'
-    : 'var(--color-surface-card)';
+  return surface === 'canvas' ? 'var(--color-canvas)' : 'var(--color-surface-card)'
 }
 
 export function getFormControlStyle({
@@ -58,14 +56,14 @@ export function getFormControlStyle({
   invalid = false,
   isFocused = false,
   multiline = false,
-  resize,
+  resize
 }: FormControlStyleOptions = {}): React.CSSProperties {
-  const metrics = CONTROL_METRICS[size];
+  const metrics = CONTROL_METRICS[size]
   const borderColor = invalid
     ? 'var(--color-semantic-error)'
     : isFocused
       ? 'var(--color-primary)'
-      : 'var(--color-hairline)';
+      : 'var(--color-hairline)'
 
   return {
     width: '100%',
@@ -90,6 +88,6 @@ export function getFormControlStyle({
       ? `${metrics.paddingBlock} ${metrics.paddingInline}`
       : `0 ${metrics.paddingInline}`,
     minHeight: multiline ? undefined : metrics.height,
-    resize: multiline ? resize ?? 'vertical' : undefined,
-  };
+    resize: multiline ? (resize ?? 'vertical') : undefined
+  }
 }

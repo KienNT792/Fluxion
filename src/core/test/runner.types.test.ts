@@ -1,5 +1,5 @@
-import { describe, expectTypeOf, it } from 'vitest';
-import { RunnerEvent } from '../runner/runner.types';
+import { describe, expectTypeOf, it } from 'vitest'
+import { RunnerEvent } from '../runner/runner.types'
 
 describe('RunnerEvent', () => {
   it('supports Codex JSON event payloads at the type level', () => {
@@ -9,12 +9,12 @@ describe('RunnerEvent', () => {
       | { type: 'status'; content: string; timestamp: number }
       | { type: 'json-event'; event: unknown; raw: string; timestamp: number }
       | {
-          type: 'process-started';
-          pid?: number;
-          displayCommand: string;
-          startedAt: string;
-          timestamp: number;
+          type: 'process-started'
+          pid?: number
+          displayCommand: string
+          startedAt: string
+          timestamp: number
         }
-    >();
-  });
-});
+    >()
+  })
+})

@@ -20,19 +20,19 @@ export const WORKFLOW_TRACE_EVENT_TYPES = [
   'node.review_rejected',
   'node.rerun_requested',
   'node.failed',
-  'node.aborted',
-] as const;
+  'node.aborted'
+] as const
 
-export type WorkflowTraceEventType = (typeof WORKFLOW_TRACE_EVENT_TYPES)[number];
+export type WorkflowTraceEventType = (typeof WORKFLOW_TRACE_EVENT_TYPES)[number]
 
 export interface WorkflowTraceEvent<
-  TData extends Record<string, unknown> = Record<string, unknown>,
+  TData extends Record<string, unknown> = Record<string, unknown>
 > {
-  schemaVersion: 1;
-  runId: string;
-  workflowId: string;
-  nodeId?: string;
-  type: WorkflowTraceEventType;
-  timestamp: string;
-  data?: TData;
+  schemaVersion: 1
+  runId: string
+  workflowId: string
+  nodeId?: string
+  type: WorkflowTraceEventType
+  timestamp: string
+  data?: TData
 }

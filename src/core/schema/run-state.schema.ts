@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
-const ExecutionModeSchema = z.enum(['auto', 'manual']);
+const ExecutionModeSchema = z.enum(['auto', 'manual'])
 export const RunStatusSchema = z.enum([
   'pending',
   'running',
@@ -8,11 +8,11 @@ export const RunStatusSchema = z.enum([
   'completed',
   'failed',
   'aborted',
-  'rejected',
-]);
+  'rejected'
+])
 
-export const ReviewStatusSchema = z.enum(['pending', 'approved', 'rejected']);
-export const ReviewSourceSchema = z.enum(['node', 'manual']);
+export const ReviewStatusSchema = z.enum(['pending', 'approved', 'rejected'])
+export const ReviewSourceSchema = z.enum(['node', 'manual'])
 
 export const NodeRunStateSchema = z.object({
   nodeId: z.string().min(1),
@@ -31,8 +31,8 @@ export const NodeRunStateSchema = z.object({
   reviewSource: ReviewSourceSchema.optional(),
   reviewRequestedAt: z.string().optional(),
   reviewResolvedAt: z.string().optional(),
-  reviewComment: z.string().optional(),
-});
+  reviewComment: z.string().optional()
+})
 
 export const WorkflowRunStateSchema = z.object({
   schemaVersion: z.literal(1),
@@ -45,5 +45,5 @@ export const WorkflowRunStateSchema = z.object({
   completedAt: z.string().optional(),
   currentNodeIds: z.array(z.string().min(1)).default([]),
   awaitingReviewNodeIds: z.array(z.string().min(1)).default([]),
-  nodes: z.record(z.string(), NodeRunStateSchema),
-});
+  nodes: z.record(z.string(), NodeRunStateSchema)
+})

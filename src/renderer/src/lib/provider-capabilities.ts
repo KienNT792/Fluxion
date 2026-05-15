@@ -4,98 +4,98 @@ import {
   ProviderCatalogSource,
   ProviderCapabilitiesMap,
   ProviderModel,
-  ProviderReadinessState,
-} from '@shared';
+  ProviderReadinessState
+} from '@shared'
 
 export interface CodexReadinessBadgeState {
-  label: 'Ready' | 'Setup needed' | 'Catalog warning' | 'Model warning';
-  tone: 'ready' | 'warning' | 'blocked';
-  summary: string;
-  detail: string;
-  blocking: boolean;
-  actionCommand?: string;
-  catalogSource?: ProviderCatalogSource;
-  unknownModels: string[];
+  label: 'Ready' | 'Setup needed' | 'Catalog warning' | 'Model warning'
+  tone: 'ready' | 'warning' | 'blocked'
+  summary: string
+  detail: string
+  blocking: boolean
+  actionCommand?: string
+  catalogSource?: ProviderCatalogSource
+  unknownModels: string[]
 }
 
 export interface ProviderReadinessSummary {
-  availableCount: number;
-  blockingCount: number;
-  warningCount: number;
-  primaryLabel: string;
-  primaryDetail: string;
-  primaryActionCommand?: string;
+  availableCount: number
+  blockingCount: number
+  warningCount: number
+  primaryLabel: string
+  primaryDetail: string
+  primaryActionCommand?: string
 }
 
 export function getCodexCapabilities(
   providerCapabilities: ProviderCapabilitiesMap
 ): ProviderCapabilities | undefined {
-  return providerCapabilities.codex;
+  return providerCapabilities.codex
 }
 
 export function getCodexReadiness(
   providerCapabilities: ProviderCapabilitiesMap
 ): ProviderReadinessState | undefined {
-  return providerCapabilities.codex?.readiness;
+  return providerCapabilities.codex?.readiness
 }
 
 export function getCodexModelById(
   providerCapabilities: ProviderCapabilitiesMap,
   modelId: string
 ): ProviderModel | undefined {
-  return providerCapabilities.codex?.models.find((model) => model.id === modelId);
+  return providerCapabilities.codex?.models.find((model) => model.id === modelId)
 }
 
 export function getCodexModelDisplayName(
   providerCapabilities: ProviderCapabilitiesMap,
   modelId: string
 ): string {
-  return getCodexModelById(providerCapabilities, modelId)?.displayName ?? modelId;
+  return getCodexModelById(providerCapabilities, modelId)?.displayName ?? modelId
 }
 
 export function getDefaultCodexModel(providerCapabilities: ProviderCapabilitiesMap): string {
   return (
-    providerCapabilities.codex?.defaultModel
-    ?? providerCapabilities.codex?.models.find((model) => model.visibility !== 'hide')?.id
-    ?? providerCapabilities.codex?.models[0]?.id
-    ?? CODEX_DEFAULT_MODEL
-  );
+    providerCapabilities.codex?.defaultModel ??
+    providerCapabilities.codex?.models.find((model) => model.visibility !== 'hide')?.id ??
+    providerCapabilities.codex?.models[0]?.id ??
+    CODEX_DEFAULT_MODEL
+  )
 }
 
 export function modelSupportsReasoning(model: ProviderModel | undefined): boolean {
-  return (model?.supportedReasoningLevels.length ?? 0) > 0;
+  return (model?.supportedReasoningLevels.length ?? 0) > 0
 }
 
 export function isKnownCodexModel(
   providerCapabilities: ProviderCapabilitiesMap,
   modelId: string
 ): boolean {
-  return Boolean(getCodexModelById(providerCapabilities, modelId));
+  return Boolean(getCodexModelById(providerCapabilities, modelId))
 }
 
 export function collectUnknownCodexModels(
   providerCapabilities: ProviderCapabilitiesMap,
   modelIds: string[]
 ): string[] {
-  const unknownModels = new Set<string>();
+  const unknownModels = new Set<string>()
 
   for (const modelId of modelIds) {
     if (!modelId || isKnownCodexModel(providerCapabilities, modelId)) {
-      continue;
+      continue
     }
 
-    unknownModels.add(modelId);
+    unknownModels.add(modelId)
   }
 
-  return [...unknownModels];
+  return [...unknownModels]
 }
 
 export function getCodexReadinessBadgeState(
   providerCapabilities: ProviderCapabilitiesMap,
   modelIds: string[]
 ): CodexReadinessBadgeState {
-  const codexCapabilities = getCodexCapabilities(providerCapabilities);
-  const readiness = getCodexReadiness(providerCapabilities);
+  const codexCapabilities = getCodexCapabilities(providerCapabilities)
+  const readiness = getCodexReadiness(providerCapabilities)
 
   if (!codexCapabilities) {
     return {
@@ -106,11 +106,11 @@ export function getCodexReadinessBadgeState(
       blocking: false,
       actionCommand: 'codex login status',
       catalogSource: 'none',
-      unknownModels: [],
-    };
+      unknownModels: []
+    }
   }
 
-  const unknownModels = collectUnknownCodexModels(providerCapabilities, modelIds);
+  const unknownModels = collectUnknownCodexModels(providerCapabilities, modelIds)
 
   if (readiness?.blocking) {
     return {
@@ -121,8 +121,8 @@ export function getCodexReadinessBadgeState(
       blocking: true,
       actionCommand: readiness.actionCommand,
       catalogSource: readiness.catalogSource,
-      unknownModels,
-    };
+      unknownModels
+    }
   }
 
   if (unknownModels.length > 0) {
@@ -134,17 +134,15 @@ export function getCodexReadinessBadgeState(
       blocking: false,
       actionCommand: readiness?.actionCommand,
       catalogSource: readiness?.catalogSource,
-      unknownModels,
-    };
+      unknownModels
+    }
   }
 
   if (
-    readiness
-    && (
-      readiness.code === 'catalog_failed'
-      || readiness.code === 'auth_unknown'
-      || readiness.catalogSource === 'bundled'
-    )
+    readiness &&
+    (readiness.code === 'catalog_failed' ||
+      readiness.code === 'auth_unknown' ||
+      readiness.catalogSource === 'bundled')
   ) {
     return {
       label: 'Catalog warning',
@@ -154,8 +152,8 @@ export function getCodexReadinessBadgeState(
       blocking: false,
       actionCommand: readiness.actionCommand,
       catalogSource: readiness.catalogSource,
-      unknownModels,
-    };
+      unknownModels
+    }
   }
 
   return {
@@ -166,20 +164,18 @@ export function getCodexReadinessBadgeState(
     blocking: false,
     actionCommand: readiness?.actionCommand,
     catalogSource: readiness?.catalogSource,
-    unknownModels,
-  };
+    unknownModels
+  }
 }
 
-export function getCodexReadinessBlockMessage(
-  readiness: CodexReadinessBadgeState
-): string | null {
+export function getCodexReadinessBlockMessage(readiness: CodexReadinessBadgeState): string | null {
   if (!readiness.blocking) {
-    return null;
+    return null
   }
 
   return readiness.actionCommand
     ? `${readiness.summary} ${readiness.detail} Run \`${readiness.actionCommand}\`, then refresh Codex readiness.`
-    : `${readiness.summary} ${readiness.detail}`;
+    : `${readiness.summary} ${readiness.detail}`
 }
 
 export function getProviderReadinessSummary(
@@ -187,7 +183,7 @@ export function getProviderReadinessSummary(
 ): ProviderReadinessSummary {
   const providers = Object.values(providerCapabilities).filter(
     (capability): capability is ProviderCapabilities => Boolean(capability)
-  );
+  )
 
   if (providers.length === 0) {
     return {
@@ -196,27 +192,25 @@ export function getProviderReadinessSummary(
       warningCount: 1,
       primaryLabel: 'Provider status not checked',
       primaryDetail: 'Refresh provider readiness to verify local agent tooling.',
-      primaryActionCommand: 'codex login status',
-    };
+      primaryActionCommand: 'codex login status'
+    }
   }
 
-  const availableCount = providers.filter((provider) => provider.available).length;
-  const blockingProviders = providers.filter((provider) => provider.readiness?.blocking);
+  const availableCount = providers.filter((provider) => provider.available).length
+  const blockingProviders = providers.filter((provider) => provider.readiness?.blocking)
   const warningProviders = providers.filter(
     (provider) =>
-      !provider.readiness?.blocking
-      && (
-        provider.readiness?.code === 'catalog_failed'
-        || provider.readiness?.code === 'auth_unknown'
-        || provider.readiness?.catalogSource === 'bundled'
-      )
-  );
+      !provider.readiness?.blocking &&
+      (provider.readiness?.code === 'catalog_failed' ||
+        provider.readiness?.code === 'auth_unknown' ||
+        provider.readiness?.catalogSource === 'bundled')
+  )
 
   const primaryProvider =
-    blockingProviders[0]
-    ?? warningProviders[0]
-    ?? providers.find((provider) => provider.available)
-    ?? providers[0];
+    blockingProviders[0] ??
+    warningProviders[0] ??
+    providers.find((provider) => provider.available) ??
+    providers[0]
 
   return {
     availableCount,
@@ -224,8 +218,8 @@ export function getProviderReadinessSummary(
     warningCount: warningProviders.length,
     primaryLabel: primaryProvider?.readiness?.title ?? `${primaryProvider.displayName} ready`,
     primaryDetail:
-      primaryProvider?.readiness?.message
-      ?? `${primaryProvider.displayName} is available for local workflow execution.`,
-    primaryActionCommand: primaryProvider?.readiness?.actionCommand,
-  };
+      primaryProvider?.readiness?.message ??
+      `${primaryProvider.displayName} is available for local workflow execution.`,
+    primaryActionCommand: primaryProvider?.readiness?.actionCommand
+  }
 }

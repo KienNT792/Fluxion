@@ -1,16 +1,16 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { createHash } from 'crypto';
-import matter from 'gray-matter';
-import { NodeId } from '../../shared/workflow.types';
+import * as fs from 'fs/promises'
+import * as path from 'path'
+import { createHash } from 'crypto'
+import matter from 'gray-matter'
+import { NodeId } from '../../shared/workflow.types'
 import {
   CompiledMemoryContext,
   MemoryContextSource,
-  SaveNodeOutputParams,
-} from '../../shared/memory.types';
+  SaveNodeOutputParams
+} from '../../shared/memory.types'
 
 export class MemoryManager {
-  private static instance: MemoryManager;
+  private static instance: MemoryManager
 
   private constructor() {
     // Singleton
@@ -18,32 +18,32 @@ export class MemoryManager {
 
   public static getInstance(): MemoryManager {
     if (!MemoryManager.instance) {
-      MemoryManager.instance = new MemoryManager();
+      MemoryManager.instance = new MemoryManager()
     }
-    return MemoryManager.instance;
+    return MemoryManager.instance
   }
 
   /**
    * Initializes the tiered memory directories in the workspace.
    */
   public async initWorkspace(workspacePath: string): Promise<void> {
-    const memoryDir = path.join(workspacePath, '.fluxion', 'memory');
-    const shortTermDir = path.join(memoryDir, 'short-term');
-    const longTermDir = path.join(memoryDir, 'long-term');
+    const memoryDir = path.join(workspacePath, '.fluxion', 'memory')
+    const shortTermDir = path.join(memoryDir, 'short-term')
+    const longTermDir = path.join(memoryDir, 'long-term')
 
-    await fs.mkdir(shortTermDir, { recursive: true });
-    await fs.mkdir(longTermDir, { recursive: true });
+    await fs.mkdir(shortTermDir, { recursive: true })
+    await fs.mkdir(longTermDir, { recursive: true })
 
     // Initialize global-context.md if it doesn't exist
-    const globalContextPath = path.join(memoryDir, 'global-context.md');
+    const globalContextPath = path.join(memoryDir, 'global-context.md')
     try {
-      await fs.access(globalContextPath);
+      await fs.access(globalContextPath)
     } catch {
       const defaultGlobalContext = matter.stringify(
         '# Global Workspace Rules\n\nAdd your system rules here.',
         { type: 'global', version: '1.0' }
-      );
-      await fs.writeFile(globalContextPath, defaultGlobalContext, 'utf-8');
+      )
+      await fs.writeFile(globalContextPath, defaultGlobalContext, 'utf-8')
     }
   }
 
@@ -57,7 +57,7 @@ export class MemoryManager {
     previousNodeIds: NodeId[]
   ): Promise<string> {
     return (await this.compileContextWithSources(workspacePath, workflowId, previousNodeIds))
-      .compiledContext;
+      .compiledContext
   }
 
   public async compileContextWithSources(
@@ -65,73 +65,78 @@ export class MemoryManager {
     workflowId: string,
     previousNodeIds: NodeId[]
   ): Promise<CompiledMemoryContext> {
-    const memoryDir = path.join(workspacePath, '.fluxion', 'memory');
-    let context = '';
-    const sources: MemoryContextSource[] = [];
+    const memoryDir = path.join(workspacePath, '.fluxion', 'memory')
+    let context = ''
+    const sources: MemoryContextSource[] = []
 
     // 1. Read Global Context
-    const globalPath = path.join(memoryDir, 'global-context.md');
+    const globalPath = path.join(memoryDir, 'global-context.md')
     try {
-      const globalContent = await fs.readFile(globalPath, 'utf-8');
-      const parsedGlobal = matter(globalContent);
-      const section = `[GLOBAL CONTEXT]\n${parsedGlobal.content}\n\n`;
-      context += section;
-      sources.push(this.createIncludedSource(workspacePath, 'global', globalPath, parsedGlobal.content));
+      const globalContent = await fs.readFile(globalPath, 'utf-8')
+      const parsedGlobal = matter(globalContent)
+      const section = `[GLOBAL CONTEXT]\n${parsedGlobal.content}\n\n`
+      context += section
+      sources.push(
+        this.createIncludedSource(workspacePath, 'global', globalPath, parsedGlobal.content)
+      )
     } catch (e) {
-      console.warn('Could not read global context', e);
+      console.warn('Could not read global context', e)
       sources.push({
         type: 'global',
         path: this.toWorkspaceRelative(workspacePath, globalPath),
         included: false,
-        warning: 'Could not read global context.',
-      });
+        warning: 'Could not read global context.'
+      })
     }
 
     // 2. Read Short-term Context from previous nodes
     if (previousNodeIds.length > 0) {
-      context += `[SHORT-TERM CONTEXT]\n`;
+      context += `[SHORT-TERM CONTEXT]\n`
       for (const nodeId of previousNodeIds) {
-        const nodePath = path.join(memoryDir, 'short-term', workflowId, `${nodeId}.md`);
+        const nodePath = path.join(memoryDir, 'short-term', workflowId, `${nodeId}.md`)
         try {
-          const nodeContent = await fs.readFile(nodePath, 'utf-8');
-          const parsedNode = matter(nodeContent);
-          const source = this.getNodeSourceLabel(parsedNode.data);
-          const runId = typeof parsedNode.data.runId === 'string' ? parsedNode.data.runId : undefined;
+          const nodeContent = await fs.readFile(nodePath, 'utf-8')
+          const parsedNode = matter(nodeContent)
+          const source = this.getNodeSourceLabel(parsedNode.data)
+          const runId =
+            typeof parsedNode.data.runId === 'string' ? parsedNode.data.runId : undefined
 
-          context += `--- Output from Node ${nodeId} (${source}) ---\n`;
-          context += `${parsedNode.content}\n\n`;
+          context += `--- Output from Node ${nodeId} (${source}) ---\n`
+          context += `${parsedNode.content}\n\n`
           sources.push({
             ...this.createIncludedSource(workspacePath, 'short-term', nodePath, parsedNode.content),
             nodeId,
-            runId,
-          });
+            runId
+          })
         } catch (e) {
-          console.warn(`Could not read short-term context for node ${nodeId}`, e);
+          console.warn(`Could not read short-term context for node ${nodeId}`, e)
           sources.push({
             type: 'short-term',
             path: this.toWorkspaceRelative(workspacePath, nodePath),
             included: false,
             nodeId,
-            warning: `Could not read short-term context for node ${nodeId}.`,
-          });
+            warning: `Could not read short-term context for node ${nodeId}.`
+          })
         }
       }
     }
 
     // 3. Read Long-term Context (Summarized history)
-    const longTermPath = path.join(memoryDir, 'long-term', 'index.md');
+    const longTermPath = path.join(memoryDir, 'long-term', 'index.md')
     try {
-      const longTermIndex = await fs.readFile(longTermPath, 'utf-8');
-      context += `[LONG-TERM CONTEXT]\n${longTermIndex}\n\n`;
-      sources.push(this.createIncludedSource(workspacePath, 'long-term', longTermPath, longTermIndex));
+      const longTermIndex = await fs.readFile(longTermPath, 'utf-8')
+      context += `[LONG-TERM CONTEXT]\n${longTermIndex}\n\n`
+      sources.push(
+        this.createIncludedSource(workspacePath, 'long-term', longTermPath, longTermIndex)
+      )
     } catch {
       // It's ok if long-term index doesn't exist yet
       sources.push({
         type: 'long-term',
         path: this.toWorkspaceRelative(workspacePath, longTermPath),
         included: false,
-        warning: 'Optional long-term context index was not found.',
-      });
+        warning: 'Optional long-term context index was not found.'
+      })
     }
 
     return {
@@ -139,8 +144,8 @@ export class MemoryManager {
       sources,
       contextHash: this.hashContent(context),
       contextBytes: Buffer.byteLength(context, 'utf8'),
-      contextChars: context.length,
-    };
+      contextChars: context.length
+    }
   }
 
   /**
@@ -151,10 +156,10 @@ export class MemoryManager {
     workflowId: string,
     params: SaveNodeOutputParams
   ): Promise<string> {
-    const memoryDir = this.getWorkflowShortTermDir(workspacePath, workflowId);
+    const memoryDir = this.getWorkflowShortTermDir(workspacePath, workflowId)
 
     // Ensure directory exists
-    await fs.mkdir(memoryDir, { recursive: true });
+    await fs.mkdir(memoryDir, { recursive: true })
 
     const frontmatter: Record<string, unknown> = {
       schemaVersion: '2.0',
@@ -164,26 +169,26 @@ export class MemoryManager {
       model: params.model,
       status: params.status,
       startedAt: params.startedAt,
-      completedAt: params.completedAt,
-    };
+      completedAt: params.completedAt
+    }
 
     if (params.attempt !== undefined) {
-      frontmatter.attempt = params.attempt;
+      frontmatter.attempt = params.attempt
     }
     if (params.exitCode !== undefined) {
-      frontmatter.exitCode = params.exitCode;
+      frontmatter.exitCode = params.exitCode
     }
     if (params.runnerSessionId !== undefined) {
-      frontmatter.runnerSessionId = params.runnerSessionId;
+      frontmatter.runnerSessionId = params.runnerSessionId
     }
     if (params.provider !== undefined) {
-      frontmatter.provider = params.provider;
+      frontmatter.provider = params.provider
     }
 
-    const mdContent = matter.stringify(params.content, frontmatter);
+    const mdContent = matter.stringify(params.content, frontmatter)
 
-    const outputPath = path.join(memoryDir, `${params.nodeId}.md`);
-    await fs.writeFile(outputPath, mdContent, 'utf-8');
+    const outputPath = path.join(memoryDir, `${params.nodeId}.md`)
+    await fs.writeFile(outputPath, mdContent, 'utf-8')
     if (params.attempt !== undefined) {
       const historyPath = this.getNodeOutputHistoryPath(
         workspacePath,
@@ -191,15 +196,15 @@ export class MemoryManager {
         params.runId,
         params.nodeId,
         params.attempt
-      );
-      await fs.mkdir(path.dirname(historyPath), { recursive: true });
-      await fs.writeFile(historyPath, mdContent, 'utf-8');
+      )
+      await fs.mkdir(path.dirname(historyPath), { recursive: true })
+      await fs.writeFile(historyPath, mdContent, 'utf-8')
     }
-    return outputPath;
+    return outputPath
   }
 
   public getNodeOutputPath(workspacePath: string, workflowId: string, nodeId: NodeId): string {
-    return path.join(this.getWorkflowShortTermDir(workspacePath, workflowId), `${nodeId}.md`);
+    return path.join(this.getWorkflowShortTermDir(workspacePath, workflowId), `${nodeId}.md`)
   }
 
   public getNodeOutputHistoryPath(
@@ -215,7 +220,7 @@ export class MemoryManager {
       runId,
       nodeId,
       `attempt-${attempt}.md`
-    );
+    )
   }
 
   public async deleteNodeOutput(
@@ -223,20 +228,20 @@ export class MemoryManager {
     workflowId: string,
     nodeId: NodeId
   ): Promise<void> {
-    await fs.rm(this.getNodeOutputPath(workspacePath, workflowId, nodeId), { force: true });
+    await fs.rm(this.getNodeOutputPath(workspacePath, workflowId, nodeId), { force: true })
   }
 
   private getNodeSourceLabel(frontmatter: Record<string, unknown>): string {
-    const runner = typeof frontmatter.runner === 'string' ? frontmatter.runner : '';
-    const provider = typeof frontmatter.provider === 'string' ? frontmatter.provider : '';
-    const model = typeof frontmatter.model === 'string' ? frontmatter.model : '';
-    const owner = runner || provider || 'Unknown';
+    const runner = typeof frontmatter.runner === 'string' ? frontmatter.runner : ''
+    const provider = typeof frontmatter.provider === 'string' ? frontmatter.provider : ''
+    const model = typeof frontmatter.model === 'string' ? frontmatter.model : ''
+    const owner = runner || provider || 'Unknown'
 
-    return model ? `${owner} / ${model}` : owner;
+    return model ? `${owner} / ${model}` : owner
   }
 
   private getWorkflowShortTermDir(workspacePath: string, workflowId: string): string {
-    return path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId);
+    return path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId)
   }
 
   private createIncludedSource(
@@ -250,17 +255,17 @@ export class MemoryManager {
       path: this.toWorkspaceRelative(workspacePath, absolutePath),
       included: true,
       bytes: Buffer.byteLength(content, 'utf8'),
-      hash: this.hashContent(content),
-    };
+      hash: this.hashContent(content)
+    }
   }
 
   private hashContent(content: string): string {
-    return createHash('sha256').update(content, 'utf8').digest('hex');
+    return createHash('sha256').update(content, 'utf8').digest('hex')
   }
 
   private toWorkspaceRelative(workspacePath: string, absolutePath: string): string {
-    return path.relative(workspacePath, absolutePath).replaceAll(path.sep, '/');
+    return path.relative(workspacePath, absolutePath).replaceAll(path.sep, '/')
   }
 }
 
-export const memoryManager = MemoryManager.getInstance();
+export const memoryManager = MemoryManager.getInstance()

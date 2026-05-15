@@ -1,4 +1,4 @@
-import { RefObject, useEffect } from 'react';
+import { RefObject, useEffect } from 'react'
 
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -6,11 +6,11 @@ const FOCUSABLE_SELECTOR = [
   'input:not([disabled])',
   'select:not([disabled])',
   'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
+  '[tabindex]:not([tabindex="-1"])'
+].join(',')
 
 function isVisible(element: HTMLElement): boolean {
-  return Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+  return Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
 }
 
 export function useModalFocusTrap(
@@ -20,69 +20,68 @@ export function useModalFocusTrap(
 ): void {
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') {
-      return;
+      return
     }
 
-    const previouslyFocused = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
 
     const focusInitialElement = (): void => {
-      const container = containerRef.current;
+      const container = containerRef.current
       if (!container) {
-        return;
+        return
       }
 
       const firstFocusable = Array.from(
         container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      ).find(isVisible);
-      const target = initialFocusRef?.current ?? firstFocusable ?? container;
-      target.focus();
-    };
+      ).find(isVisible)
+      const target = initialFocusRef?.current ?? firstFocusable ?? container
+      target.focus()
+    }
 
-    const frameId = window.requestAnimationFrame(focusInitialElement);
+    const frameId = window.requestAnimationFrame(focusInitialElement)
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Tab') {
-        return;
+        return
       }
 
-      const container = containerRef.current;
+      const container = containerRef.current
       if (!container) {
-        return;
+        return
       }
 
       const focusableElements = Array.from(
         container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      ).filter(isVisible);
+      ).filter(isVisible)
 
       if (focusableElements.length === 0) {
-        event.preventDefault();
-        container.focus();
-        return;
+        event.preventDefault()
+        container.focus()
+        return
       }
 
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
+      const firstElement = focusableElements[0]
+      const lastElement = focusableElements[focusableElements.length - 1]
 
       if (event.shiftKey && document.activeElement === firstElement) {
-        event.preventDefault();
-        lastElement.focus();
-        return;
+        event.preventDefault()
+        lastElement.focus()
+        return
       }
 
       if (!event.shiftKey && document.activeElement === lastElement) {
-        event.preventDefault();
-        firstElement.focus();
+        event.preventDefault()
+        firstElement.focus()
       }
-    };
+    }
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown)
 
     return () => {
-      window.cancelAnimationFrame(frameId);
-      document.removeEventListener('keydown', handleKeyDown);
-      previouslyFocused?.focus();
-    };
-  }, [containerRef, initialFocusRef, isOpen]);
+      window.cancelAnimationFrame(frameId)
+      document.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [containerRef, initialFocusRef, isOpen])
 }

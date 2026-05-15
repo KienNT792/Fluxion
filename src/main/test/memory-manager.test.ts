@@ -1,22 +1,22 @@
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
-import matter from 'gray-matter';
-import { mkdtemp } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { memoryManager } from '../services/memory-manager';
+import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import matter from 'gray-matter'
+import { mkdtemp } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { memoryManager } from '../services/memory-manager'
 
 describe('MemoryManager', () => {
-  let workspacePath: string;
+  let workspacePath: string
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-memory-'));
-    await memoryManager.initWorkspace(workspacePath);
-  });
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-memory-'))
+    await memoryManager.initWorkspace(workspacePath)
+  })
 
   afterEach(async () => {
-    await rm(workspacePath, { recursive: true, force: true });
-  });
+    await rm(workspacePath, { recursive: true, force: true })
+  })
 
   it('writes V2 frontmatter for completed node outputs', async () => {
     const outputPath = await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
@@ -30,10 +30,10 @@ describe('MemoryManager', () => {
       exitCode: 0,
       runnerSessionId: 'session-1',
       provider: 'openai',
-      content: 'Final answer',
-    });
+      content: 'Final answer'
+    })
 
-    const parsed = matter(await readFile(outputPath, 'utf8'));
+    const parsed = matter(await readFile(outputPath, 'utf8'))
     expect(parsed.data).toMatchObject({
       schemaVersion: '2.0',
       nodeId: 'node-a',
@@ -45,10 +45,10 @@ describe('MemoryManager', () => {
       completedAt: '2026-05-06T00:00:01.000Z',
       exitCode: 0,
       runnerSessionId: 'session-1',
-      provider: 'openai',
-    });
-    expect(parsed.content.trimEnd()).toBe('Final answer');
-  });
+      provider: 'openai'
+    })
+    expect(parsed.content.trimEnd()).toBe('Final answer')
+  })
 
   it('writes attempt history while preserving the latest output path', async () => {
     const latestPath = await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
@@ -60,8 +60,8 @@ describe('MemoryManager', () => {
       status: 'completed',
       startedAt: '2026-05-06T00:00:00.000Z',
       completedAt: '2026-05-06T00:00:01.000Z',
-      content: 'First attempt',
-    });
+      content: 'First attempt'
+    })
     await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
       runId: 'run-1',
       nodeId: 'node-a',
@@ -71,8 +71,8 @@ describe('MemoryManager', () => {
       status: 'completed',
       startedAt: '2026-05-06T00:00:02.000Z',
       completedAt: '2026-05-06T00:00:03.000Z',
-      content: 'Second attempt',
-    });
+      content: 'Second attempt'
+    })
 
     const attemptOnePath = join(
       workspacePath,
@@ -84,7 +84,7 @@ describe('MemoryManager', () => {
       'run-1',
       'node-a',
       'attempt-1.md'
-    );
+    )
     const attemptTwoPath = join(
       workspacePath,
       '.fluxion',
@@ -95,26 +95,26 @@ describe('MemoryManager', () => {
       'run-1',
       'node-a',
       'attempt-2.md'
-    );
+    )
 
-    expect(await readFile(latestPath, 'utf8')).toContain('Second attempt');
-    expect(await readFile(attemptOnePath, 'utf8')).toContain('First attempt');
-    expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second attempt');
-    expect(matter(await readFile(attemptTwoPath, 'utf8')).data).toMatchObject({ attempt: 2 });
-  });
+    expect(await readFile(latestPath, 'utf8')).toContain('Second attempt')
+    expect(await readFile(attemptOnePath, 'utf8')).toContain('First attempt')
+    expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second attempt')
+    expect(matter(await readFile(attemptTwoPath, 'utf8')).data).toMatchObject({ attempt: 2 })
+  })
 
   it('compiles context from both V1 and V2 short-term memory files', async () => {
-    const shortTermDir = join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-2');
-    await mkdir(shortTermDir, { recursive: true });
+    const shortTermDir = join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-2')
+    await mkdir(shortTermDir, { recursive: true })
     const v1Content = matter.stringify('Legacy node output', {
       schemaVersion: '1.0',
       nodeId: 'node-v1',
       provider: 'openai',
       model: 'gpt-4.1',
       status: 'completed',
-      timestamp: 123,
-    });
-    await writeFile(join(shortTermDir, 'node-v1.md'), v1Content, 'utf8');
+      timestamp: 123
+    })
+    await writeFile(join(shortTermDir, 'node-v1.md'), v1Content, 'utf8')
 
     await memoryManager.saveNodeOutput(workspacePath, 'workflow-2', {
       runId: 'run-2',
@@ -125,19 +125,19 @@ describe('MemoryManager', () => {
       startedAt: '2026-05-06T00:00:00.000Z',
       completedAt: '2026-05-06T00:00:01.000Z',
       provider: 'openai',
-      content: 'Modern node output',
-    });
+      content: 'Modern node output'
+    })
 
     const context = await memoryManager.compileContext(workspacePath, 'workflow-2', [
       'node-v1',
-      'node-v2',
-    ]);
+      'node-v2'
+    ])
 
-    expect(context).toContain('Output from Node node-v1 (openai / gpt-4.1)');
-    expect(context).toContain('Legacy node output');
-    expect(context).toContain('Output from Node node-v2 (codex / gpt-5.5)');
-    expect(context).toContain('Modern node output');
-  });
+    expect(context).toContain('Output from Node node-v1 (openai / gpt-4.1)')
+    expect(context).toContain('Legacy node output')
+    expect(context).toContain('Output from Node node-v2 (codex / gpt-5.5)')
+    expect(context).toContain('Modern node output')
+  })
 
   it('reports context sources and a stable compiled context hash', async () => {
     await memoryManager.saveNodeOutput(workspacePath, 'workflow-3', {
@@ -148,20 +148,22 @@ describe('MemoryManager', () => {
       status: 'completed',
       startedAt: '2026-05-06T00:00:00.000Z',
       completedAt: '2026-05-06T00:00:01.000Z',
-      content: 'Source output',
-    });
+      content: 'Source output'
+    })
 
     const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-3', [
-      'node-a',
-    ]);
-    const repeatReport = await memoryManager.compileContextWithSources(workspacePath, 'workflow-3', [
-      'node-a',
-    ]);
+      'node-a'
+    ])
+    const repeatReport = await memoryManager.compileContextWithSources(
+      workspacePath,
+      'workflow-3',
+      ['node-a']
+    )
 
-    expect(report.compiledContext).toContain('Source output');
-    expect(report.contextHash).toBe(repeatReport.contextHash);
-    expect(report.contextBytes).toBe(Buffer.byteLength(report.compiledContext, 'utf8'));
-    expect(report.contextChars).toBe(report.compiledContext.length);
+    expect(report.compiledContext).toContain('Source output')
+    expect(report.contextHash).toBe(repeatReport.contextHash)
+    expect(report.contextBytes).toBe(Buffer.byteLength(report.compiledContext, 'utf8'))
+    expect(report.contextChars).toBe(report.compiledContext.length)
     expect(report.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -169,7 +171,7 @@ describe('MemoryManager', () => {
           path: '.fluxion/memory/global-context.md',
           included: true,
           bytes: expect.any(Number),
-          hash: expect.any(String),
+          hash: expect.any(String)
         }),
         expect.objectContaining({
           type: 'short-term',
@@ -178,15 +180,15 @@ describe('MemoryManager', () => {
           nodeId: 'node-a',
           runId: 'run-3',
           bytes: expect.any(Number),
-          hash: expect.any(String),
+          hash: expect.any(String)
         }),
         expect.objectContaining({
           type: 'long-term',
           path: '.fluxion/memory/long-term/index.md',
           included: false,
-          warning: expect.any(String),
-        }),
+          warning: expect.any(String)
+        })
       ])
-    );
-  });
-});
+    )
+  })
+})

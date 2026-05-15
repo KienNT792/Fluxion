@@ -1,9 +1,9 @@
-import { mkdtemp, readdir, readFile, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { Workflow } from '@shared';
-import { RunStateStore } from '../services/run-state-store';
+import { mkdtemp, readdir, readFile, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { Workflow } from '@shared'
+import { RunStateStore } from '../services/run-state-store'
 
 function createWorkflow(): Workflow {
   return {
@@ -18,8 +18,8 @@ function createWorkflow(): Workflow {
         data: {
           provider: 'codex',
           model: 'gpt-5.5',
-          prompt: 'Run A',
-        },
+          prompt: 'Run A'
+        }
       },
       {
         id: 'node-b',
@@ -29,192 +29,190 @@ function createWorkflow(): Workflow {
         data: {
           provider: 'codex',
           model: 'gpt-5.5',
-          prompt: 'Run B',
-        },
-      },
+          prompt: 'Run B'
+        }
+      }
     ],
-    edges: [],
-  };
+    edges: []
+  }
 }
 
 async function readRunJson(workspacePath: string): Promise<unknown> {
-  const runsDir = join(workspacePath, '.fluxion', 'runs');
-  const files = await readdir(runsDir);
-  const filePath = join(runsDir, files[0]!);
-  return JSON.parse(await readFile(filePath, 'utf8')) as unknown;
+  const runsDir = join(workspacePath, '.fluxion', 'runs')
+  const files = await readdir(runsDir)
+  const filePath = join(runsDir, files[0]!)
+  return JSON.parse(await readFile(filePath, 'utf8')) as unknown
 }
 
 describe('RunStateStore', () => {
-  let workspacePath: string;
+  let workspacePath: string
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-run-state-'));
-  });
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-run-state-'))
+  })
 
   afterEach(async () => {
-    await rm(workspacePath, { recursive: true, force: true });
-  });
+    await rm(workspacePath, { recursive: true, force: true })
+  })
 
   it('initializes a run file with scoped nodes', async () => {
-    const store = new RunStateStore();
+    const store = new RunStateStore()
     await store.initializeRun({
       workspacePath,
       workflow: createWorkflow(),
       executionNodeIds: new Set(['node-a']),
-      runId: 'run-1',
-    });
+      runId: 'run-1'
+    })
 
-    const state = await store.readRun(workspacePath, 'run-1');
-    expect(state.status).toBe('running');
-    expect(state.executionMode).toBe('auto');
-    expect(Object.keys(state.nodes)).toEqual(['node-a']);
+    const state = await store.readRun(workspacePath, 'run-1')
+    expect(state.status).toBe('running')
+    expect(state.executionMode).toBe('auto')
+    expect(Object.keys(state.nodes)).toEqual(['node-a'])
     expect(state.nodes['node-a']).toMatchObject({
       status: 'pending',
       attempts: 0,
       runner: 'codex',
       model: 'gpt-5.5',
       humanReview: false,
-      outputArtifactPaths: [],
-    });
-    expect(state.awaitingReviewNodeIds).toEqual([]);
-  });
+      outputArtifactPaths: []
+    })
+    expect(state.awaitingReviewNodeIds).toEqual([])
+  })
 
   it('preserves concurrent updates for parallel nodes', async () => {
-    const store = new RunStateStore();
+    const store = new RunStateStore()
     await store.initializeRun({
       workspacePath,
       workflow: createWorkflow(),
       executionNodeIds: new Set(['node-a', 'node-b']),
-      runId: 'run-2',
-    });
+      runId: 'run-2'
+    })
 
     await Promise.all([
       store.markNodeRunning(workspacePath, 'run-2', 'node-a'),
-      store.markNodeRunning(workspacePath, 'run-2', 'node-b'),
-    ]);
+      store.markNodeRunning(workspacePath, 'run-2', 'node-b')
+    ])
 
-    let state = await store.readRun(workspacePath, 'run-2');
-    expect(state.currentNodeIds).toEqual(['node-a', 'node-b']);
-    expect(state.nodes['node-a']?.status).toBe('running');
-    expect(state.nodes['node-b']?.status).toBe('running');
+    let state = await store.readRun(workspacePath, 'run-2')
+    expect(state.currentNodeIds).toEqual(['node-a', 'node-b'])
+    expect(state.nodes['node-a']?.status).toBe('running')
+    expect(state.nodes['node-b']?.status).toBe('running')
 
     await Promise.all([
       store.markNodeCompleted(workspacePath, 'run-2', 'node-a', {
-        outputArtifactPaths: ['docs/a.md'],
+        outputArtifactPaths: ['docs/a.md']
       }),
       store.markNodeCompleted(workspacePath, 'run-2', 'node-b', {
-        outputArtifactPaths: ['docs/b.md'],
-      }),
-    ]);
+        outputArtifactPaths: ['docs/b.md']
+      })
+    ])
 
-    state = await store.readRun(workspacePath, 'run-2');
-    expect(state.currentNodeIds).toEqual([]);
-    expect(state.nodes['node-a']?.status).toBe('completed');
-    expect(state.nodes['node-b']?.status).toBe('completed');
-    expect(state.nodes['node-a']?.outputArtifactPaths).toEqual(['docs/a.md']);
-    expect(state.nodes['node-b']?.outputArtifactPaths).toEqual(['docs/b.md']);
-  });
+    state = await store.readRun(workspacePath, 'run-2')
+    expect(state.currentNodeIds).toEqual([])
+    expect(state.nodes['node-a']?.status).toBe('completed')
+    expect(state.nodes['node-b']?.status).toBe('completed')
+    expect(state.nodes['node-a']?.outputArtifactPaths).toEqual(['docs/a.md'])
+    expect(state.nodes['node-b']?.outputArtifactPaths).toEqual(['docs/b.md'])
+  })
 
   it('rejects invalid final states without corrupting the persisted file', async () => {
-    const store = new RunStateStore();
+    const store = new RunStateStore()
     await store.initializeRun({
       workspacePath,
       workflow: createWorkflow(),
       executionNodeIds: new Set(['node-a']),
-      runId: 'run-3',
-    });
+      runId: 'run-3'
+    })
 
-    await expect(
-      store.finalizeWorkflow(workspacePath, 'run-3', 'idle' as never)
-    ).rejects.toThrow();
+    await expect(store.finalizeWorkflow(workspacePath, 'run-3', 'idle' as never)).rejects.toThrow()
 
-    const state = await store.readRun(workspacePath, 'run-3');
-    expect(state.status).toBe('running');
+    const state = await store.readRun(workspacePath, 'run-3')
+    expect(state.status).toBe('running')
 
-    const persisted = (await readRunJson(workspacePath)) as { status: string };
-    expect(persisted.status).toBe('running');
-  });
+    const persisted = (await readRunJson(workspacePath)) as { status: string }
+    expect(persisted.status).toBe('running')
+  })
 
   it('transitions nodes through awaiting review, approval, rejection, and rerun reset', async () => {
-    const store = new RunStateStore();
-    const workflow = createWorkflow();
-    workflow.nodes[0]!.data.humanReview = true;
+    const store = new RunStateStore()
+    const workflow = createWorkflow()
+    workflow.nodes[0]!.data.humanReview = true
 
     await store.initializeRun({
       workspacePath,
       workflow,
       executionNodeIds: new Set(['node-a']),
-      runId: 'run-4',
-    });
+      runId: 'run-4'
+    })
 
-    await store.markNodeRunning(workspacePath, 'run-4', 'node-a');
+    await store.markNodeRunning(workspacePath, 'run-4', 'node-a')
     let state = await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a', {
       outputArtifactPaths: ['docs/review.md'],
-      reviewSource: 'node',
-    });
-    expect(state.status).toBe('awaiting_review');
-    expect(state.awaitingReviewNodeIds).toEqual(['node-a']);
+      reviewSource: 'node'
+    })
+    expect(state.status).toBe('awaiting_review')
+    expect(state.awaitingReviewNodeIds).toEqual(['node-a'])
     expect(state.nodes['node-a']).toMatchObject({
       status: 'awaiting_review',
       humanReview: true,
       reviewStatus: 'pending',
       reviewSource: 'node',
-      outputArtifactPaths: ['docs/review.md'],
-    });
+      outputArtifactPaths: ['docs/review.md']
+    })
 
     state = await store.markReviewApproved(workspacePath, 'run-4', 'node-a', {
-      comment: 'looks good',
-    });
-    expect(state.status).toBe('running');
-    expect(state.awaitingReviewNodeIds).toEqual([]);
+      comment: 'looks good'
+    })
+    expect(state.status).toBe('running')
+    expect(state.awaitingReviewNodeIds).toEqual([])
     expect(state.nodes['node-a']).toMatchObject({
       status: 'completed',
       reviewStatus: 'approved',
-      reviewComment: 'looks good',
-    });
+      reviewComment: 'looks good'
+    })
 
-    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a');
-    state = await store.resetNodeForRerun(workspacePath, 'run-4', 'node-a');
+    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a')
+    state = await store.resetNodeForRerun(workspacePath, 'run-4', 'node-a')
     expect(state.nodes['node-a']).toMatchObject({
       status: 'pending',
       reviewStatus: undefined,
       reviewSource: undefined,
-      outputArtifactPaths: [],
-    });
+      outputArtifactPaths: []
+    })
 
-    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a');
+    await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a')
     state = await store.markReviewRejected(workspacePath, 'run-4', 'node-a', {
-      comment: 'needs changes',
-    });
-    expect(state.status).toBe('rejected');
+      comment: 'needs changes'
+    })
+    expect(state.status).toBe('rejected')
     expect(state.nodes['node-a']).toMatchObject({
       status: 'rejected',
       reviewStatus: 'rejected',
       reviewSource: 'node',
-      reviewComment: 'needs changes',
-    });
-  });
+      reviewComment: 'needs changes'
+    })
+  })
 
   it('records manual execution mode review checkpoints without mutating node-level humanReview', async () => {
-    const store = new RunStateStore();
+    const store = new RunStateStore()
     await store.initializeRun({
       workspacePath,
       workflow: createWorkflow(),
       executionNodeIds: new Set(['node-a']),
       runId: 'run-5',
-      executionMode: 'manual',
-    });
+      executionMode: 'manual'
+    })
 
-    await store.markNodeRunning(workspacePath, 'run-5', 'node-a');
+    await store.markNodeRunning(workspacePath, 'run-5', 'node-a')
     const state = await store.markNodeAwaitingReview(workspacePath, 'run-5', 'node-a', {
-      reviewSource: 'manual',
-    });
+      reviewSource: 'manual'
+    })
 
-    expect(state.executionMode).toBe('manual');
+    expect(state.executionMode).toBe('manual')
     expect(state.nodes['node-a']).toMatchObject({
       humanReview: false,
       reviewSource: 'manual',
-      reviewStatus: 'pending',
-    });
-  });
-});
+      reviewStatus: 'pending'
+    })
+  })
+})

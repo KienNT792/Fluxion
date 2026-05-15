@@ -1,25 +1,25 @@
-import React from 'react';
+import React from 'react'
 
 interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  fallbackTitle: string;
+  children: React.ReactNode
+  fallbackTitle: string
 }
 
 interface ErrorBoundaryState {
-  error: Error | null;
+  error: Error | null
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
-    error: null,
-  };
+    error: null
+  }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { error };
+    return { error }
   }
 
   public componentDidCatch(error: Error): void {
-    console.error(this.props.fallbackTitle, error);
+    console.error(this.props.fallbackTitle, error)
   }
 
   public render(): React.ReactNode {
@@ -31,7 +31,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             width: '300px',
             flexShrink: 0,
             background: 'var(--color-canvas)',
-            borderLeft: '1px solid var(--color-hairline)',
+            borderLeft: '1px solid var(--color-hairline)'
           }}
         >
           <div
@@ -39,7 +39,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             style={{
               background: 'var(--color-surface-card)',
               border: '1px solid var(--color-hairline)',
-              color: 'var(--color-semantic-error)',
+              color: 'var(--color-semantic-error)'
             }}
           >
             <div className="text-xs font-semibold uppercase tracking-[0.08em]">
@@ -50,9 +50,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             </div>
           </div>
         </aside>
-      );
+      )
     }
 
-    return this.props.children;
+    return this.props.children
   }
 }

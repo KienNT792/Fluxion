@@ -4,15 +4,15 @@ export function logRuntimeDebug(
   details?: Record<string, unknown>
 ): void {
   if (!import.meta.env.DEV) {
-    return;
+    return
   }
 
-  const prefix = `[FluxionRuntimeDebug/${scope}]`;
+  const prefix = `[FluxionRuntimeDebug/${scope}]`
 
   if (details) {
-    console.log(prefix, message, details);
-    return;
+    console.log(prefix, message, details)
+    return
   }
 
-  console.log(prefix, message);
+  console.log(prefix, message)
 }

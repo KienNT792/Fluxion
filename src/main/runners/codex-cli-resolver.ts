@@ -1,18 +1,18 @@
-import { execFile } from 'child_process';
-import { access } from 'fs/promises';
-import { dirname, extname, join } from 'path';
+import { execFile } from 'child_process'
+import { access } from 'fs/promises'
+import { dirname, extname, join } from 'path'
 
 export const CODEX_CLI_NOT_FOUND_MESSAGE =
-  'Codex CLI not found. Install @openai/codex and run codex login.';
+  'Codex CLI not found. Install @openai/codex and run codex login.'
 
-const WHERE_CODEX_TIMEOUT_MS = 3_000;
-const WHERE_CODEX_MAX_BUFFER = 64 * 1024;
+const WHERE_CODEX_TIMEOUT_MS = 3_000
+const WHERE_CODEX_MAX_BUFFER = 64 * 1024
 
 export interface ResolvedCodexCli {
-  command: string;
-  argsPrefix: string[];
-  displayCommand: string;
-  source: 'direct' | 'node-script' | 'cmd-shim';
+  command: string
+  argsPrefix: string[]
+  displayCommand: string
+  source: 'direct' | 'node-script' | 'cmd-shim'
 }
 
 function runWhereCodex(): Promise<string[]> {
@@ -24,12 +24,12 @@ function runWhereCodex(): Promise<string[]> {
         encoding: 'utf8',
         windowsHide: true,
         timeout: WHERE_CODEX_TIMEOUT_MS,
-        maxBuffer: WHERE_CODEX_MAX_BUFFER,
+        maxBuffer: WHERE_CODEX_MAX_BUFFER
       },
       (error, stdout) => {
         if (error) {
-          resolve([]);
-          return;
+          resolve([])
+          return
         }
 
         resolve(
@@ -37,38 +37,38 @@ function runWhereCodex(): Promise<string[]> {
             .split(/\r?\n/)
             .map((line) => line.trim())
             .filter(Boolean)
-        );
+        )
       }
-    );
-  });
+    )
+  })
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
-    await access(filePath);
-    return true;
+    await access(filePath)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
 async function resolveNodeScriptForShim(shimPath: string): Promise<ResolvedCodexCli | null> {
-  const baseDirectory = dirname(shimPath);
-  const scriptPath = join(baseDirectory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+  const baseDirectory = dirname(shimPath)
+  const scriptPath = join(baseDirectory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
 
   if (!(await pathExists(scriptPath))) {
-    return null;
+    return null
   }
 
-  const localNodePath = join(baseDirectory, 'node.exe');
-  const nodeCommand = (await pathExists(localNodePath)) ? localNodePath : 'node';
+  const localNodePath = join(baseDirectory, 'node.exe')
+  const nodeCommand = (await pathExists(localNodePath)) ? localNodePath : 'node'
 
   return {
     command: nodeCommand,
     argsPrefix: [scriptPath],
     displayCommand: `${nodeCommand} ${scriptPath}`,
-    source: 'node-script',
-  };
+    source: 'node-script'
+  }
 }
 
 function createCmdShimCandidate(cmdPath: string): ResolvedCodexCli {
@@ -76,34 +76,34 @@ function createCmdShimCandidate(cmdPath: string): ResolvedCodexCli {
     command: process.env.ComSpec || 'cmd.exe',
     argsPrefix: ['/d', '/c', 'call', cmdPath],
     displayCommand: `cmd.exe /d /c call ${cmdPath}`,
-    source: 'cmd-shim',
-  };
+    source: 'cmd-shim'
+  }
 }
 
 function isCmdShim(candidate: string): boolean {
-  const extension = extname(candidate).toLowerCase();
-  return extension === '.cmd' || extension === '.bat';
+  const extension = extname(candidate).toLowerCase()
+  return extension === '.cmd' || extension === '.bat'
 }
 
 function isExecutable(candidate: string): boolean {
-  return extname(candidate).toLowerCase() === '.exe';
+  return extname(candidate).toLowerCase() === '.exe'
 }
 
 function dedupeResolvedCandidates(candidates: ResolvedCodexCli[]): ResolvedCodexCli[] {
-  const seen = new Set<string>();
-  const uniqueCandidates: ResolvedCodexCli[] = [];
+  const seen = new Set<string>()
+  const uniqueCandidates: ResolvedCodexCli[] = []
 
   for (const candidate of candidates) {
-    const key = [candidate.command, ...candidate.argsPrefix].join('\u0000');
+    const key = [candidate.command, ...candidate.argsPrefix].join('\u0000')
     if (seen.has(key)) {
-      continue;
+      continue
     }
 
-    seen.add(key);
-    uniqueCandidates.push(candidate);
+    seen.add(key)
+    uniqueCandidates.push(candidate)
   }
 
-  return uniqueCandidates;
+  return uniqueCandidates
 }
 
 export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
@@ -113,15 +113,15 @@ export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
         command: 'codex',
         argsPrefix: [],
         displayCommand: 'codex',
-        source: 'direct',
-      },
-    ];
+        source: 'direct'
+      }
+    ]
   }
 
-  const candidates = await runWhereCodex();
-  const directCandidates: ResolvedCodexCli[] = [];
-  const nodeScriptCandidates: ResolvedCodexCli[] = [];
-  const cmdShimCandidates: ResolvedCodexCli[] = [];
+  const candidates = await runWhereCodex()
+  const directCandidates: ResolvedCodexCli[] = []
+  const nodeScriptCandidates: ResolvedCodexCli[] = []
+  const cmdShimCandidates: ResolvedCodexCli[] = []
 
   for (const candidate of candidates) {
     if (isExecutable(candidate)) {
@@ -129,30 +129,30 @@ export async function resolveCodexCliCandidates(): Promise<ResolvedCodexCli[]> {
         command: candidate,
         argsPrefix: [],
         displayCommand: candidate,
-        source: 'direct',
-      });
-      continue;
+        source: 'direct'
+      })
+      continue
     }
 
-    const nodeScriptCandidate = await resolveNodeScriptForShim(candidate);
+    const nodeScriptCandidate = await resolveNodeScriptForShim(candidate)
     if (nodeScriptCandidate) {
-      nodeScriptCandidates.push(nodeScriptCandidate);
+      nodeScriptCandidates.push(nodeScriptCandidate)
     }
 
     if (isCmdShim(candidate)) {
-      cmdShimCandidates.push(createCmdShimCandidate(candidate));
+      cmdShimCandidates.push(createCmdShimCandidate(candidate))
     }
   }
 
   const resolvedCandidates = dedupeResolvedCandidates([
     ...directCandidates,
     ...nodeScriptCandidates,
-    ...cmdShimCandidates,
-  ]);
+    ...cmdShimCandidates
+  ])
 
   if (resolvedCandidates.length === 0) {
-    throw new Error(CODEX_CLI_NOT_FOUND_MESSAGE);
+    throw new Error(CODEX_CLI_NOT_FOUND_MESSAGE)
   }
 
-  return resolvedCandidates;
+  return resolvedCandidates
 }

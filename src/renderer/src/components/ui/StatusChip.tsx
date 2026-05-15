@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'
 
 export type StatusChipTone =
   | 'idle'
@@ -8,14 +8,14 @@ export type StatusChipTone =
   | 'paused'
   | 'stopping'
   | 'warning'
-  | 'success';
+  | 'success'
 
 interface StatusChipProps {
-  tone?: StatusChipTone;
-  label: string;
-  animate?: boolean;
-  className?: string;
-  title?: string;
+  tone?: StatusChipTone
+  label: string
+  animate?: boolean
+  className?: string
+  title?: string
 }
 
 const TONE_COLORS: Record<StatusChipTone, string> = {
@@ -26,17 +26,17 @@ const TONE_COLORS: Record<StatusChipTone, string> = {
   paused: 'var(--color-timeline-edit)',
   stopping: 'var(--color-timeline-read)',
   warning: 'var(--color-timeline-done)',
-  success: 'var(--color-semantic-success)',
-};
+  success: 'var(--color-semantic-success)'
+}
 
 export const StatusChip: React.FC<StatusChipProps> = ({
   tone = 'idle',
   label,
   animate = tone === 'running',
   className = '',
-  title,
+  title
 }) => {
-  const color = TONE_COLORS[tone];
+  const color = TONE_COLORS[tone]
 
   return (
     <span
@@ -45,7 +45,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({
         color,
         background: 'var(--color-surface-card)',
         border: '1px solid var(--color-hairline)',
-        lineHeight: 1.4,
+        lineHeight: 1.4
       }}
       title={title ?? label}
     >
@@ -55,5 +55,5 @@ export const StatusChip: React.FC<StatusChipProps> = ({
       />
       <span className="truncate">{label}</span>
     </span>
-  );
-};
+  )
+}

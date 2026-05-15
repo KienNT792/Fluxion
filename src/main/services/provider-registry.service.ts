@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { execFile } from 'child_process'
 import {
   CODEX_DEFAULT_MODEL,
   CODEX_DEFAULT_REASONING_LEVEL,
@@ -12,34 +12,32 @@ import {
   ProviderModel,
   ProviderParameterSpec,
   ProviderReadinessState,
-  ReasoningLevel,
-} from '@shared';
-import { settingsService } from './settings.service';
+  ReasoningLevel
+} from '@shared'
+import { settingsService } from './settings.service'
 import {
   CODEX_CLI_NOT_FOUND_MESSAGE,
   ResolvedCodexCli,
-  resolveCodexCliCandidates,
-} from '../runners/codex-cli-resolver';
+  resolveCodexCliCandidates
+} from '../runners/codex-cli-resolver'
 
-const OPENAI_MODELS_TIMEOUT_MS = 10_000;
-const CODEX_MODELS_TIMEOUT_MS = 10_000;
-const EXEC_FILE_MAX_BUFFER = 1024 * 1024;
+const OPENAI_MODELS_TIMEOUT_MS = 10_000
+const CODEX_MODELS_TIMEOUT_MS = 10_000
+const EXEC_FILE_MAX_BUFFER = 1024 * 1024
 
 function createUnknownCodexApprovalProtocol(): CodexApprovalProtocolProbeResult {
   return {
     status: 'unknown',
     message:
-      'Codex approval protocol probe has not been run. Fluxion keeps on-request and untrusted approval policies blocked until support is verified.',
-  };
+      'Codex approval protocol probe has not been run. Fluxion keeps on-request and untrusted approval policies blocked until support is verified.'
+  }
 }
 
-function withCodexApprovalProtocol(
-  capabilities: ProviderCapabilities
-): ProviderCapabilities {
+function withCodexApprovalProtocol(capabilities: ProviderCapabilities): ProviderCapabilities {
   return {
     ...capabilities,
-    approvalProtocol: capabilities.approvalProtocol ?? createUnknownCodexApprovalProtocol(),
-  };
+    approvalProtocol: capabilities.approvalProtocol ?? createUnknownCodexApprovalProtocol()
+  }
 }
 
 const OPENAI_PARAMETERS: ProviderParameterSpec[] = [
@@ -51,8 +49,8 @@ const OPENAI_PARAMETERS: ProviderParameterSpec[] = [
     appliesTo: 'reasoning-models',
     options: CODEX_REASONING_LEVELS.map((level) => ({
       value: level,
-      label: level,
-    })),
+      label: level
+    }))
   },
   {
     id: 'temperature',
@@ -62,7 +60,7 @@ const OPENAI_PARAMETERS: ProviderParameterSpec[] = [
     min: 0,
     max: 2,
     step: 0.1,
-    appliesTo: 'standard-models',
+    appliesTo: 'standard-models'
   },
   {
     id: 'maxTokens',
@@ -71,9 +69,9 @@ const OPENAI_PARAMETERS: ProviderParameterSpec[] = [
     defaultValue: 2048,
     min: 1,
     step: 1,
-    appliesTo: 'all',
-  },
-];
+    appliesTo: 'all'
+  }
+]
 
 const CODEX_PARAMETERS: ProviderParameterSpec[] = [
   {
@@ -84,76 +82,73 @@ const CODEX_PARAMETERS: ProviderParameterSpec[] = [
     appliesTo: 'reasoning-models',
     options: CODEX_REASONING_LEVELS.map((level) => ({
       value: level,
-      label: level,
-    })),
-  },
-];
+      label: level
+    }))
+  }
+]
 
 interface OpenAIModelListResponse {
   data?: Array<{
-    id?: unknown;
-  }>;
+    id?: unknown
+  }>
 }
 
 interface CodexDebugReasoningLevel {
-  effort?: unknown;
+  effort?: unknown
 }
 
 export interface CodexDebugModel {
-  slug?: unknown;
-  display_name?: unknown;
-  description?: unknown;
-  visibility?: unknown;
-  supported_in_api?: unknown;
-  default_reasoning_level?: unknown;
-  supported_reasoning_levels?: unknown;
+  slug?: unknown
+  display_name?: unknown
+  description?: unknown
+  visibility?: unknown
+  supported_in_api?: unknown
+  default_reasoning_level?: unknown
+  supported_reasoning_levels?: unknown
 }
 
 interface CodexDebugModelsResponse {
-  models?: CodexDebugModel[];
+  models?: CodexDebugModel[]
 }
 
 interface ExecFileResult {
-  stdout: string;
-  stderr: string;
+  stdout: string
+  stderr: string
 }
 
 interface ExecFileErrorWithOutput extends Error {
-  code?: string;
-  stdout?: string;
-  stderr?: string;
+  code?: string
+  stdout?: string
+  stderr?: string
 }
 
 interface CodexCapabilitiesDependencies {
-  resolveCli?: () => Promise<ResolvedCodexCli[]>;
-  runCommand?: (
-    command: string,
-    args: string[]
-  ) => Promise<ExecFileResult>;
+  resolveCli?: () => Promise<ResolvedCodexCli[]>
+  runCommand?: (command: string, args: string[]) => Promise<ExecFileResult>
 }
 
 interface CodexCommandAttemptResult {
-  result?: ExecFileResult;
-  error?: unknown;
-  attempts: CodexCommandAttempt[];
+  result?: ExecFileResult
+  error?: unknown
+  attempts: CodexCommandAttempt[]
 }
 
 interface CodexCommandAttempt {
-  candidate: ResolvedCodexCli;
-  error?: unknown;
-  result?: ExecFileResult;
+  candidate: ResolvedCodexCli
+  error?: unknown
+  result?: ExecFileResult
 }
 
 interface CodexDiscoveryContext {
-  cliCandidates: ResolvedCodexCli[];
-  preferredCandidate?: ResolvedCodexCli;
-  runCommand: (command: string, args: string[]) => Promise<ExecFileResult>;
+  cliCandidates: ResolvedCodexCli[]
+  preferredCandidate?: ResolvedCodexCli
+  runCommand: (command: string, args: string[]) => Promise<ExecFileResult>
 }
 
 function normalizeResolvedCliCandidates(
   candidateOrCandidates: ResolvedCodexCli | ResolvedCodexCli[]
 ): ResolvedCodexCli[] {
-  return Array.isArray(candidateOrCandidates) ? candidateOrCandidates : [candidateOrCandidates];
+  return Array.isArray(candidateOrCandidates) ? candidateOrCandidates : [candidateOrCandidates]
 }
 
 function createExecFileRunner(
@@ -168,95 +163,95 @@ function createExecFileRunner(
           encoding: 'utf8',
           windowsHide: true,
           timeout: timeoutMs,
-          maxBuffer: EXEC_FILE_MAX_BUFFER,
+          maxBuffer: EXEC_FILE_MAX_BUFFER
         },
         (error, stdout, stderr) => {
           if (error) {
-            reject(Object.assign(error, { stdout, stderr }));
-            return;
+            reject(Object.assign(error, { stdout, stderr }))
+            return
           }
 
-          resolve({ stdout, stderr });
+          resolve({ stdout, stderr })
         }
-      );
-    });
+      )
+    })
 }
 
 function getErrorOutput(error: unknown): { stdout: string; stderr: string } {
   if (typeof error !== 'object' || error === null) {
-    return { stdout: '', stderr: '' };
+    return { stdout: '', stderr: '' }
   }
 
-  const maybeError = error as ExecFileErrorWithOutput;
+  const maybeError = error as ExecFileErrorWithOutput
   return {
     stdout: typeof maybeError.stdout === 'string' ? maybeError.stdout : '',
-    stderr: typeof maybeError.stderr === 'string' ? maybeError.stderr : '',
-  };
+    stderr: typeof maybeError.stderr === 'string' ? maybeError.stderr : ''
+  }
 }
 
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
     ? String((error as ExecFileErrorWithOutput).code)
-    : undefined;
+    : undefined
 }
 
 function shouldTryNextCandidate(error: unknown): boolean {
-  const code = getErrorCode(error);
-  return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOENT';
+  const code = getErrorCode(error)
+  return code === 'EPERM' || code === 'EACCES' || code === 'EINVAL' || code === 'ENOENT'
 }
 
 function isWindowsAppsAliasCandidate(candidate: ResolvedCodexCli): boolean {
   const commandLine = [candidate.command, ...candidate.argsPrefix]
     .join(' ')
     .replace(/\//g, '\\')
-    .toLowerCase();
+    .toLowerCase()
 
-  return commandLine.includes('\\windowsapps\\');
+  return commandLine.includes('\\windowsapps\\')
 }
 
 function isWindowsAppsAliasPermissionError(error: unknown): boolean {
-  const code = getErrorCode(error);
+  const code = getErrorCode(error)
   if (code === 'EPERM' || code === 'EACCES' || code === 'EINVAL') {
-    return true;
+    return true
   }
 
-  const message = error instanceof Error ? error.message : '';
+  const message = error instanceof Error ? error.message : ''
   return /(operation not permitted|permission denied|access is denied|invalid argument)/i.test(
     message
-  );
+  )
 }
 
 function hasWindowsAppsAliasBlock(attemptResult: CodexCommandAttemptResult): boolean {
-  const failedAttempts = attemptResult.attempts.filter((attempt) => attempt.error);
+  const failedAttempts = attemptResult.attempts.filter((attempt) => attempt.error)
   if (failedAttempts.length === 0) {
-    return false;
+    return false
   }
 
   return (
-    failedAttempts.every((attempt) => shouldTryNextCandidate(attempt.error))
-    && failedAttempts.some(
+    failedAttempts.every((attempt) => shouldTryNextCandidate(attempt.error)) &&
+    failedAttempts.some(
       (attempt) =>
-        attempt.error
-        && isWindowsAppsAliasCandidate(attempt.candidate)
-        && isWindowsAppsAliasPermissionError(attempt.error)
+        attempt.error &&
+        isWindowsAppsAliasCandidate(attempt.candidate) &&
+        isWindowsAppsAliasPermissionError(attempt.error)
     )
-  );
+  )
 }
 
 function getCliCandidateKey(candidate: ResolvedCodexCli): string {
-  return [candidate.command, ...candidate.argsPrefix].join('\u0000');
+  return [candidate.command, ...candidate.argsPrefix].join('\u0000')
 }
 
 function getPrioritizedCliCandidates(context: CodexDiscoveryContext): ResolvedCodexCli[] {
   if (!context.preferredCandidate) {
-    return context.cliCandidates;
+    return context.cliCandidates
   }
 
-  const preferredKey = getCliCandidateKey(context.preferredCandidate);
+  const preferredKey = getCliCandidateKey(context.preferredCandidate)
   return [
     context.preferredCandidate,
-    ...context.cliCandidates.filter((candidate) => getCliCandidateKey(candidate) !== preferredKey),
-  ];
+    ...context.cliCandidates.filter((candidate) => getCliCandidateKey(candidate) !== preferredKey)
+  ]
 }
 
 function buildCodexReadiness(
@@ -269,7 +264,7 @@ function buildCodexReadiness(
       blocking: false,
       title: 'Codex CLI ready.',
       message: 'Fluxion can run workflows through the local Codex CLI.',
-      catalogSource: 'live',
+      catalogSource: 'live'
     },
     cli_missing: {
       code: 'cli_missing',
@@ -278,7 +273,7 @@ function buildCodexReadiness(
       message:
         'Install @openai/codex in Windows and make sure the codex command is visible to this app.',
       actionCommand: 'npm i -g @openai/codex',
-      catalogSource: 'none',
+      catalogSource: 'none'
     },
     windowsapps_alias_blocked: {
       code: 'windowsapps_alias_blocked',
@@ -287,7 +282,7 @@ function buildCodexReadiness(
       message:
         'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn. Install or update @openai/codex globally, then put that npm command ahead of WindowsApps in PATH or disable the alias.',
       actionCommand: 'npm i -g @openai/codex',
-      catalogSource: 'none',
+      catalogSource: 'none'
     },
     auth_missing: {
       code: 'auth_missing',
@@ -295,74 +290,74 @@ function buildCodexReadiness(
       title: 'Codex CLI is not logged in.',
       message: 'Run codex login, then refresh Codex readiness in Fluxion.',
       actionCommand: 'codex login',
-      catalogSource: 'none',
+      catalogSource: 'none'
     },
     auth_unknown: {
       code: 'auth_unknown',
       blocking: false,
       title: 'Codex auth status could not be confirmed.',
-      message: 'Fluxion will still try to use Codex, but run codex login status if execution fails.',
+      message:
+        'Fluxion will still try to use Codex, but run codex login status if execution fails.',
       actionCommand: 'codex login status',
-      catalogSource: 'none',
+      catalogSource: 'none'
     },
     catalog_failed: {
       code: 'catalog_failed',
       blocking: false,
       title: 'Codex model catalog could not be loaded.',
-      message: 'Fluxion will preserve custom model slugs, but the model picker cannot show live Codex models.',
+      message:
+        'Fluxion will preserve custom model slugs, but the model picker cannot show live Codex models.',
       actionCommand: 'codex debug models',
-      catalogSource: 'none',
-    },
-  };
+      catalogSource: 'none'
+    }
+  }
 
   return {
     ...defaults[code],
     ...overrides,
-    code,
-  };
+    code
+  }
 }
 
 export function isCodexAuthMissingMessage(message: string): boolean {
   return /(codex login|not authenticated|authentication|required login|please log in)/i.test(
     message
-  );
+  )
 }
 
 function toReasoningLevels(input: unknown): ReasoningLevel[] {
   if (!Array.isArray(input)) {
-    return [];
+    return []
   }
 
   const levels = input
     .map((item) => {
       if (typeof item === 'string') {
-        return item;
+        return item
       }
 
       if (typeof item === 'object' && item !== null && 'effort' in item) {
-        return String((item as CodexDebugReasoningLevel).effort ?? '');
+        return String((item as CodexDebugReasoningLevel).effort ?? '')
       }
 
-      return '';
+      return ''
     })
     .filter(
       (value): value is ReasoningLevel =>
         value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh'
-    );
+    )
 
-  return [...new Set(levels)];
+  return [...new Set(levels)]
 }
 
 export function mapCodexDebugModelToProviderModel(model: CodexDebugModel): ProviderModel | null {
   if (typeof model.slug !== 'string' || model.slug.trim().length === 0) {
-    return null;
+    return null
   }
 
-  const supportedReasoningLevels = toReasoningLevels(model.supported_reasoning_levels);
+  const supportedReasoningLevels = toReasoningLevels(model.supported_reasoning_levels)
   const defaultReasoningLevel =
-    typeof model.default_reasoning_level === 'string'
-      ? model.default_reasoning_level
-      : undefined;
+    typeof model.default_reasoning_level === 'string' ? model.default_reasoning_level : undefined
 
   return {
     id: model.slug,
@@ -382,27 +377,28 @@ export function mapCodexDebugModelToProviderModel(model: CodexDebugModel): Provi
       typeof model.supported_in_api === 'boolean' ? model.supported_in_api : undefined,
     supportedReasoningLevels,
     defaultReasoningLevel:
-      defaultReasoningLevel && supportedReasoningLevels.includes(defaultReasoningLevel as ReasoningLevel)
+      defaultReasoningLevel &&
+      supportedReasoningLevels.includes(defaultReasoningLevel as ReasoningLevel)
         ? defaultReasoningLevel
-        : supportedReasoningLevels[0],
-  };
+        : supportedReasoningLevels[0]
+  }
 }
 
 export function parseCodexDebugModelsOutput(output: string): ProviderModel[] {
-  const payload = JSON.parse(output) as CodexDebugModelsResponse;
+  const payload = JSON.parse(output) as CodexDebugModelsResponse
   if (!Array.isArray(payload.models)) {
-    throw new Error('Codex model discovery returned an invalid payload.');
+    throw new Error('Codex model discovery returned an invalid payload.')
   }
 
   return payload.models
     .map(mapCodexDebugModelToProviderModel)
     .filter((model): model is ProviderModel => model !== null)
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    .sort((a, b) => a.displayName.localeCompare(b.displayName))
 }
 
 export function parseCodexVersionOutput(output: string): string | undefined {
-  const match = output.trim().match(/(?:codex(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i);
-  return match?.[1];
+  const match = output.trim().match(/(?:codex(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i)
+  return match?.[1]
 }
 
 function buildStaticOpenAIModels(): ProviderModel[] {
@@ -412,32 +408,32 @@ function buildStaticOpenAIModels(): ProviderModel[] {
     description: model.description,
     visibility: 'list',
     supportedReasoningLevels: model.supportedReasoningLevels,
-    defaultReasoningLevel: model.supportsReasoning ? OPENAI_DEFAULT_REASONING_LEVEL : undefined,
-  }));
+    defaultReasoningLevel: model.supportsReasoning ? OPENAI_DEFAULT_REASONING_LEVEL : undefined
+  }))
 }
 
 async function fetchOpenAIModels(apiKey: string): Promise<ProviderModel[]> {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MODELS_TIMEOUT_MS);
+  const controller = new AbortController()
+  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MODELS_TIMEOUT_MS)
 
   try {
     const response = await fetch('https://api.openai.com/v1/models', {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`
       },
-      signal: controller.signal,
-    });
+      signal: controller.signal
+    })
 
     if (!response.ok) {
-      throw new Error(`OpenAI model list request failed with status ${response.status}.`);
+      throw new Error(`OpenAI model list request failed with status ${response.status}.`)
     }
 
-    const payload = (await response.json()) as OpenAIModelListResponse;
+    const payload = (await response.json()) as OpenAIModelListResponse
     if (!Array.isArray(payload.data)) {
-      throw new Error('OpenAI model list returned an invalid payload.');
+      throw new Error('OpenAI model list returned an invalid payload.')
     }
 
-    const staticModels = new Map(buildStaticOpenAIModels().map((model) => [model.id, model]));
+    const staticModels = new Map(buildStaticOpenAIModels().map((model) => [model.id, model]))
 
     return payload.data
       .map((item) => (typeof item.id === 'string' ? item.id : undefined))
@@ -449,17 +445,17 @@ async function fetchOpenAIModels(apiKey: string): Promise<ProviderModel[]> {
         description: staticModels.get(id)?.description,
         visibility: staticModels.has(id) ? 'list' : 'dynamic',
         supportedReasoningLevels: staticModels.get(id)?.supportedReasoningLevels ?? [],
-        defaultReasoningLevel: staticModels.get(id)?.defaultReasoningLevel,
-      }));
+        defaultReasoningLevel: staticModels.get(id)?.defaultReasoningLevel
+      }))
   } finally {
-    clearTimeout(timeoutHandle);
+    clearTimeout(timeoutHandle)
   }
 }
 
 async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
-  const apiKey = await settingsService.resolveOpenAIApiKey();
-  const settingsSummary = await settingsService.getProviderSettingsSummary();
-  const fallbackModels = buildStaticOpenAIModels();
+  const apiKey = await settingsService.resolveOpenAIApiKey()
+  const settingsSummary = await settingsService.getProviderSettingsSummary()
+  const fallbackModels = buildStaticOpenAIModels()
 
   if (!apiKey) {
     return {
@@ -470,17 +466,18 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
         type: 'api-key-env',
         status: 'missing',
         envVar: 'OPENAI_API_KEY',
-        message: 'Set the OpenAI API key in Global Settings or via OPENAI_API_KEY.',
+        message: 'Set the OpenAI API key in Global Settings or via OPENAI_API_KEY.'
       },
       models: fallbackModels,
       defaultModel: OPENAI_DEFAULT_MODEL,
       parameters: OPENAI_PARAMETERS,
-      refreshHint: 'Uses /v1/models when OPENAI_API_KEY is available; otherwise shows fallback presets.',
-    };
+      refreshHint:
+        'Uses /v1/models when OPENAI_API_KEY is available; otherwise shows fallback presets.'
+    }
   }
 
   try {
-    const models = await fetchOpenAIModels(apiKey);
+    const models = await fetchOpenAIModels(apiKey)
 
     return {
       provider: 'openai',
@@ -489,20 +486,19 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
       auth: {
         type: 'api-key-env',
         status: 'authenticated',
-        envVar:
-          settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
+        envVar: settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
         message:
           settingsSummary.openaiApiKeySource === 'stored'
             ? 'Configured in Fluxion Global Settings.'
-            : undefined,
+            : undefined
       },
       models: models.length > 0 ? models : fallbackModels,
       defaultModel: models.some((model) => model.id === OPENAI_DEFAULT_MODEL)
         ? OPENAI_DEFAULT_MODEL
-        : models[0]?.id ?? OPENAI_DEFAULT_MODEL,
+        : (models[0]?.id ?? OPENAI_DEFAULT_MODEL),
       parameters: OPENAI_PARAMETERS,
-      refreshHint: 'Uses OpenAI /v1/models for live model discovery.',
-    };
+      refreshHint: 'Uses OpenAI /v1/models for live model discovery.'
+    }
   } catch (error) {
     return {
       provider: 'openai',
@@ -511,104 +507,99 @@ async function getOpenAICapabilities(): Promise<ProviderCapabilities> {
       auth: {
         type: 'api-key-env',
         status: 'authenticated',
-        envVar:
-          settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
+        envVar: settingsSummary.openaiApiKeySource === 'env' ? 'OPENAI_API_KEY' : undefined,
         message:
           settingsSummary.openaiApiKeySource === 'stored'
             ? 'Configured in Fluxion Global Settings, but live model discovery failed.'
-            : 'API key exists, but live model discovery failed.',
+            : 'API key exists, but live model discovery failed.'
       },
       error: error instanceof Error ? error.message : 'Failed to fetch OpenAI models.',
       models: fallbackModels,
       defaultModel: OPENAI_DEFAULT_MODEL,
       parameters: OPENAI_PARAMETERS,
-      refreshHint: 'Uses OpenAI /v1/models for live model discovery.',
-    };
+      refreshHint: 'Uses OpenAI /v1/models for live model discovery.'
+    }
   }
 }
 
 async function createCodexDiscoveryContext(
   dependencies: CodexCapabilitiesDependencies = {}
 ): Promise<CodexDiscoveryContext> {
-  const resolveCli = dependencies.resolveCli ?? resolveCodexCliCandidates;
-  const runCommand = dependencies.runCommand ?? createExecFileRunner();
-  const cliCandidates = normalizeResolvedCliCandidates(await resolveCli());
+  const resolveCli = dependencies.resolveCli ?? resolveCodexCliCandidates
+  const runCommand = dependencies.runCommand ?? createExecFileRunner()
+  const cliCandidates = normalizeResolvedCliCandidates(await resolveCli())
 
   return {
     cliCandidates,
-    runCommand,
-  };
+    runCommand
+  }
 }
 
 async function runCodexCommandAcrossCandidates(
   context: CodexDiscoveryContext,
   args: string[]
 ): Promise<CodexCommandAttemptResult> {
-  let lastError: unknown;
-  const attempts: CodexCommandAttempt[] = [];
+  let lastError: unknown
+  const attempts: CodexCommandAttempt[] = []
 
   for (const cliCandidate of getPrioritizedCliCandidates(context)) {
     try {
-      const result = await context.runCommand(
-        cliCandidate.command,
-        [...cliCandidate.argsPrefix, ...args]
-      );
-      context.preferredCandidate = cliCandidate;
+      const result = await context.runCommand(cliCandidate.command, [
+        ...cliCandidate.argsPrefix,
+        ...args
+      ])
+      context.preferredCandidate = cliCandidate
       attempts.push({
         candidate: cliCandidate,
-        result,
-      });
+        result
+      })
 
       return {
         result,
-        attempts,
-      };
+        attempts
+      }
     } catch (error) {
-      lastError = error;
+      lastError = error
       attempts.push({
         candidate: cliCandidate,
-        error,
-      });
+        error
+      })
       if (!shouldTryNextCandidate(error)) {
-        break;
+        break
       }
     }
   }
 
   return {
     error: lastError ?? new Error(CODEX_CLI_NOT_FOUND_MESSAGE),
-    attempts,
-  };
+    attempts
+  }
 }
 
 export async function getCodexCapabilities(
   dependencies: CodexCapabilitiesDependencies = {}
 ): Promise<ProviderCapabilities> {
   try {
-    const discoveryContext = await createCodexDiscoveryContext(dependencies);
-    const versionStatus = await runCodexCommandAcrossCandidates(discoveryContext, [
-      '--version',
-    ]);
+    const discoveryContext = await createCodexDiscoveryContext(dependencies)
+    const versionStatus = await runCodexCommandAcrossCandidates(discoveryContext, ['--version'])
     const codexVersion = versionStatus.result
       ? parseCodexVersionOutput(
           `${versionStatus.result.stdout}\n${versionStatus.result.stderr}`.trim()
         )
-      : undefined;
-    const loginStatus = await runCodexCommandAcrossCandidates(discoveryContext, [
-      'login',
-      'status',
-    ]);
+      : undefined
+    const loginStatus = await runCodexCommandAcrossCandidates(discoveryContext, ['login', 'status'])
 
-    let authStatus: ProviderCapabilities['auth']['status'] = 'authenticated';
-    let authWarning: string | undefined;
+    let authStatus: ProviderCapabilities['auth']['status'] = 'authenticated'
+    let authWarning: string | undefined
 
     if (loginStatus.error) {
-      const { stdout, stderr } = getErrorOutput(loginStatus.error);
-      const combinedOutput = `${stderr}\n${stdout}`.trim()
-        || (loginStatus.error instanceof Error ? loginStatus.error.message : '');
+      const { stdout, stderr } = getErrorOutput(loginStatus.error)
+      const combinedOutput =
+        `${stderr}\n${stdout}`.trim() ||
+        (loginStatus.error instanceof Error ? loginStatus.error.message : '')
 
       if (hasWindowsAppsAliasBlock(loginStatus) && !isCodexAuthMissingMessage(combinedOutput)) {
-        const readiness = buildCodexReadiness('windowsapps_alias_blocked');
+        const readiness = buildCodexReadiness('windowsapps_alias_blocked')
         return withCodexApprovalProtocol({
           provider: 'codex',
           displayName: 'Codex',
@@ -617,7 +608,7 @@ export async function getCodexCapabilities(
             type: 'cli-login',
             status: 'unknown',
             loginCommand: 'codex login',
-            message: readiness.message,
+            message: readiness.message
           },
           readiness,
           version: codexVersion,
@@ -625,12 +616,12 @@ export async function getCodexCapabilities(
           models: [],
           parameters: CODEX_PARAMETERS,
           refreshHint:
-            'Install or update @openai/codex globally, fix PATH or App Execution Alias settings, then refresh Codex readiness.',
-        });
+            'Install or update @openai/codex globally, fix PATH or App Execution Alias settings, then refresh Codex readiness.'
+        })
       }
 
       if (isCodexAuthMissingMessage(combinedOutput)) {
-        const readiness = buildCodexReadiness('auth_missing');
+        const readiness = buildCodexReadiness('auth_missing')
         return withCodexApprovalProtocol({
           provider: 'codex',
           displayName: 'Codex',
@@ -639,46 +630,43 @@ export async function getCodexCapabilities(
             type: 'cli-login',
             status: 'missing',
             loginCommand: 'codex login',
-            message: readiness.message,
+            message: readiness.message
           },
           readiness,
           version: codexVersion,
           error: combinedOutput || readiness.message,
           models: [],
           parameters: CODEX_PARAMETERS,
-          refreshHint: 'Run `codex login`, then refresh Codex readiness.',
-        });
+          refreshHint: 'Run `codex login`, then refresh Codex readiness.'
+        })
       }
 
-      authStatus = 'unknown';
-      authWarning = combinedOutput || 'Codex auth status could not be confirmed.';
+      authStatus = 'unknown'
+      authWarning = combinedOutput || 'Codex auth status could not be confirmed.'
     }
 
-    const liveCatalog = await runCodexCommandAcrossCandidates(discoveryContext, [
-      'debug',
-      'models',
-    ]);
-    let catalogResult = liveCatalog.result;
-    let catalogSource: ProviderReadinessState['catalogSource'] = 'live';
-    let catalogError = liveCatalog.error;
+    const liveCatalog = await runCodexCommandAcrossCandidates(discoveryContext, ['debug', 'models'])
+    let catalogResult = liveCatalog.result
+    let catalogSource: ProviderReadinessState['catalogSource'] = 'live'
+    let catalogError = liveCatalog.error
 
     if (!catalogResult) {
       const bundledCatalog = await runCodexCommandAcrossCandidates(discoveryContext, [
         'debug',
         'models',
-        '--bundled',
-      ]);
-      catalogResult = bundledCatalog.result;
-      catalogError = bundledCatalog.error ?? catalogError;
-      catalogSource = catalogResult ? 'bundled' : 'none';
+        '--bundled'
+      ])
+      catalogResult = bundledCatalog.result
+      catalogError = bundledCatalog.error ?? catalogError
+      catalogSource = catalogResult ? 'bundled' : 'none'
     }
 
     if (!catalogResult) {
-      const { stdout, stderr } = getErrorOutput(catalogError);
-      const combinedOutput = `${stderr}\n${stdout}`.trim();
+      const { stdout, stderr } = getErrorOutput(catalogError)
+      const combinedOutput = `${stderr}\n${stdout}`.trim()
       const errorMessage =
-        combinedOutput
-        || (catalogError instanceof Error ? catalogError.message : 'Codex model discovery failed.');
+        combinedOutput ||
+        (catalogError instanceof Error ? catalogError.message : 'Codex model discovery failed.')
       const readiness = buildCodexReadiness(
         authStatus === 'unknown' ? 'auth_unknown' : 'catalog_failed',
         {
@@ -686,9 +674,9 @@ export async function getCodexCapabilities(
             authStatus === 'unknown'
               ? `${authWarning} Catalog discovery also failed: ${errorMessage}`
               : errorMessage,
-          catalogSource: 'none',
+          catalogSource: 'none'
         }
-      );
+      )
 
       return withCodexApprovalProtocol({
         provider: 'codex',
@@ -698,39 +686,37 @@ export async function getCodexCapabilities(
           type: 'cli-login',
           status: authStatus,
           loginCommand: 'codex login',
-          message: authWarning,
+          message: authWarning
         },
         readiness,
         version: codexVersion,
         error: errorMessage,
         models: [],
         parameters: CODEX_PARAMETERS,
-        refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-      });
+        refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
+      })
     }
 
-    const models = parseCodexDebugModelsOutput(catalogResult.stdout);
+    const models = parseCodexDebugModelsOutput(catalogResult.stdout)
     const defaultModel =
-      models.find((model) => model.id === CODEX_DEFAULT_MODEL)?.id
-      ?? models.find((model) => model.visibility !== 'hide')?.id
-      ?? models[0]?.id;
+      models.find((model) => model.id === CODEX_DEFAULT_MODEL)?.id ??
+      models.find((model) => model.visibility !== 'hide')?.id ??
+      models[0]?.id
     const catalogMessage =
       catalogSource === 'bundled'
         ? 'Live model discovery failed, so Fluxion is using the bundled Codex catalog.'
-        : 'Fluxion can run workflows through the local Codex CLI.';
+        : 'Fluxion can run workflows through the local Codex CLI.'
     const readiness =
       authStatus === 'unknown'
         ? buildCodexReadiness('auth_unknown', {
             message: authWarning ?? 'Codex auth status could not be confirmed.',
-            catalogSource,
+            catalogSource
           })
         : buildCodexReadiness('ready', {
             message: catalogMessage,
             catalogSource,
-            ...(catalogSource === 'bundled'
-              ? { title: 'Codex bundled catalog loaded.' }
-              : {}),
-          });
+            ...(catalogSource === 'bundled' ? { title: 'Codex bundled catalog loaded.' } : {})
+          })
 
     return withCodexApprovalProtocol({
       provider: 'codex',
@@ -741,25 +727,25 @@ export async function getCodexCapabilities(
         status: authStatus,
         loginCommand: 'codex login',
         message:
-          authWarning
-          ?? (catalogResult.stderr.trim().length > 0 ? catalogResult.stderr.trim() : undefined),
+          authWarning ??
+          (catalogResult.stderr.trim().length > 0 ? catalogResult.stderr.trim() : undefined)
       },
       readiness,
       version: codexVersion,
       models,
       defaultModel,
       parameters: CODEX_PARAMETERS,
-      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-    });
+      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
+    })
   } catch (error) {
-    const { stdout, stderr } = getErrorOutput(error);
-    const combinedOutput = `${stderr}\n${stdout}`.trim();
+    const { stdout, stderr } = getErrorOutput(error)
+    const combinedOutput = `${stderr}\n${stdout}`.trim()
 
     if (
       error instanceof Error &&
       (error.message.includes(CODEX_CLI_NOT_FOUND_MESSAGE) || getErrorCode(error) === 'ENOENT')
     ) {
-      const readiness = buildCodexReadiness('cli_missing');
+      const readiness = buildCodexReadiness('cli_missing')
       return withCodexApprovalProtocol({
         provider: 'codex',
         displayName: 'Codex',
@@ -768,18 +754,18 @@ export async function getCodexCapabilities(
           type: 'cli-login',
           status: 'missing',
           loginCommand: 'codex login',
-          message: readiness.message,
+          message: readiness.message
         },
         readiness,
         error: CODEX_CLI_NOT_FOUND_MESSAGE,
         models: [],
         parameters: CODEX_PARAMETERS,
-        refreshHint: 'Install @openai/codex in Windows, then refresh Codex readiness.',
-      });
+        refreshHint: 'Install @openai/codex in Windows, then refresh Codex readiness.'
+      })
     }
 
     if (combinedOutput && isCodexAuthMissingMessage(combinedOutput)) {
-      const readiness = buildCodexReadiness('auth_missing');
+      const readiness = buildCodexReadiness('auth_missing')
       return withCodexApprovalProtocol({
         provider: 'codex',
         displayName: 'Codex',
@@ -788,19 +774,20 @@ export async function getCodexCapabilities(
           type: 'cli-login',
           status: 'missing',
           loginCommand: 'codex login',
-          message: readiness.message,
+          message: readiness.message
         },
         readiness,
         error: combinedOutput,
         models: [],
         parameters: CODEX_PARAMETERS,
-        refreshHint: 'Run `codex login`, then refresh Codex readiness.',
-      });
+        refreshHint: 'Run `codex login`, then refresh Codex readiness.'
+      })
     }
 
     const readiness = buildCodexReadiness('catalog_failed', {
-      message: combinedOutput || (error instanceof Error ? error.message : 'Codex model discovery failed.'),
-    });
+      message:
+        combinedOutput || (error instanceof Error ? error.message : 'Codex model discovery failed.')
+    })
 
     return withCodexApprovalProtocol({
       provider: 'codex',
@@ -810,26 +797,26 @@ export async function getCodexCapabilities(
         type: 'cli-login',
         status: 'unknown',
         loginCommand: 'codex login',
-        message: combinedOutput || 'Codex model discovery failed.',
+        message: combinedOutput || 'Codex model discovery failed.'
       },
       readiness,
       error:
-        combinedOutput
-        || (error instanceof Error ? error.message : 'Codex model discovery failed.'),
+        combinedOutput ||
+        (error instanceof Error ? error.message : 'Codex model discovery failed.'),
       models: [],
       parameters: CODEX_PARAMETERS,
-      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.',
-    });
+      refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
+    })
   }
 }
 
 export class ProviderRegistryService {
-  private static instance: ProviderRegistryService;
-  private cachedCapabilities: ProviderCapabilitiesMap | null = null;
-  private cachedAt = 0;
-  private pendingCapabilities: Promise<ProviderCapabilitiesMap> | null = null;
-  private cacheGeneration = 0;
-  private readonly cacheTtlMs = 30_000;
+  private static instance: ProviderRegistryService
+  private cachedCapabilities: ProviderCapabilitiesMap | null = null
+  private cachedAt = 0
+  private pendingCapabilities: Promise<ProviderCapabilitiesMap> | null = null
+  private cacheGeneration = 0
+  private readonly cacheTtlMs = 30_000
 
   private constructor() {
     // Singleton
@@ -837,65 +824,60 @@ export class ProviderRegistryService {
 
   public static getInstance(): ProviderRegistryService {
     if (!ProviderRegistryService.instance) {
-      ProviderRegistryService.instance = new ProviderRegistryService();
+      ProviderRegistryService.instance = new ProviderRegistryService()
     }
 
-    return ProviderRegistryService.instance;
+    return ProviderRegistryService.instance
   }
 
   public async fetchCapabilities(forceRefresh = false): Promise<ProviderCapabilitiesMap> {
-    const now = Date.now();
-    if (
-      !forceRefresh
-      && this.cachedCapabilities
-      && now - this.cachedAt < this.cacheTtlMs
-    ) {
-      return this.cachedCapabilities;
+    const now = Date.now()
+    if (!forceRefresh && this.cachedCapabilities && now - this.cachedAt < this.cacheTtlMs) {
+      return this.cachedCapabilities
     }
 
     if (this.pendingCapabilities) {
-      return this.pendingCapabilities;
+      return this.pendingCapabilities
     }
 
-    const generation = this.cacheGeneration;
-    const pendingCapabilities = Promise.all([
-      getCodexCapabilities(),
-      getOpenAICapabilities(),
-    ]).then(([codex, openai]) => {
-      const capabilities: ProviderCapabilitiesMap = {
-        codex,
-        openai,
-      };
+    const generation = this.cacheGeneration
+    const pendingCapabilities = Promise.all([getCodexCapabilities(), getOpenAICapabilities()]).then(
+      ([codex, openai]) => {
+        const capabilities: ProviderCapabilitiesMap = {
+          codex,
+          openai
+        }
 
-      if (this.cacheGeneration === generation) {
-        this.cachedCapabilities = capabilities;
-        this.cachedAt = Date.now();
+        if (this.cacheGeneration === generation) {
+          this.cachedCapabilities = capabilities
+          this.cachedAt = Date.now()
+        }
+
+        return capabilities
       }
+    )
 
-      return capabilities;
-    });
-
-    this.pendingCapabilities = pendingCapabilities;
+    this.pendingCapabilities = pendingCapabilities
 
     try {
-      return await pendingCapabilities;
+      return await pendingCapabilities
     } finally {
       if (this.pendingCapabilities === pendingCapabilities) {
-        this.pendingCapabilities = null;
+        this.pendingCapabilities = null
       }
     }
   }
 
   public getCachedCapabilities(): ProviderCapabilitiesMap | null {
-    return this.cachedCapabilities;
+    return this.cachedCapabilities
   }
 
   public invalidateCache(): void {
-    this.cachedCapabilities = null;
-    this.cachedAt = 0;
-    this.pendingCapabilities = null;
-    this.cacheGeneration += 1;
+    this.cachedCapabilities = null
+    this.cachedAt = 0
+    this.pendingCapabilities = null
+    this.cacheGeneration += 1
   }
 }
 
-export const providerRegistryService = ProviderRegistryService.getInstance();
+export const providerRegistryService = ProviderRegistryService.getInstance()

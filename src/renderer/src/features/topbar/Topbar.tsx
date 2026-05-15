@@ -187,7 +187,11 @@ export const Topbar: React.FC = () => {
                 variant="secondary"
                 size="toolbar"
                 className="hidden min-w-[132px] shrink-0 md:inline-flex"
-                title={reviewNodeLabel ? `Open review for ${String(reviewNodeLabel)}` : 'Open review panel'}
+                title={
+                  reviewNodeLabel
+                    ? `Open review for ${String(reviewNodeLabel)}`
+                    : 'Open review panel'
+                }
                 onClick={() => requestReviewFocus(reviewNodeIds[0]!)}
               >
                 {reviewButtonLabel}

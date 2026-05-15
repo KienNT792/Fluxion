@@ -47,10 +47,12 @@ export function getFirstPromptLine(prompt: unknown): string {
     return ''
   }
 
-  return prompt
-    .split(/\r\n|\r|\n/)
-    .map((line) => line.trim())
-    .find(Boolean) ?? ''
+  return (
+    prompt
+      .split(/\r\n|\r|\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? ''
+  )
 }
 
 export function getAgentNodeTitle(data: Partial<AgentNodeData>, modelDisplayName: string): string {

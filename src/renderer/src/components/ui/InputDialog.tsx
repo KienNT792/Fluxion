@@ -1,22 +1,22 @@
-import React, { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { PencilLine } from 'lucide-react';
-import { useModalFocusTrap } from '../../lib/use-modal-focus-trap';
-import { Button } from './Button';
-import { Input } from './Input';
+import React, { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { PencilLine } from 'lucide-react'
+import { useModalFocusTrap } from '../../lib/use-modal-focus-trap'
+import { Button } from './Button'
+import { Input } from './Input'
 
 interface InputDialogProps {
-  isOpen: boolean;
-  title: string;
-  description?: string;
-  value: string;
-  placeholder?: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  confirmDisabled?: boolean;
-  onValueChange: (value: string) => void;
-  onConfirm: () => void | Promise<void>;
-  onCancel: () => void;
+  isOpen: boolean
+  title: string
+  description?: string
+  value: string
+  placeholder?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  confirmDisabled?: boolean
+  onValueChange: (value: string) => void
+  onConfirm: () => void | Promise<void>
+  onCancel: () => void
 }
 
 export const InputDialog: React.FC<InputDialogProps> = ({
@@ -30,61 +30,61 @@ export const InputDialog: React.FC<InputDialogProps> = ({
   confirmDisabled = false,
   onValueChange,
   onConfirm,
-  onCancel,
+  onCancel
 }) => {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
 
-  useModalFocusTrap(isOpen, dialogRef, inputRef);
+  useModalFocusTrap(isOpen, dialogRef, inputRef)
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
 
-    return () => window.cancelAnimationFrame(frameId);
-  }, [isOpen]);
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        onCancel();
-        return;
+        onCancel()
+        return
       }
 
       if (event.key === 'Enter' && !confirmDisabled) {
-        event.preventDefault();
-        void onConfirm();
+        event.preventDefault()
+        void onConfirm()
       }
-    };
+    }
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [confirmDisabled, isOpen, onCancel, onConfirm]);
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [confirmDisabled, isOpen, onCancel, onConfirm])
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      return
     }
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
+      document.body.style.overflow = originalOverflow
+    }
+  }, [isOpen])
 
   if (!isOpen || typeof document === 'undefined') {
-    return null;
+    return null
   }
 
   return createPortal(
@@ -103,7 +103,7 @@ export const InputDialog: React.FC<InputDialogProps> = ({
         className="w-full max-w-md overflow-hidden rounded-lg"
         style={{
           background: 'var(--color-surface-card)',
-          border: '1px solid var(--color-hairline)',
+          border: '1px solid var(--color-hairline)'
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -116,7 +116,7 @@ export const InputDialog: React.FC<InputDialogProps> = ({
             style={{
               background: 'var(--color-canvas-soft)',
               border: '1px solid var(--color-hairline)',
-              color: 'var(--color-primary)',
+              color: 'var(--color-primary)'
             }}
           >
             <PencilLine size={16} />
@@ -162,5 +162,5 @@ export const InputDialog: React.FC<InputDialogProps> = ({
       </div>
     </div>,
     document.body
-  );
-};
+  )
+}

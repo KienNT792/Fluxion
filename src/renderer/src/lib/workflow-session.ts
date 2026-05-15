@@ -5,71 +5,68 @@ import {
   Workflow,
   WorkflowEdge,
   WorkflowNode,
-  WorkspaceOpenedPayload,
-} from '@shared';
-import { useExecutionStore } from '../stores/execution.store';
-import { useWorkflowStore } from '../stores/workflow.store';
-import {
-  getCodexReadinessBadgeState,
-  getCodexReadinessBlockMessage,
-} from './provider-capabilities';
+  WorkspaceOpenedPayload
+} from '@shared'
+import { useExecutionStore } from '../stores/execution.store'
+import { useWorkflowStore } from '../stores/workflow.store'
+import { getCodexReadinessBadgeState, getCodexReadinessBlockMessage } from './provider-capabilities'
 
-const TRUSTED_WORKSPACE_STORAGE_KEY = 'fluxion.trusted-workspaces';
+const TRUSTED_WORKSPACE_STORAGE_KEY = 'fluxion.trusted-workspaces'
 
-export type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error';
+export type WorkspaceOpenPhase = 'idle' | 'selecting' | 'awaitingTrust' | 'opening' | 'error'
 
 export interface WorkspaceOpenStatus {
-  phase: WorkspaceOpenPhase;
-  workspacePath?: string;
-  error?: string;
+  phase: WorkspaceOpenPhase
+  workspacePath?: string
+  error?: string
 }
 
 interface WorkspaceOpenOptions {
-  requestWorkspaceTrust?: (workspacePath: string) => Promise<boolean>;
-  onStatusChange?: (status: WorkspaceOpenStatus) => void;
+  requestWorkspaceTrust?: (workspacePath: string) => Promise<boolean>
+  onStatusChange?: (status: WorkspaceOpenStatus) => void
 }
 
 function readRendererTrustedWorkspaceCache(): string[] {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return [];
+    return []
   }
 
   try {
-    const raw = window.localStorage.getItem(TRUSTED_WORKSPACE_STORAGE_KEY);
+    const raw = window.localStorage.getItem(TRUSTED_WORKSPACE_STORAGE_KEY)
     if (!raw) {
-      return [];
+      return []
     }
 
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(raw)
     return Array.isArray(parsed)
       ? parsed.filter((entry): entry is string => typeof entry === 'string')
-      : [];
+      : []
   } catch {
-    return [];
+    return []
   }
 }
 
 function clearRendererTrustedWorkspaceCache(): void {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return;
+    return
   }
 
   try {
-    window.localStorage.removeItem(TRUSTED_WORKSPACE_STORAGE_KEY);
+    window.localStorage.removeItem(TRUSTED_WORKSPACE_STORAGE_KEY)
   } catch {
     // A cache cleanup failure should not block workspace open.
   }
 }
 
 async function migrateRendererTrustedWorkspaceCache(): Promise<void> {
-  const cachedPaths = readRendererTrustedWorkspaceCache();
+  const cachedPaths = readRendererTrustedWorkspaceCache()
   if (cachedPaths.length === 0 || !window.api?.migrateRendererTrustedWorkspaceCache) {
-    return;
+    return
   }
 
   try {
-    await window.api.migrateRendererTrustedWorkspaceCache(cachedPaths);
-    clearRendererTrustedWorkspaceCache();
+    await window.api.migrateRendererTrustedWorkspaceCache(cachedPaths)
+    clearRendererTrustedWorkspaceCache()
   } catch {
     // If migration fails, main-process trust remains the source of truth and the
     // user may be asked to trust the workspace again.
@@ -77,49 +74,49 @@ async function migrateRendererTrustedWorkspaceCache(): Promise<void> {
 }
 
 export async function isTrustedWorkspacePath(workspacePath: string): Promise<boolean> {
-  await migrateRendererTrustedWorkspaceCache();
+  await migrateRendererTrustedWorkspaceCache()
   if (!window.api?.isWorkspaceTrusted) {
-    return false;
+    return false
   }
 
-  return window.api.isWorkspaceTrusted(workspacePath);
+  return window.api.isWorkspaceTrusted(workspacePath)
 }
 
 export async function markWorkspaceAsTrusted(workspacePath: string): Promise<void> {
   if (!window.api?.trustWorkspace) {
-    return;
+    return
   }
 
-  await window.api.trustWorkspace(workspacePath);
+  await window.api.trustWorkspace(workspacePath)
 }
 
 export async function shouldPromptWorkspaceTrust(workspacePath: string): Promise<boolean> {
-  return !(await isTrustedWorkspacePath(workspacePath));
+  return !(await isTrustedWorkspacePath(workspacePath))
 }
 
 export function requiresLegacyWorkflowAction(payload: WorkspaceOpenedPayload): boolean {
   return (
-    payload.legacyWorkflowDetected
-    && !payload.contextSummary?.contextOnboarding.legacyWorkflowDecision
-  );
+    payload.legacyWorkflowDetected &&
+    !payload.contextSummary?.contextOnboarding.legacyWorkflowDecision
+  )
 }
 
 export function shouldShowInitialIncompleteContextPrompt(): boolean {
-  return false;
+  return false
 }
 
 export function getContextEntryBehavior(payload: WorkspaceOpenedPayload): {
-  autoOpenModal: boolean;
-  showIncompleteBanner: boolean;
-  showLegacyBanner: boolean;
+  autoOpenModal: boolean
+  showIncompleteBanner: boolean
+  showLegacyBanner: boolean
 } {
   return {
     autoOpenModal:
-      payload.contextStatus === 'missing'
-      && !payload.contextSummary?.contextOnboarding.initialPromptDismissedAt,
+      payload.contextStatus === 'missing' &&
+      !payload.contextSummary?.contextOnboarding.initialPromptDismissedAt,
     showIncompleteBanner: payload.contextStatus === 'incomplete',
-    showLegacyBanner: requiresLegacyWorkflowAction(payload),
-  };
+    showLegacyBanner: requiresLegacyWorkflowAction(payload)
+  }
 }
 
 function mapCanvasNodesToWorkflowNodes(): WorkflowNode[] {
@@ -131,8 +128,8 @@ function mapCanvasNodesToWorkflowNodes(): WorkflowNode[] {
         ? node.data.label
         : String(node.data.model),
     data: node.data,
-    position: node.position,
-  }));
+    position: node.position
+  }))
 }
 
 function mapCanvasEdgesToWorkflowEdges(): WorkflowEdge[] {
@@ -140,40 +137,40 @@ function mapCanvasEdgesToWorkflowEdges(): WorkflowEdge[] {
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    label: typeof edge.label === 'string' ? edge.label : undefined,
-  }));
+    label: typeof edge.label === 'string' ? edge.label : undefined
+  }))
 }
 
 function collectRetryNodeIds(startNodeId: NodeId, edges: WorkflowEdge[]): NodeId[] {
-  const adjacency = new Map<NodeId, NodeId[]>();
+  const adjacency = new Map<NodeId, NodeId[]>()
   for (const edge of edges) {
     if (!adjacency.has(edge.source)) {
-      adjacency.set(edge.source, []);
+      adjacency.set(edge.source, [])
     }
 
-    adjacency.get(edge.source)!.push(edge.target);
+    adjacency.get(edge.source)!.push(edge.target)
   }
 
-  const visited = new Set<NodeId>();
-  const queue: NodeId[] = [startNodeId];
+  const visited = new Set<NodeId>()
+  const queue: NodeId[] = [startNodeId]
 
   while (queue.length > 0) {
-    const nodeId = queue.shift()!;
+    const nodeId = queue.shift()!
     if (visited.has(nodeId)) {
-      continue;
+      continue
     }
 
-    visited.add(nodeId);
+    visited.add(nodeId)
     for (const neighbor of adjacency.get(nodeId) ?? []) {
-      queue.push(neighbor);
+      queue.push(neighbor)
     }
   }
 
-  return [...visited];
+  return [...visited]
 }
 
 export function buildWorkflowDocument(): Workflow {
-  const { workflowId, workflowName, lastSavedAt, executionMode } = useWorkflowStore.getState();
+  const { workflowId, workflowName, lastSavedAt, executionMode } = useWorkflowStore.getState()
 
   return {
     id: workflowId,
@@ -181,32 +178,29 @@ export function buildWorkflowDocument(): Workflow {
     executionMode,
     nodes: mapCanvasNodesToWorkflowNodes(),
     edges: mapCanvasEdgesToWorkflowEdges(),
-    updatedAt: lastSavedAt ?? undefined,
-  };
+    updatedAt: lastSavedAt ?? undefined
+  }
 }
 
 export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
-  const entryBehavior = getContextEntryBehavior(payload);
-  useWorkflowStore.getState().hydrateWorkspace(payload);
-  useWorkflowStore.getState().setContextState(
-    payload.contextStatus,
-    payload.contextSummary ?? null
-  );
-  useWorkflowStore.getState().setContextSetupOpen(entryBehavior.autoOpenModal);
-  const executionStore = useExecutionStore.getState();
-  executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id));
-  executionStore.setWorkflowStatus('idle');
-  executionStore.setWorkflowError(null);
+  const entryBehavior = getContextEntryBehavior(payload)
+  useWorkflowStore.getState().hydrateWorkspace(payload)
+  useWorkflowStore.getState().setContextState(payload.contextStatus, payload.contextSummary ?? null)
+  useWorkflowStore.getState().setContextSetupOpen(entryBehavior.autoOpenModal)
+  const executionStore = useExecutionStore.getState()
+  executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id))
+  executionStore.setWorkflowStatus('idle')
+  executionStore.setWorkflowError(null)
 }
 
 export async function loadWorkspaceFromPath(workspacePath: string): Promise<void> {
-  const payload = await window.api.loadWorkspace(workspacePath);
-  hydrateWorkspaceState(payload);
-  await useWorkflowStore.getState().fetchProviderCapabilities();
+  const payload = await window.api.loadWorkspace(workspacePath)
+  hydrateWorkspaceState(payload)
+  await useWorkflowStore.getState().fetchProviderCapabilities()
 }
 
 export async function selectWorkspacePathFromDialog(): Promise<string | null> {
-  return window.api.openWorkspaceDialog();
+  return window.api.openWorkspaceDialog()
 }
 
 function toWorkspaceOpenOptions(
@@ -215,22 +209,19 @@ function toWorkspaceOpenOptions(
     | WorkspaceOpenOptions
 ): WorkspaceOpenOptions {
   if (typeof optionsOrRequestWorkspaceTrust === 'function') {
-    return { requestWorkspaceTrust: optionsOrRequestWorkspaceTrust };
+    return { requestWorkspaceTrust: optionsOrRequestWorkspaceTrust }
   }
 
-  return optionsOrRequestWorkspaceTrust ?? {};
+  return optionsOrRequestWorkspaceTrust ?? {}
 }
 
-function emitWorkspaceOpenStatus(
-  options: WorkspaceOpenOptions,
-  status: WorkspaceOpenStatus
-): void {
-  useWorkflowStore.getState().setWorkspaceOpenState(status);
-  options.onStatusChange?.(status);
+function emitWorkspaceOpenStatus(options: WorkspaceOpenOptions, status: WorkspaceOpenStatus): void {
+  useWorkflowStore.getState().setWorkspaceOpenState(status)
+  options.onStatusChange?.(status)
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  return error instanceof Error ? error.message : fallback
 }
 
 export async function openWorkspacePath(
@@ -239,36 +230,36 @@ export async function openWorkspacePath(
     | ((workspacePath: string) => Promise<boolean>)
     | WorkspaceOpenOptions
 ): Promise<void> {
-  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust);
+  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust)
 
   try {
     if (await shouldPromptWorkspaceTrust(workspacePath)) {
       if (!options.requestWorkspaceTrust) {
-        emitWorkspaceOpenStatus(options, { phase: 'idle' });
-        return;
+        emitWorkspaceOpenStatus(options, { phase: 'idle' })
+        return
       }
 
-      emitWorkspaceOpenStatus(options, { phase: 'awaitingTrust', workspacePath });
-      const isTrusted = await options.requestWorkspaceTrust(workspacePath);
+      emitWorkspaceOpenStatus(options, { phase: 'awaitingTrust', workspacePath })
+      const isTrusted = await options.requestWorkspaceTrust(workspacePath)
       if (!isTrusted) {
-        emitWorkspaceOpenStatus(options, { phase: 'idle' });
-        return;
+        emitWorkspaceOpenStatus(options, { phase: 'idle' })
+        return
       }
 
-      await markWorkspaceAsTrusted(workspacePath);
+      await markWorkspaceAsTrusted(workspacePath)
     }
 
-    useWorkflowStore.getState().resetWorkspaceLoadingEvents();
-    emitWorkspaceOpenStatus(options, { phase: 'opening', workspacePath });
-    await loadWorkspaceFromPath(workspacePath);
-    emitWorkspaceOpenStatus(options, { phase: 'idle' });
+    useWorkflowStore.getState().resetWorkspaceLoadingEvents()
+    emitWorkspaceOpenStatus(options, { phase: 'opening', workspacePath })
+    await loadWorkspaceFromPath(workspacePath)
+    emitWorkspaceOpenStatus(options, { phase: 'idle' })
   } catch (error) {
     emitWorkspaceOpenStatus(options, {
       phase: 'error',
       workspacePath,
-      error: getErrorMessage(error, 'Failed to open workspace.'),
-    });
-    throw error;
+      error: getErrorMessage(error, 'Failed to open workspace.')
+    })
+    throw error
   }
 }
 
@@ -277,59 +268,58 @@ export async function openWorkspaceFromDialog(
     | ((workspacePath: string) => Promise<boolean>)
     | WorkspaceOpenOptions
 ): Promise<void> {
-  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust);
-  emitWorkspaceOpenStatus(options, { phase: 'selecting' });
-  const selectedPath = await selectWorkspacePathFromDialog();
+  const options = toWorkspaceOpenOptions(optionsOrRequestWorkspaceTrust)
+  emitWorkspaceOpenStatus(options, { phase: 'selecting' })
+  const selectedPath = await selectWorkspacePathFromDialog()
   if (!selectedPath) {
-    emitWorkspaceOpenStatus(options, { phase: 'idle' });
-    return;
+    emitWorkspaceOpenStatus(options, { phase: 'idle' })
+    return
   }
 
-  await openWorkspacePath(selectedPath, options);
+  await openWorkspacePath(selectedPath, options)
 }
 
 export async function reloadCurrentWorkspaceFromDisk(): Promise<void> {
-  const workspacePath = useWorkflowStore.getState().workspacePath;
+  const workspacePath = useWorkflowStore.getState().workspacePath
   if (!workspacePath) {
-    return;
+    return
   }
 
-  await loadWorkspaceFromPath(workspacePath);
+  await loadWorkspaceFromPath(workspacePath)
 }
 
 export async function saveCurrentWorkflow(): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const workspacePath = workflowStore.workspacePath;
+  const workflowStore = useWorkflowStore.getState()
+  const workspacePath = workflowStore.workspacePath
   if (!workspacePath || workflowStore.isSaving) {
-    return;
+    return
   }
 
-  const savedRevision = workflowStore.workflowRevision;
-  workflowStore.markSaveStarted();
+  const savedRevision = workflowStore.workflowRevision
+  workflowStore.markSaveStarted()
 
   try {
-    const activeWorkflowFilePath = workflowStore.activeWorkflowFilePath;
+    const activeWorkflowFilePath = workflowStore.activeWorkflowFilePath
     if (!activeWorkflowFilePath) {
-      throw new Error('No active workflow file path found.');
+      throw new Error('No active workflow file path found.')
     }
 
     const result = await window.api.saveWorkflow(
-      workspacePath, 
+      workspacePath,
       buildWorkflowDocument(),
       activeWorkflowFilePath
-    );
-    useWorkflowStore.getState().markSaveCompleted(result.savedAt, savedRevision);
+    )
+    useWorkflowStore.getState().markSaveCompleted(result.savedAt, savedRevision)
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Failed to save workflow.';
-    useWorkflowStore.getState().markSaveFailed(errorMessage);
-    throw error;
+    const errorMessage = error instanceof Error ? error.message : 'Failed to save workflow.'
+    useWorkflowStore.getState().markSaveFailed(errorMessage)
+    throw error
   }
 }
 
 export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const executionStore = useExecutionStore.getState();
+  const workflowStore = useWorkflowStore.getState()
+  const executionStore = useExecutionStore.getState()
 
   if (
     !workflowStore.workspacePath ||
@@ -338,60 +328,60 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     executionStore.workflowStatus === 'stopping' ||
     executionStore.workflowStatus === 'paused'
   ) {
-    return;
+    return
   }
 
-  const workflow = buildWorkflowDocument();
+  const workflow = buildWorkflowDocument()
   const approvalGuardrail = getWorkflowCodexApprovalGuardrail(workflow.nodes, {
     approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
       workflowStore.providerCapabilities
-    ),
-  });
+    )
+  })
 
   if (approvalGuardrail.severity === 'blocked') {
-    executionStore.setWorkflowStatus('error');
-    executionStore.setWorkflowError(approvalGuardrail.message);
-    return;
+    executionStore.setWorkflowStatus('error')
+    executionStore.setWorkflowError(approvalGuardrail.message)
+    return
   }
 
   const currentReadiness = getCodexReadinessBadgeState(
     workflowStore.providerCapabilities,
     workflowStore.nodes.map((node) => String(node.data.model ?? ''))
-  );
+  )
   const providerCapabilities =
     !workflowStore.hasFetchedProviderCapabilities || currentReadiness.blocking
       ? await workflowStore.fetchProviderCapabilities(true)
-      : workflowStore.providerCapabilities;
+      : workflowStore.providerCapabilities
   const readiness = getCodexReadinessBadgeState(
     providerCapabilities,
     workflowStore.nodes.map((node) => String(node.data.model ?? ''))
-  );
+  )
 
   if (readiness.blocking) {
-    executionStore.setWorkflowStatus('error');
-    executionStore.setWorkflowError(getCodexReadinessBlockMessage(readiness));
-    return;
+    executionStore.setWorkflowStatus('error')
+    executionStore.setWorkflowError(getCodexReadinessBlockMessage(readiness))
+    return
   }
 
   if (resumeFromNodeId) {
-    const retryNodeIds = collectRetryNodeIds(resumeFromNodeId, workflow.edges);
-    executionStore.resetNodeExecution(retryNodeIds);
+    const retryNodeIds = collectRetryNodeIds(resumeFromNodeId, workflow.edges)
+    executionStore.resetNodeExecution(retryNodeIds)
     retryNodeIds.forEach((nodeId) => {
       executionStore.appendAttemptSeparator(
         nodeId,
         nodeId === resumeFromNodeId
           ? 'Retry started from this node.'
           : `Retry started from upstream node ${resumeFromNodeId}.`
-      );
-    });
+      )
+    })
   } else {
-    executionStore.resetExecution(workflow.nodes.map((node) => node.id));
-    workflowStore.setTerminalFollowMode('auto');
-    workflowStore.setTerminalNodeId(null);
+    executionStore.resetExecution(workflow.nodes.map((node) => node.id))
+    workflowStore.setTerminalFollowMode('auto')
+    workflowStore.setTerminalNodeId(null)
   }
 
-  executionStore.setWorkflowStatus('running');
-  executionStore.setWorkflowError(null);
+  executionStore.setWorkflowStatus('running')
+  executionStore.setWorkflowError(null)
   window.api.runWorkflow(
     workflow.id,
     workflow.nodes,
@@ -399,118 +389,118 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
     workflowStore.workspacePath,
     workflow.executionMode ?? 'auto',
     resumeFromNodeId
-  );
+  )
 }
 
 export function retryWorkflowFromNode(nodeId: NodeId): void {
-  void runCurrentWorkflow(nodeId);
+  void runCurrentWorkflow(nodeId)
 }
 
 export async function approveReviewNode(nodeId: NodeId): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const executionStore = useExecutionStore.getState();
+  const workflowStore = useWorkflowStore.getState()
+  const executionStore = useExecutionStore.getState()
   if (!executionStore.activeRunId) {
-    return;
+    return
   }
 
-  executionStore.setReviewActionInFlight(nodeId, 'approve');
+  executionStore.setReviewActionInFlight(nodeId, 'approve')
 
   try {
     await window.api.approveWorkflowNode({
       workflowId: workflowStore.workflowId,
       runId: executionStore.activeRunId,
-      nodeId,
-    });
+      nodeId
+    })
   } catch (error) {
-    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined)
     useExecutionStore
       .getState()
-      .setWorkflowError(getErrorMessage(error, 'Failed to approve review node.'));
+      .setWorkflowError(getErrorMessage(error, 'Failed to approve review node.'))
   }
 }
 
 export async function rejectReviewNode(nodeId: NodeId): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const executionStore = useExecutionStore.getState();
+  const workflowStore = useWorkflowStore.getState()
+  const executionStore = useExecutionStore.getState()
   if (!executionStore.activeRunId) {
-    return;
+    return
   }
 
-  executionStore.setReviewActionInFlight(nodeId, 'reject');
+  executionStore.setReviewActionInFlight(nodeId, 'reject')
 
   try {
     await window.api.rejectWorkflowNode({
       workflowId: workflowStore.workflowId,
       runId: executionStore.activeRunId,
-      nodeId,
-    });
+      nodeId
+    })
   } catch (error) {
-    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined)
     useExecutionStore
       .getState()
-      .setWorkflowError(getErrorMessage(error, 'Failed to reject review node.'));
+      .setWorkflowError(getErrorMessage(error, 'Failed to reject review node.'))
   }
 }
 
 export async function rerunReviewNode(nodeId: NodeId): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const executionStore = useExecutionStore.getState();
+  const workflowStore = useWorkflowStore.getState()
+  const executionStore = useExecutionStore.getState()
   if (!executionStore.activeRunId) {
-    return;
+    return
   }
 
-  executionStore.setReviewActionInFlight(nodeId, 'rerun');
-  executionStore.appendAttemptSeparator(nodeId, 'Review rerun started.');
+  executionStore.setReviewActionInFlight(nodeId, 'rerun')
+  executionStore.appendAttemptSeparator(nodeId, 'Review rerun started.')
 
   try {
     await window.api.rerunWorkflowNode({
       workflowId: workflowStore.workflowId,
       runId: executionStore.activeRunId,
-      nodeId,
-    });
+      nodeId
+    })
   } catch (error) {
-    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined);
+    useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined)
     useExecutionStore
       .getState()
-      .setWorkflowError(getErrorMessage(error, 'Failed to rerun review node.'));
+      .setWorkflowError(getErrorMessage(error, 'Failed to rerun review node.'))
   }
 }
 
 // Multi-workflow helpers
 
 export async function createNewWorkflow(name: string): Promise<void> {
-  const workspacePath = useWorkflowStore.getState().workspacePath;
-  if (!workspacePath) return;
+  const workspacePath = useWorkflowStore.getState().workspacePath
+  if (!workspacePath) return
 
-  const result = await window.api.createWorkflow(workspacePath, name);
-  await switchWorkflow(result.workflow.id);
+  const result = await window.api.createWorkflow(workspacePath, name)
+  await switchWorkflow(result.workflow.id)
 }
 
 export async function switchWorkflow(workflowId: string): Promise<void> {
-  const workflowState = useWorkflowStore.getState();
-  const workspacePath = workflowState.workspacePath;
-  if (!workspacePath) return;
-  if (workflowState.workflowId === workflowId) return;
+  const workflowState = useWorkflowStore.getState()
+  const workspacePath = workflowState.workspacePath
+  if (!workspacePath) return
+  if (workflowState.workflowId === workflowId) return
 
   // Persist pending changes from the current workflow before switching.
   if (workflowState.isDirty) {
-    await saveCurrentWorkflow();
+    await saveCurrentWorkflow()
   }
 
   // Main process sets the active workflow file in this call.
-  await window.api.loadWorkflow(workspacePath, workflowId);
+  await window.api.loadWorkflow(workspacePath, workflowId)
 
   // Reload workspace payload so canvas state and workflow list stay in sync.
-  await loadWorkspaceFromPath(workspacePath);
+  await loadWorkspaceFromPath(workspacePath)
 }
 
 export async function deleteCurrentWorkflow(): Promise<void> {
-  const workflowStore = useWorkflowStore.getState();
-  const workspacePath = workflowStore.workspacePath;
-  const workflowId = workflowStore.workflowId;
+  const workflowStore = useWorkflowStore.getState()
+  const workspacePath = workflowStore.workspacePath
+  const workflowId = workflowStore.workflowId
 
-  if (!workspacePath || !workflowId) return;
+  if (!workspacePath || !workflowId) return
 
-  await window.api.deleteWorkflow(workspacePath, workflowId);
-  await loadWorkspaceFromPath(workspacePath);
+  await window.api.deleteWorkflow(workspacePath, workflowId)
+  await loadWorkspaceFromPath(workspacePath)
 }

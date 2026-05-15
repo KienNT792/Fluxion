@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { WorkflowSchema } from '../schema/workflow.schema';
+import { describe, expect, it } from 'vitest'
+import { WorkflowSchema } from '../schema/workflow.schema'
 
 describe('WorkflowSchema', () => {
   it('normalizes future-facing node defaults for backward compatibility', () => {
@@ -15,24 +15,24 @@ describe('WorkflowSchema', () => {
           data: {
             provider: 'codex',
             model: 'gpt-5.5',
-            prompt: 'Do the thing',
-          },
-        },
+            prompt: 'Do the thing'
+          }
+        }
       ],
-      edges: [],
-    });
+      edges: []
+    })
 
-    expect(parsed.executionMode).toBe('auto');
-    expect(parsed.nodes[0].data.runner).toBe('codex');
+    expect(parsed.executionMode).toBe('auto')
+    expect(parsed.nodes[0].data.runner).toBe('codex')
     expect(parsed.nodes[0].data.codex).toEqual({
       json: true,
       sandboxMode: 'workspace-write',
-      approvalPolicy: 'never',
-    });
-    expect(parsed.nodes[0].data.requires).toEqual([]);
-    expect(parsed.nodes[0].data.produces).toEqual([]);
-    expect(parsed.nodes[0].data.humanReview).toBe(false);
-  });
+      approvalPolicy: 'never'
+    })
+    expect(parsed.nodes[0].data.requires).toEqual([])
+    expect(parsed.nodes[0].data.produces).toEqual([])
+    expect(parsed.nodes[0].data.humanReview).toBe(false)
+  })
 
   it('accepts explicit codex sandbox options', () => {
     const parsed = WorkflowSchema.parse({
@@ -50,20 +50,20 @@ describe('WorkflowSchema', () => {
             prompt: 'Do the thing',
             codex: {
               sandboxMode: 'read-only',
-              approvalPolicy: 'on-request',
-            },
-          },
-        },
+              approvalPolicy: 'on-request'
+            }
+          }
+        }
       ],
-      edges: [],
-    });
+      edges: []
+    })
 
     expect(parsed.nodes[0].data.codex).toEqual({
       json: true,
       sandboxMode: 'read-only',
-      approvalPolicy: 'on-request',
-    });
-  });
+      approvalPolicy: 'on-request'
+    })
+  })
 
   it('rejects an invalid codex sandbox mode', () => {
     expect(() =>
@@ -81,15 +81,15 @@ describe('WorkflowSchema', () => {
               model: 'gpt-5.5',
               prompt: 'Do the thing',
               codex: {
-                sandboxMode: 'full-auto',
-              },
-            },
-          },
+                sandboxMode: 'full-auto'
+              }
+            }
+          }
         ],
-        edges: [],
+        edges: []
       })
-    ).toThrow();
-  });
+    ).toThrow()
+  })
 
   it('rejects an invalid codex approval policy', () => {
     expect(() =>
@@ -107,15 +107,15 @@ describe('WorkflowSchema', () => {
               model: 'gpt-5.5',
               prompt: 'Do the thing',
               codex: {
-                approvalPolicy: 'on-failure',
-              },
-            },
-          },
+                approvalPolicy: 'on-failure'
+              }
+            }
+          }
         ],
-        edges: [],
+        edges: []
       })
-    ).toThrow();
-  });
+    ).toThrow()
+  })
 
   it('accepts manual execution mode at the workflow level', () => {
     const parsed = WorkflowSchema.parse({
@@ -131,13 +131,13 @@ describe('WorkflowSchema', () => {
           data: {
             provider: 'codex',
             model: 'gpt-5.5',
-            prompt: 'Do the thing',
-          },
-        },
+            prompt: 'Do the thing'
+          }
+        }
       ],
-      edges: [],
-    });
+      edges: []
+    })
 
-    expect(parsed.executionMode).toBe('manual');
-  });
-});
+    expect(parsed.executionMode).toBe('manual')
+  })
+})

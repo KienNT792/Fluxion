@@ -239,9 +239,7 @@ function ReadinessRow({
   const dotColor = TONE_COLORS[row.tone]
 
   return (
-    <div
-      className="flex items-start justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-[var(--color-canvas)]"
-    >
+    <div className="flex items-start justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-[var(--color-canvas)]">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dotColor }} />
@@ -301,16 +299,16 @@ function ReadinessRow({
       {row.id === 'permissions' &&
         approvalGuardrail.severity !== 'ok' &&
         approvalGuardrail.nodeId && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={disabled}
-          onClick={onFixPermissions}
-        >
-          Fix
-        </Button>
-      )}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            onClick={onFixPermissions}
+          >
+            Fix
+          </Button>
+        )}
     </div>
   )
 }

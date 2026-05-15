@@ -1,5 +1,4 @@
 export interface ArtifactRef {
-  path: string;
-  required?: boolean;
+  path: string
+  required?: boolean
 }
-

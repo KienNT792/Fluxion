@@ -11,26 +11,28 @@ import {
   ProjectSecurityPolicy,
   WorkspaceTrustLevel,
   WorkspaceContextStatus,
-  WorkspaceContextType,
-} from './context.types';
+  WorkspaceContextType
+} from './context.types'
 
-const DEFAULT_OPEN_QUESTION = 'Project context has not been finalized yet.';
+const DEFAULT_OPEN_QUESTION = 'Project context has not been finalized yet.'
 
 function uniqueList(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
-function defaultSecurityPolicy(
-  generatedOrIgnoredPaths: string[] = []
-): ProjectSecurityPolicy {
+function defaultSecurityPolicy(generatedOrIgnoredPaths: string[] = []): ProjectSecurityPolicy {
   return {
     sensitivePaths: ['.env', '.env.*', '**/*secret*', '**/*credential*'],
     generatedOrIgnoredPaths: uniqueList(generatedOrIgnoredPaths),
     writableRoots: ['.'],
-    approvalRequiredFor: ['dependency installation', 'network access', 'destructive file operations'],
+    approvalRequiredFor: [
+      'dependency installation',
+      'network access',
+      'destructive file operations'
+    ],
     destructiveCommands: ['git reset --hard', 'git clean -fd', 'rm -rf', 'Remove-Item -Recurse'],
-    networkPolicy: 'unknown',
-  };
+    networkPolicy: 'unknown'
+  }
 }
 
 function defaultReadiness(): ProjectContextReadiness {
@@ -38,20 +40,22 @@ function defaultReadiness(): ProjectContextReadiness {
     status: 'incomplete',
     missingItems: [],
     riskFlags: [],
-    recommendedFirstActions: [],
-  };
+    recommendedFirstActions: []
+  }
 }
 
-function normalizeComponents(values: ProjectContextComponent[] | undefined): ProjectContextComponent[] {
-  const seen = new Set<string>();
-  const normalized: ProjectContextComponent[] = [];
+function normalizeComponents(
+  values: ProjectContextComponent[] | undefined
+): ProjectContextComponent[] {
+  const seen = new Set<string>()
+  const normalized: ProjectContextComponent[] = []
 
   for (const value of values ?? []) {
-    const id = value.id.trim() || value.rootPath.trim() || value.name.trim();
+    const id = value.id.trim() || value.rootPath.trim() || value.name.trim()
     if (!id || seen.has(id)) {
-      continue;
+      continue
     }
-    seen.add(id);
+    seen.add(id)
     normalized.push({
       ...value,
       id,
@@ -61,49 +65,49 @@ function normalizeComponents(values: ProjectContextComponent[] | undefined): Pro
       frameworks: uniqueList(value.frameworks ?? []),
       entrypoints: uniqueList(value.entrypoints ?? []),
       verificationCommands: uniqueList(value.verificationCommands ?? []),
-      evidenceIds: uniqueList(value.evidenceIds ?? []),
-    });
+      evidenceIds: uniqueList(value.evidenceIds ?? [])
+    })
   }
 
-  return normalized;
+  return normalized
 }
 
 function normalizeCommands(values: ProjectContextCommand[] | undefined): ProjectContextCommand[] {
-  const seen = new Set<string>();
-  const normalized: ProjectContextCommand[] = [];
+  const seen = new Set<string>()
+  const normalized: ProjectContextCommand[] = []
 
   for (const value of values ?? []) {
-    const id = value.id.trim() || `${value.cwd}:${value.command}`.trim();
+    const id = value.id.trim() || `${value.cwd}:${value.command}`.trim()
     if (!id || seen.has(id)) {
-      continue;
+      continue
     }
-    seen.add(id);
+    seen.add(id)
     normalized.push({
       ...value,
       id,
       label: value.label.trim() || value.command.trim(),
       command: value.command.trim(),
       cwd: value.cwd.trim() || '.',
-      evidenceIds: uniqueList(value.evidenceIds ?? []),
-    });
+      evidenceIds: uniqueList(value.evidenceIds ?? [])
+    })
   }
 
-  return normalized;
+  return normalized
 }
 
 function normalizeAgentInstructionSources(
   values: AgentInstructionSource[] | undefined
 ): AgentInstructionSource[] {
-  const seen = new Set<string>();
+  const seen = new Set<string>()
 
   return (values ?? []).filter((value) => {
-    const key = `${value.target}:${value.sourcePath}:${value.scope}`;
+    const key = `${value.target}:${value.sourcePath}:${value.scope}`
     if (!value.sourcePath.trim() || seen.has(key)) {
-      return false;
+      return false
     }
-    seen.add(key);
-    return true;
-  });
+    seen.add(key)
+    return true
+  })
 }
 
 function normalizeContextOnboarding(
@@ -113,17 +117,17 @@ function normalizeContextOnboarding(
     initialPromptDismissedAt: value?.initialPromptDismissedAt?.trim() || undefined,
     incompleteBannerDismissedAt: value?.incompleteBannerDismissedAt?.trim() || undefined,
     legacyWorkflowDecision: value?.legacyWorkflowDecision,
-    legacyWorkflowDecisionAt: value?.legacyWorkflowDecisionAt?.trim() || undefined,
-  };
+    legacyWorkflowDecisionAt: value?.legacyWorkflowDecisionAt?.trim() || undefined
+  }
 }
 
 function parseTimestamp(value: string | undefined): number | null {
   if (!value) {
-    return null;
+    return null
   }
 
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function createEmptyProjectContextDraft(
@@ -165,26 +169,26 @@ export function createEmptyProjectContextDraft(
     contextOnboarding: {},
     sourceEvidence: [],
     lastReviewedAt: new Date(0).toISOString(),
-    contextStatus: 'missing',
-  };
+    contextStatus: 'missing'
+  }
 }
 
 export function normalizeProjectContextDraft(
   draft: Partial<ProjectContextDraft>,
   defaults?: Partial<ProjectContextDraft>
 ): ProjectContextDraft {
-  const fallbackWorkspaceType = defaults?.workspaceType ?? 'blank';
-  const fallbackProjectName = defaults?.projectName ?? 'Workspace';
-  const workspaceType = draft.workspaceType ?? defaults?.workspaceType ?? fallbackWorkspaceType;
+  const fallbackWorkspaceType = defaults?.workspaceType ?? 'blank'
+  const fallbackProjectName = defaults?.projectName ?? 'Workspace'
+  const workspaceType = draft.workspaceType ?? defaults?.workspaceType ?? fallbackWorkspaceType
 
   return {
     version: PROJECT_CONTEXT_VERSION,
     workspaceType,
     projectName: (draft.projectName ?? defaults?.projectName ?? fallbackProjectName).trim(),
     kickoffIntent:
-      draft.kickoffIntent ?? defaults?.kickoffIntent ?? (workspaceType === 'blank'
-        ? 'not-sure-yet'
-        : undefined),
+      draft.kickoffIntent ??
+      defaults?.kickoffIntent ??
+      (workspaceType === 'blank' ? 'not-sure-yet' : undefined),
     projectGoal: (draft.projectGoal ?? defaults?.projectGoal ?? '').trim(),
     targetUsers: (draft.targetUsers ?? defaults?.targetUsers ?? '').trim(),
     primaryStack: uniqueList(draft.primaryStack ?? defaults?.primaryStack ?? []),
@@ -226,66 +230,65 @@ export function normalizeProjectContextDraft(
       ...(defaults?.securityPolicy ?? {}),
       ...(draft.securityPolicy ?? {}),
       sensitivePaths: uniqueList(
-        draft.securityPolicy?.sensitivePaths
-          ?? defaults?.securityPolicy?.sensitivePaths
-          ?? defaultSecurityPolicy().sensitivePaths
+        draft.securityPolicy?.sensitivePaths ??
+          defaults?.securityPolicy?.sensitivePaths ??
+          defaultSecurityPolicy().sensitivePaths
       ),
       generatedOrIgnoredPaths: uniqueList(
-        draft.securityPolicy?.generatedOrIgnoredPaths
-          ?? defaults?.securityPolicy?.generatedOrIgnoredPaths
-          ?? draft.generatedOrIgnoredPaths
-          ?? defaults?.generatedOrIgnoredPaths
-          ?? []
+        draft.securityPolicy?.generatedOrIgnoredPaths ??
+          defaults?.securityPolicy?.generatedOrIgnoredPaths ??
+          draft.generatedOrIgnoredPaths ??
+          defaults?.generatedOrIgnoredPaths ??
+          []
       ),
       writableRoots: uniqueList(
-        draft.securityPolicy?.writableRoots
-          ?? defaults?.securityPolicy?.writableRoots
-          ?? defaultSecurityPolicy().writableRoots
+        draft.securityPolicy?.writableRoots ??
+          defaults?.securityPolicy?.writableRoots ??
+          defaultSecurityPolicy().writableRoots
       ),
       approvalRequiredFor: uniqueList(
-        draft.securityPolicy?.approvalRequiredFor
-          ?? defaults?.securityPolicy?.approvalRequiredFor
-          ?? defaultSecurityPolicy().approvalRequiredFor
+        draft.securityPolicy?.approvalRequiredFor ??
+          defaults?.securityPolicy?.approvalRequiredFor ??
+          defaultSecurityPolicy().approvalRequiredFor
       ),
       destructiveCommands: uniqueList(
-        draft.securityPolicy?.destructiveCommands
-          ?? defaults?.securityPolicy?.destructiveCommands
-          ?? defaultSecurityPolicy().destructiveCommands
-      ),
+        draft.securityPolicy?.destructiveCommands ??
+          defaults?.securityPolicy?.destructiveCommands ??
+          defaultSecurityPolicy().destructiveCommands
+      )
     },
     readiness: draft.readiness ?? defaults?.readiness ?? defaultReadiness(),
     contextOnboarding: normalizeContextOnboarding(
       draft.contextOnboarding ?? defaults?.contextOnboarding
     ),
     sourceEvidence: draft.sourceEvidence ?? defaults?.sourceEvidence ?? [],
-    lastReviewedAt:
-      draft.lastReviewedAt ?? defaults?.lastReviewedAt ?? new Date(0).toISOString(),
-    contextStatus: draft.contextStatus ?? defaults?.contextStatus ?? 'missing',
-  };
+    lastReviewedAt: draft.lastReviewedAt ?? defaults?.lastReviewedAt ?? new Date(0).toISOString(),
+    contextStatus: draft.contextStatus ?? defaults?.contextStatus ?? 'missing'
+  }
 }
 
 export function isProjectContextReadyForFinalSave(draft: ProjectContextDraft): boolean {
   if (!draft.projectName.trim() || !draft.projectGoal.trim()) {
-    return false;
+    return false
   }
 
   if (draft.workspaceType === 'blank') {
     return Boolean(
-      draft.firstMilestone.trim()
-      && draft.kickoffIntent
-      && (draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0)
-    );
+      draft.firstMilestone.trim() &&
+      draft.kickoffIntent &&
+      (draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0)
+    )
   }
 
   const hasStackSignal =
-    draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0;
+    draft.primaryStack.length > 0 || draft.languages.length > 0 || draft.frameworks.length > 0
   const hasStructureSignal =
-    draft.architectureSummary.trim().length > 0 || draft.importantPaths.length > 0;
+    draft.architectureSummary.trim().length > 0 || draft.importantPaths.length > 0
   const hasVerificationSignal =
-    draft.verificationCommands.length > 0
-    || draft.riskFlags.some((flag) => flag.toLowerCase().includes('verification'));
+    draft.verificationCommands.length > 0 ||
+    draft.riskFlags.some((flag) => flag.toLowerCase().includes('verification'))
 
-  return hasStackSignal && hasStructureSignal && hasVerificationSignal;
+  return hasStackSignal && hasStructureSignal && hasVerificationSignal
 }
 
 export function resolveProjectContextStatus(
@@ -293,23 +296,23 @@ export function resolveProjectContextStatus(
   mode: ContextSaveMode
 ): WorkspaceContextStatus {
   if (mode === 'draft' || mode === 'skip') {
-    return 'incomplete';
+    return 'incomplete'
   }
 
-  return isProjectContextReadyForFinalSave(draft) ? 'ready' : 'incomplete';
+  return isProjectContextReadyForFinalSave(draft) ? 'ready' : 'incomplete'
 }
 
 export function isContextOnboardingDismissalCurrent(
   dismissedAt: string | undefined,
   lastReviewedAt: string | undefined
 ): boolean {
-  const dismissedTime = parseTimestamp(dismissedAt);
+  const dismissedTime = parseTimestamp(dismissedAt)
   if (dismissedTime == null) {
-    return false;
+    return false
   }
 
-  const lastReviewedTime = parseTimestamp(lastReviewedAt) ?? 0;
-  return dismissedTime > lastReviewedTime;
+  const lastReviewedTime = parseTimestamp(lastReviewedAt) ?? 0
+  return dismissedTime > lastReviewedTime
 }
 
 export function shouldShowIncompleteContextBanner(
@@ -318,13 +321,13 @@ export function shouldShowIncompleteContextBanner(
   isContextSetupOpen: boolean
 ): boolean {
   if (contextStatus !== 'incomplete' || isContextSetupOpen) {
-    return false;
+    return false
   }
 
   return !isContextOnboardingDismissalCurrent(
     draft?.contextOnboarding.incompleteBannerDismissedAt,
     draft?.lastReviewedAt
-  );
+  )
 }
 
 export function buildSkippedProjectContextDraft(
@@ -334,55 +337,54 @@ export function buildSkippedProjectContextDraft(
 ): ProjectContextDraft {
   const normalized = normalizeProjectContextDraft(baseDraft, {
     workspaceType,
-    projectName,
-  });
-  const openQuestions = normalized.openQuestions.length > 0
-    ? normalized.openQuestions
-    : [DEFAULT_OPEN_QUESTION];
+    projectName
+  })
+  const openQuestions =
+    normalized.openQuestions.length > 0 ? normalized.openQuestions : [DEFAULT_OPEN_QUESTION]
 
   return {
     ...normalized,
     openQuestions,
-    contextStatus: 'incomplete',
-  };
+    contextStatus: 'incomplete'
+  }
 }
 
 function renderBulletLines(items: string[]): string {
   if (items.length === 0) {
-    return '- Unknown';
+    return '- Unknown'
   }
 
-  return items.map((item) => `- ${item}`).join('\n');
+  return items.map((item) => `- ${item}`).join('\n')
 }
 
 export function formatProjectContextMarkdown(draft: ProjectContextDraft): string {
-  const targetUsers = draft.targetUsers.trim() || 'Unknown';
-  const projectGoal = draft.projectGoal.trim() || 'Unknown';
-  const architectureSummary = draft.architectureSummary.trim() || 'Unknown';
-  const milestone = draft.firstMilestone.trim() || 'Unknown';
-  const stack = draft.primaryStack.length > 0 ? draft.primaryStack.join(', ') : 'Unknown';
+  const targetUsers = draft.targetUsers.trim() || 'Unknown'
+  const projectGoal = draft.projectGoal.trim() || 'Unknown'
+  const architectureSummary = draft.architectureSummary.trim() || 'Unknown'
+  const milestone = draft.firstMilestone.trim() || 'Unknown'
+  const stack = draft.primaryStack.length > 0 ? draft.primaryStack.join(', ') : 'Unknown'
   const technicalSignals = [
     ...draft.languages.map((item) => `Language: ${item}`),
     ...draft.frameworks.map((item) => `Framework: ${item}`),
     ...draft.packageManagers.map((item) => `Package manager: ${item}`),
     ...draft.buildSystems.map((item) => `Build system: ${item}`),
-    ...draft.testFrameworks.map((item) => `Test framework: ${item}`),
-  ];
+    ...draft.testFrameworks.map((item) => `Test framework: ${item}`)
+  ]
   const componentSignals = draft.components.map((component) => {
     const details = [
       component.type,
       component.languages.join(', '),
-      component.frameworks.join(', '),
-    ].filter(Boolean);
-    return `${component.name} (${component.rootPath})${details.length ? `: ${details.join(' / ')}` : ''}`;
-  });
+      component.frameworks.join(', ')
+    ].filter(Boolean)
+    return `${component.name} (${component.rootPath})${details.length ? `: ${details.join(' / ')}` : ''}`
+  })
   const commandCatalog = draft.commandCatalog.map((command) => {
-    const cwd = command.cwd === '.' ? '' : ` from \`${command.cwd}\``;
-    return `${command.category}: \`${command.command}\`${cwd}`;
-  });
+    const cwd = command.cwd === '.' ? '' : ` from \`${command.cwd}\``
+    return `${command.category}: \`${command.command}\`${cwd}`
+  })
   const instructionSources = draft.agentInstructionSources.map(
     (source) => `${source.target}: \`${source.sourcePath}\` (${source.activation})`
-  );
+  )
 
   return [
     '---',
@@ -441,8 +443,8 @@ export function formatProjectContextMarkdown(draft: ProjectContextDraft): string
     '',
     '# Open Questions',
     renderBulletLines(draft.openQuestions),
-    '',
-  ].join('\n');
+    ''
+  ].join('\n')
 }
 
 export function formatReadableProjectContext(draft: ProjectContextDraft): string {
@@ -455,19 +457,19 @@ export function formatReadableProjectContext(draft: ProjectContextDraft): string
     `Languages: ${draft.languages.join(', ') || 'Unknown'}`,
     `Frameworks: ${draft.frameworks.join(', ') || 'Unknown'}`,
     `Architecture: ${draft.architectureSummary || 'Unknown'}`,
-    `Milestone: ${draft.firstMilestone || 'Unknown'}`,
-  ].join('\n');
+    `Milestone: ${draft.firstMilestone || 'Unknown'}`
+  ].join('\n')
 }
 
 export function kickoffIntentLabel(intent: KickoffIntent): string {
   switch (intent) {
     case 'desktop-app':
-      return 'Desktop App';
+      return 'Desktop App'
     case 'cli-tool':
-      return 'CLI Tool';
+      return 'CLI Tool'
     case 'web-app':
-      return 'Web App';
+      return 'Web App'
     default:
-      return 'Not sure yet';
+      return 'Not sure yet'
   }
 }

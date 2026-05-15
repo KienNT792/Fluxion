@@ -125,13 +125,9 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
     selectedNode,
     selectedNodeId
   })
-  const defaultInspectorTab = getDefaultNodeInspectorTab(
-    nodeStatus,
-    nodeApprovalGuardrail.severity
-  )
+  const defaultInspectorTab = getDefaultNodeInspectorTab(nodeStatus, nodeApprovalGuardrail.severity)
   const [activeTab, setActiveTab] = useState<NodeInspectorTab>(defaultInspectorTab)
-  const visibleActiveTab =
-    nodeStatus === 'paused' || nodeStatus === 'error' ? 'output' : activeTab
+  const visibleActiveTab = nodeStatus === 'paused' || nodeStatus === 'error' ? 'output' : activeTab
 
   const updateCodexOptions = (nextOptions: Partial<CodexExecutionOptions>): void => {
     setLocalData((prev) => ({

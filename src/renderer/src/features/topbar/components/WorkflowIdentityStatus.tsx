@@ -24,10 +24,7 @@ export const WorkflowIdentityStatus: React.FC<WorkflowIdentityStatusProps> = ({
         <span className="shrink-0 text-xs" style={{ color: 'var(--color-muted-soft)' }}>
           /
         </span>
-        <span
-          className="hidden shrink-0 text-xs sm:inline"
-          style={{ color: 'var(--color-muted)' }}
-        >
+        <span className="hidden shrink-0 text-xs sm:inline" style={{ color: 'var(--color-muted)' }}>
           Workflow
         </span>
         <span
