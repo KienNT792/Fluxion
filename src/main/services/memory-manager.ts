@@ -2,9 +2,12 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import { createHash } from 'crypto'
 import matter from 'gray-matter'
+import { MemoryIndexSchema } from '@core'
 import { NodeId } from '../../shared/workflow.types'
 import {
   CompiledMemoryContext,
+  MemoryIndex,
+  MemoryIndexEntry,
   MemoryContextSource,
   SaveNodeOutputParams
 } from '../../shared/memory.types'
@@ -30,6 +33,7 @@ export class MemoryManager {
     const memoryDir = path.join(workspacePath, '.fluxion', 'memory')
     const shortTermDir = path.join(memoryDir, 'short-term')
     const longTermDir = path.join(memoryDir, 'long-term')
+    const indexPath = this.getMemoryIndexPath(workspacePath)
 
     await fs.mkdir(shortTermDir, { recursive: true })
     await fs.mkdir(longTermDir, { recursive: true })
@@ -44,6 +48,12 @@ export class MemoryManager {
         { type: 'global', version: '1.0' }
       )
       await fs.writeFile(globalContextPath, defaultGlobalContext, 'utf-8')
+    }
+
+    try {
+      await fs.access(indexPath)
+    } catch {
+      await this.writeMemoryIndex(workspacePath, this.createEmptyMemoryIndex())
     }
   }
 
@@ -200,6 +210,7 @@ export class MemoryManager {
       await fs.mkdir(path.dirname(historyPath), { recursive: true })
       await fs.writeFile(historyPath, mdContent, 'utf-8')
     }
+    await this.upsertNodeOutputMemoryIndex(workspacePath, workflowId, params, outputPath)
     return outputPath
   }
 
@@ -242,6 +253,112 @@ export class MemoryManager {
 
   private getWorkflowShortTermDir(workspacePath: string, workflowId: string): string {
     return path.join(workspacePath, '.fluxion', 'memory', 'short-term', workflowId)
+  }
+
+  private getMemoryIndexPath(workspacePath: string): string {
+    return path.join(workspacePath, '.fluxion', 'memory', 'index.json')
+  }
+
+  private createEmptyMemoryIndex(): MemoryIndex {
+    return {
+      schemaVersion: 1,
+      entries: []
+    }
+  }
+
+  private async readMemoryIndex(workspacePath: string): Promise<MemoryIndex> {
+    const indexPath = this.getMemoryIndexPath(workspacePath)
+
+    try {
+      const raw = await fs.readFile(indexPath, 'utf-8')
+      return MemoryIndexSchema.parse(JSON.parse(raw) as unknown)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return this.createEmptyMemoryIndex()
+      }
+
+      console.warn(
+        `Could not parse memory index at ${indexPath}. Rebuilding from an empty index.`,
+        error
+      )
+      return this.createEmptyMemoryIndex()
+    }
+  }
+
+  private async writeMemoryIndex(workspacePath: string, index: MemoryIndex): Promise<void> {
+    const indexPath = this.getMemoryIndexPath(workspacePath)
+    await fs.mkdir(path.dirname(indexPath), { recursive: true })
+    await fs.writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`, 'utf-8')
+  }
+
+  private async upsertNodeOutputMemoryIndex(
+    workspacePath: string,
+    workflowId: string,
+    params: SaveNodeOutputParams,
+    outputPath: string
+  ): Promise<void> {
+    const index = await this.readMemoryIndex(workspacePath)
+    const historyPath =
+      params.attempt !== undefined
+        ? this.getNodeOutputHistoryPath(
+            workspacePath,
+            workflowId,
+            params.runId,
+            params.nodeId,
+            params.attempt
+          )
+        : undefined
+    const entry = this.createRawOutputMemoryIndexEntry(
+      workspacePath,
+      workflowId,
+      params,
+      outputPath,
+      historyPath
+    )
+    const existingIndex = index.entries.findIndex((candidate) => candidate.id === entry.id)
+
+    if (existingIndex >= 0) {
+      index.entries[existingIndex] = entry
+    } else {
+      index.entries.push(entry)
+    }
+
+    await this.writeMemoryIndex(workspacePath, index)
+  }
+
+  private createRawOutputMemoryIndexEntry(
+    workspacePath: string,
+    workflowId: string,
+    params: SaveNodeOutputParams,
+    outputPath: string,
+    historyPath?: string
+  ): MemoryIndexEntry {
+    return {
+      id: this.getRawOutputMemoryIndexEntryId(
+        workflowId,
+        params.runId,
+        params.nodeId,
+        params.attempt
+      ),
+      type: 'raw_output',
+      workflowId,
+      runId: params.runId,
+      nodeId: params.nodeId,
+      sourcePath: this.toWorkspaceRelative(workspacePath, historyPath ?? outputPath),
+      latestSourcePath:
+        historyPath !== undefined ? this.toWorkspaceRelative(workspacePath, outputPath) : undefined,
+      createdAt: params.completedAt,
+      attempt: params.attempt
+    }
+  }
+
+  private getRawOutputMemoryIndexEntryId(
+    workflowId: string,
+    runId: string,
+    nodeId: NodeId,
+    attempt?: number
+  ): string {
+    return ['raw_output', workflowId, runId, nodeId, String(attempt ?? 0)].join(':')
   }
 
   private createIncludedSource(

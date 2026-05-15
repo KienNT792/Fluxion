@@ -91,6 +91,33 @@ export interface WorkspaceMemory {
   globalContext: string
 }
 
+export type MemoryEntryType =
+  | 'raw_output'
+  | 'summary'
+  | 'decision'
+  | 'fact'
+  | 'procedure'
+  | 'artifact_note'
+
+export interface RawOutputMemoryIndexEntry {
+  id: string
+  type: 'raw_output'
+  workflowId: string
+  runId: string
+  nodeId: NodeId
+  sourcePath: string
+  latestSourcePath?: string
+  createdAt: string
+  attempt?: number
+}
+
+export type MemoryIndexEntry = RawOutputMemoryIndexEntry
+
+export interface MemoryIndex {
+  schemaVersion: 1
+  entries: MemoryIndexEntry[]
+}
+
 export type MemoryContextSourceType = 'global' | 'short-term' | 'long-term'
 
 export interface MemoryContextSource {

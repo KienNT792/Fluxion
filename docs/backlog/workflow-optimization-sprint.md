@@ -396,10 +396,9 @@ Files likely touched:
 
 ## Proposed Sprint 3 - Memory Index and Manual Eval Assets
 
-### FX-WO-008 Add memory index schema [BLOCKED]
+### FX-WO-008 Add memory index schema [DONE]
 
 Priority: `P2`
-Blocked by: `FX-WO-006`
 
 Outcome: Fluxion co structured index cho raw output, summaries, decisions, facts, procedures.
 
@@ -411,10 +410,10 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Index initialized on workspace memory init.
-- [ ] Node output save can append/update memory index entry.
-- [ ] Entries include workflowId, runId, nodeId, sourcePath, type, createdAt.
-- [ ] Invalid index file degrades safely with clear warning.
+- [x] Index initialized on workspace memory init.
+- [x] Node output save can append/update memory index entry.
+- [x] Entries include workflowId, runId, nodeId, sourcePath, type, createdAt.
+- [x] Invalid index file degrades safely with clear warning.
 
 Files likely touched:
 
@@ -470,10 +469,9 @@ Files likely touched later:
 - `src/main/ipc/workflow.handlers.ts`
 - `src/renderer/src/stores/execution.store.ts`
 
-### FX-WO-012 Add memory promotion guardrails [BLOCKED]
+### FX-WO-012 Add memory promotion guardrails [READY]
 
 Priority: `P3`
-Blocked by: `FX-WO-008`
 
 Outcome: Long-term memory is not an unreviewed dump.
 
@@ -503,10 +501,10 @@ Acceptance:
 | FX-WO-007 Output lineage across attempts | P1 | DONE | 2 |
 | FX-WO-009 Local workflow trace evaluator | P2 | DONE | 2 |
 | FX-WO-013 Trace health diagnostics and process cleanup | P1 | DONE | 2 |
-| FX-WO-008 Memory index schema | P2 | BLOCKED | 3 |
+| FX-WO-008 Memory index schema | P2 | DONE | 3 |
 | FX-WO-010 Node rubric markdown template | P2 | READY | 3 |
 | FX-WO-011 Paused review recovery design | P1 | DISCOVERY | 4 |
-| FX-WO-012 Memory promotion guardrails | P3 | BLOCKED | 4 |
+| FX-WO-012 Memory promotion guardrails | P3 | READY | 4 |
 
 ## Suggested Sprint 1 Task Breakdown
 

@@ -1,9 +1,10 @@
 import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { MemoryIndexSchema } from '@core'
 import matter from 'gray-matter'
 import { mkdtemp } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memoryManager } from '../services/memory-manager'
 
 describe('MemoryManager', () => {
@@ -16,6 +17,16 @@ describe('MemoryManager', () => {
 
   afterEach(async () => {
     await rm(workspacePath, { recursive: true, force: true })
+  })
+
+  it('initializes an empty memory index file for the workspace', async () => {
+    const indexPath = join(workspacePath, '.fluxion', 'memory', 'index.json')
+    const parsed = MemoryIndexSchema.parse(JSON.parse(await readFile(indexPath, 'utf8')) as unknown)
+
+    expect(parsed).toEqual({
+      schemaVersion: 1,
+      entries: []
+    })
   })
 
   it('writes V2 frontmatter for completed node outputs', async () => {
@@ -101,6 +112,36 @@ describe('MemoryManager', () => {
     expect(await readFile(attemptOnePath, 'utf8')).toContain('First attempt')
     expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second attempt')
     expect(matter(await readFile(attemptTwoPath, 'utf8')).data).toMatchObject({ attempt: 2 })
+
+    const indexPath = join(workspacePath, '.fluxion', 'memory', 'index.json')
+    const index = MemoryIndexSchema.parse(JSON.parse(await readFile(indexPath, 'utf8')) as unknown)
+
+    expect(index.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'raw_output:workflow-1:run-1:node-a:1',
+          type: 'raw_output',
+          workflowId: 'workflow-1',
+          runId: 'run-1',
+          nodeId: 'node-a',
+          sourcePath: '.fluxion/memory/short-term/workflow-1/.history/run-1/node-a/attempt-1.md',
+          latestSourcePath: '.fluxion/memory/short-term/workflow-1/node-a.md',
+          createdAt: '2026-05-06T00:00:01.000Z',
+          attempt: 1
+        }),
+        expect.objectContaining({
+          id: 'raw_output:workflow-1:run-1:node-a:2',
+          type: 'raw_output',
+          workflowId: 'workflow-1',
+          runId: 'run-1',
+          nodeId: 'node-a',
+          sourcePath: '.fluxion/memory/short-term/workflow-1/.history/run-1/node-a/attempt-2.md',
+          latestSourcePath: '.fluxion/memory/short-term/workflow-1/node-a.md',
+          createdAt: '2026-05-06T00:00:03.000Z',
+          attempt: 2
+        })
+      ])
+    )
   })
 
   it('compiles context from both V1 and V2 short-term memory files', async () => {
@@ -190,5 +231,46 @@ describe('MemoryManager', () => {
         })
       ])
     )
+  })
+
+  it('rebuilds an invalid memory index with a warning when saving node output', async () => {
+    const indexPath = join(workspacePath, '.fluxion', 'memory', 'index.json')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await writeFile(indexPath, '{not-json}\n', 'utf8')
+
+    try {
+      await memoryManager.saveNodeOutput(workspacePath, 'workflow-4', {
+        runId: 'run-4',
+        nodeId: 'node-a',
+        runner: 'codex',
+        model: 'gpt-5.5',
+        status: 'completed',
+        startedAt: '2026-05-06T00:00:00.000Z',
+        completedAt: '2026-05-06T00:00:01.000Z',
+        content: 'Recovered output'
+      })
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Could not parse memory index'),
+        expect.anything()
+      )
+
+      const parsed = MemoryIndexSchema.parse(
+        JSON.parse(await readFile(indexPath, 'utf8')) as unknown
+      )
+      expect(parsed.entries).toEqual([
+        expect.objectContaining({
+          id: 'raw_output:workflow-4:run-4:node-a:0',
+          type: 'raw_output',
+          workflowId: 'workflow-4',
+          runId: 'run-4',
+          nodeId: 'node-a',
+          sourcePath: '.fluxion/memory/short-term/workflow-4/node-a.md',
+          createdAt: '2026-05-06T00:00:01.000Z'
+        })
+      ])
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })
