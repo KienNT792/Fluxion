@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'crypto'
 import * as path from 'path'
-import { WorkflowTraceEvent, WorkflowTraceEventType } from '@core'
+import { WorkflowRunState, WorkflowTraceEvent, WorkflowTraceEventType } from '@core'
 import {
   AbortReason,
   AgentResult,
@@ -67,6 +67,7 @@ interface WorkflowRuntime {
   readyQueue: NodeId[]
   awaitingReviewNodeIds: Set<NodeId>
   executionMode: ExecutionMode
+  recoveredAfterRestart: boolean
 }
 
 type HaltReason = 'aborted' | 'error' | 'rejected' | null
@@ -220,6 +221,65 @@ export class WorkflowEngine {
     }
   }
 
+  public hydratePausedReviewRuntime(
+    workflow: Workflow,
+    workspacePath: string,
+    sender: WorkflowEventSender,
+    runState: WorkflowRunState
+  ): void {
+    if (runState.status !== 'awaiting_review') {
+      throw new Error(`Run ${runState.runId} is not awaiting review.`)
+    }
+
+    if (runState.workflowId !== workflow.id) {
+      throw new Error(`Run ${runState.runId} does not belong to workflow ${workflow.id}.`)
+    }
+
+    if (runState.awaitingReviewNodeIds.length === 0) {
+      throw new Error(`Run ${runState.runId} does not contain any pending review nodes.`)
+    }
+
+    if (runState.currentNodeIds.length > 0) {
+      throw new Error(
+        `Run ${runState.runId} cannot be recovered because nodes were still running when it was persisted.`
+      )
+    }
+
+    if (this.currentRuntime) {
+      if (this.currentRuntime.runId === runState.runId) {
+        this.currentRuntime.sender = sender
+        return
+      }
+
+      throw new Error('A workflow is already running.')
+    }
+
+    const executionNodeIds = new Set<NodeId>(Object.keys(runState.nodes))
+    const runtime = this.createRuntime(
+      workflow,
+      path.resolve(workspacePath),
+      sender,
+      runState.runId,
+      this.parseRunStartTime(runState),
+      executionNodeIds
+    )
+
+    const missingWorkflowNodeIds = [...executionNodeIds].filter(
+      (nodeId) => !runtime.nodes.has(nodeId)
+    )
+    if (missingWorkflowNodeIds.length > 0) {
+      throw new Error(
+        `Run ${runState.runId} references nodes that no longer exist in workflow ${workflow.id}: ${missingWorkflowNodeIds.join(', ')}.`
+      )
+    }
+
+    runtime.executionMode = runState.executionMode
+    runtime.recoveredAfterRestart = true
+    this.rebuildRecoveredRuntime(runtime, runState)
+    this.resetRuntimeFlags()
+    this.currentRuntime = runtime
+  }
+
   public async approveReview(payload: WorkflowReviewActionPayload): Promise<void> {
     const runtime = this.requireReviewRuntime(payload)
     if (!runtime.awaitingReviewNodeIds.has(payload.nodeId)) {
@@ -235,7 +295,8 @@ export class WorkflowEngine {
       }
     )
     await this.trace(runtime, 'node.review_approved', payload.nodeId, {
-      hasComment: Boolean(payload.comment?.trim())
+      hasComment: Boolean(payload.comment?.trim()),
+      ...this.getRecoveredReviewTraceData(runtime)
     })
     runtime.awaitingReviewNodeIds.delete(payload.nodeId)
     this.sendNodeStatus(runtime.sender, payload.nodeId, 'completed')
@@ -266,7 +327,8 @@ export class WorkflowEngine {
     )
     await this.trace(runtime, 'node.review_rejected', payload.nodeId, {
       error: errorMessage,
-      hasComment: Boolean(payload.comment?.trim())
+      hasComment: Boolean(payload.comment?.trim()),
+      ...this.getRecoveredReviewTraceData(runtime)
     })
     runtime.awaitingReviewNodeIds.delete(payload.nodeId)
     this.sendNodeStatus(runtime.sender, payload.nodeId, 'error', errorMessage)
@@ -289,7 +351,8 @@ export class WorkflowEngine {
 
     runtime.awaitingReviewNodeIds.delete(payload.nodeId)
     await this.trace(runtime, 'node.rerun_requested', payload.nodeId, {
-      hasComment: Boolean(payload.comment?.trim())
+      hasComment: Boolean(payload.comment?.trim()),
+      ...this.getRecoveredReviewTraceData(runtime)
     })
     await this.runStateStore.resetNodeForRerun(runtime.workspacePath, runtime.runId, payload.nodeId)
     await this.memoryManager.deleteNodeOutput(
@@ -563,7 +626,8 @@ export class WorkflowEngine {
       inDegree,
       readyQueue,
       awaitingReviewNodeIds: new Set<NodeId>(),
-      executionMode: workflow.executionMode ?? 'auto'
+      executionMode: workflow.executionMode ?? 'auto',
+      recoveredAfterRestart: false
     }
   }
 
@@ -573,6 +637,44 @@ export class WorkflowEngine {
     }
 
     return node.data.humanReview ? 'node' : null
+  }
+
+  private rebuildRecoveredRuntime(runtime: WorkflowRuntime, runState: WorkflowRunState): void {
+    const reviewNodeIds = new Set(runState.awaitingReviewNodeIds)
+    runtime.awaitingReviewNodeIds = new Set<NodeId>()
+    runtime.readyQueue = []
+
+    for (const nodeId of runtime.nodes.keys()) {
+      const nodeState = runState.nodes[nodeId]
+      if (!nodeState) {
+        throw new Error(`Run ${runState.runId} is missing persisted state for node ${nodeId}.`)
+      }
+
+      const previousNodeIds = this.getPreviousNodeIds(runtime, nodeId)
+      const remainingDependencies = previousNodeIds.reduce((count, previousNodeId) => {
+        return runState.nodes[previousNodeId]?.status === 'completed' ? count : count + 1
+      }, 0)
+      runtime.inDegree.set(nodeId, remainingDependencies)
+
+      if (reviewNodeIds.has(nodeId)) {
+        if (nodeState.status !== 'awaiting_review') {
+          throw new Error(
+            `Run ${runState.runId} marks node ${nodeId} for review, but persisted status is ${nodeState.status}.`
+          )
+        }
+
+        runtime.awaitingReviewNodeIds.add(nodeId)
+        continue
+      }
+
+      if (nodeState.status === 'pending' && remainingDependencies === 0) {
+        runtime.readyQueue.push(nodeId)
+      }
+    }
+  }
+
+  private getRecoveredReviewTraceData(runtime: WorkflowRuntime): Record<string, true> {
+    return runtime.recoveredAfterRestart ? { recoveredAfterRestart: true } : {}
   }
 
   private async continueCurrentRuntime(): Promise<void> {
@@ -1055,9 +1157,7 @@ export class WorkflowEngine {
 
   private requireReviewRuntime(payload: WorkflowReviewActionPayload): WorkflowRuntime {
     if (!this.currentRuntime) {
-      throw new Error(
-        'No active workflow runtime is available. Review recovery after app restart is not implemented in P3.'
-      )
+      throw new Error('No active workflow runtime is available for this review action.')
     }
 
     if (this.currentRuntime.workflow.id !== payload.workflowId) {
@@ -1073,6 +1173,11 @@ export class WorkflowEngine {
     }
 
     return this.currentRuntime
+  }
+
+  private parseRunStartTime(runState: WorkflowRunState): number {
+    const candidate = Date.parse(runState.startedAt ?? runState.updatedAt)
+    return Number.isFinite(candidate) ? candidate : Date.now()
   }
 
   private async finalizeRuntime(

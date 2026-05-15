@@ -47,6 +47,7 @@ interface StatusSlice {
   setNodeError: (nodeId: NodeId, error?: string) => void
   setNodeExitCode: (nodeId: NodeId, exitCode?: number | null) => void
   setNodeOutputPath: (nodeId: NodeId, outputFilePath?: string) => void
+  setNodeAttemptCount: (nodeId: NodeId, attemptCount: number) => void
   setCompiledContext: (nodeId: NodeId, context: string) => void
   resetNodeExecution: (nodeIds: NodeId[]) => void
   resetExecution: (nodeIds: NodeId[]) => void
@@ -219,6 +220,15 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       nodeOutputPaths: {
         ...state.nodeOutputPaths,
         [nodeId]: outputFilePath
+      }
+    }))
+  },
+
+  setNodeAttemptCount: (nodeId, attemptCount) => {
+    set((state) => ({
+      nodeAttemptCounts: {
+        ...state.nodeAttemptCounts,
+        [nodeId]: Math.max(1, Math.floor(attemptCount))
       }
     }))
   },

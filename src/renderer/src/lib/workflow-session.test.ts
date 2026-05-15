@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceOpenedPayload } from '@shared'
 import {
+  approveReviewNode,
   getContextEntryBehavior,
+  hydrateWorkspaceState,
   markWorkspaceAsTrusted,
   openWorkspaceFromDialog,
   runCurrentWorkflow,
@@ -41,7 +43,11 @@ describe('runCurrentWorkflow approval guardrail', () => {
         }),
         fetchProviderCapabilities: vi.fn(),
         getProviderCapabilities: vi.fn().mockResolvedValue({}),
-        runWorkflow: vi.fn()
+        runWorkflow: vi.fn(),
+        readWorkspaceTextFile: vi.fn(),
+        approveWorkflowNode: vi.fn(),
+        rejectWorkflowNode: vi.fn(),
+        rerunWorkflowNode: vi.fn()
       }
     })
 
@@ -268,5 +274,84 @@ describe('runCurrentWorkflow approval guardrail', () => {
       showIncompleteBanner: false,
       showLegacyBanner: false
     })
+  })
+
+  it('hydrates paused review state from recovered workspace payload', () => {
+    const payload: WorkspaceOpenedPayload = {
+      workspacePath: 'C:\\Workspace',
+      workflow: {
+        id: 'workflow-recovered',
+        name: 'Recovered Workflow',
+        executionMode: 'auto',
+        nodes: [
+          {
+            id: 'node-a',
+            type: 'agentNode',
+            label: 'Node A',
+            position: { x: 0, y: 0 },
+            data: {
+              provider: 'codex',
+              model: 'gpt-5.5',
+              prompt: 'Review output'
+            }
+          }
+        ],
+        edges: []
+      },
+      activeWorkflowFilePath: 'C:\\Workspace\\.fluxion\\workflows\\recovered.fluxion.json',
+      activeWorkflowId: 'workflow-recovered',
+      workflows: [],
+      isNewWorkspace: false,
+      contextStatus: 'ready',
+      contextSummary: null,
+      legacyWorkflowDetected: false,
+      recoveredReview: {
+        workflowId: 'workflow-recovered',
+        runId: 'run-1',
+        nodeIds: ['node-a'],
+        nodeOutputPaths: {
+          'node-a': 'C:\\Workspace\\.fluxion\\memory\\short-term\\workflow-recovered\\node-a.md'
+        },
+        nodeAttemptCounts: {
+          'node-a': 3
+        },
+        executionMode: 'auto',
+        updatedAt: '2026-05-15T02:01:00.000Z'
+      }
+    }
+
+    hydrateWorkspaceState(payload)
+
+    const executionState = useExecutionStore.getState()
+    const workflowState = useWorkflowStore.getState()
+    expect(executionState.workflowStatus).toBe('paused')
+    expect(executionState.activeRunId).toBe('run-1')
+    expect(executionState.reviewNodeIds).toEqual(['node-a'])
+    expect(executionState.nodeStatuses['node-a']).toBe('paused')
+    expect(executionState.nodeOutputPaths['node-a']).toContain('node-a.md')
+    expect(executionState.nodeAttemptCounts['node-a']).toBe(3)
+    expect(workflowState.terminalNodeId).toBe('node-a')
+    expect(workflowState.selectedNodeId).toBe('node-a')
+    expect(workflowState.reviewFocusRequest).toMatchObject({
+      nodeId: 'node-a'
+    })
+  })
+
+  it('blocks approve for a recovered review when the output file cannot be read', async () => {
+    useExecutionStore.getState().setActiveRunId('run-1')
+    useExecutionStore.getState().addReviewNode('node-a')
+    useExecutionStore.getState().setNodeStatus('node-a', 'paused')
+    useExecutionStore
+      .getState()
+      .setNodeOutputPath(
+        'node-a',
+        'C:\\Workspace\\.fluxion\\memory\\short-term\\workflow-a\\node-a.md'
+      )
+    window.api.readWorkspaceTextFile = vi.fn().mockRejectedValue(new Error('missing'))
+
+    await approveReviewNode('node-a')
+
+    expect(window.api.approveWorkflowNode).not.toHaveBeenCalled()
+    expect(useExecutionStore.getState().workflowError).toContain('output file is missing')
   })
 })

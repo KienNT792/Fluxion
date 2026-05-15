@@ -28,6 +28,7 @@ import {
   WorkflowCreatePayload,
   WorkflowLoadPayload,
   WorkflowDeletePayload,
+  WorkspaceOpenedPayload,
   WorkspaceContextOnboardingUpdatePayload,
   LegacyWorkflowMigrationPayload,
   WorkspaceTrustMigrationPayload,
@@ -44,6 +45,7 @@ import { openShellPath, revealShellPath } from '../services/shell-path.service'
 import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service'
 import { contextEnrichmentService } from '../services/context-enrichment.service'
 import { onboardingService } from '../services/onboarding.service'
+import { runStateStore } from '../services/run-state-store'
 import { workspaceService } from '../services/workspace.service'
 import { workspaceTrustService } from '../services/workspace-trust.service'
 import { recentWorkspacesService } from '../services/recent-workspaces.service'
@@ -96,6 +98,38 @@ function coercePreviewMaxBytes(maxBytes: number | undefined): number {
   }
 
   return Math.min(HARD_TEXT_PREVIEW_MAX_BYTES, Math.max(1, Math.floor(maxBytes)))
+}
+
+async function recoverPausedReviewIfAvailable(
+  payload: WorkspaceOpenedPayload,
+  sender: Electron.WebContents
+): Promise<WorkspaceOpenedPayload> {
+  if (!payload.recoveredReview) {
+    return payload
+  }
+
+  try {
+    const runState = await runStateStore.readRun(
+      payload.workspacePath,
+      payload.recoveredReview.runId
+    )
+    workflowEngine.hydratePausedReviewRuntime(
+      payload.workflow,
+      payload.workspacePath,
+      sender,
+      runState
+    )
+    return payload
+  } catch (error) {
+    console.warn(
+      `Failed to hydrate paused review runtime for run ${payload.recoveredReview.runId}.`,
+      error
+    )
+    return {
+      ...payload,
+      recoveredReview: undefined
+    }
+  }
 }
 
 async function recordRecentWorkspace(workspacePath: string): Promise<void> {
@@ -205,7 +239,10 @@ export function registerWorkflowHandlers(): void {
   })
 
   ipcMain.handle(IpcChannels.WORKSPACE_LOAD, async (event, workspacePath: string) => {
-    const payload = await workspaceService.loadWorkspace(workspacePath, event.sender)
+    const payload = await recoverPausedReviewIfAvailable(
+      await workspaceService.loadWorkspace(workspacePath, event.sender),
+      event.sender
+    )
     await recordRecentWorkspace(payload.workspacePath)
     return payload
   })
@@ -374,8 +411,8 @@ export function registerWorkflowHandlers(): void {
     IpcChannels.WORKSPACE_MIGRATE_LEGACY_WORKFLOW,
     async (event, payload: LegacyWorkflowMigrationPayload) => {
       const migrationResult = await workspaceService.migrateLegacyWorkflow(payload.workspacePath)
-      const openedPayload = await workspaceService.loadWorkspace(
-        payload.workspacePath,
+      const openedPayload = await recoverPausedReviewIfAvailable(
+        await workspaceService.loadWorkspace(payload.workspacePath, event.sender),
         event.sender
       )
       await recordRecentWorkspace(openedPayload.workspacePath)

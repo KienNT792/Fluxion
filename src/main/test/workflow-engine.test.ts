@@ -771,6 +771,288 @@ describe('WorkflowEngine', () => {
     })
   })
 
+  it('hydrates a paused review runtime after restart and resumes downstream after approval', async () => {
+    const initialStore = new RunStateStore()
+    const adapterBeforeRestart = new FakeAdapter({
+      'node-a': {
+        output: 'Review this output'
+      },
+      'node-b': {
+        output: 'Downstream output before restart'
+      }
+    })
+    const engineBeforeRestart = WorkflowEngine.createForTesting({
+      adapter: adapterBeforeRestart,
+      memoryManager,
+      runStateStore: initialStore,
+      artifactGateService: new ArtifactGateService()
+    })
+    const workflow = createWorkflow(
+      [createNode('node-a', { humanReview: true }), createNode('node-b')],
+      [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }]
+    )
+
+    await engineBeforeRestart.start(workflow, workspacePath, new FakeSender())
+    const pausedState = await initialStore.readRun(
+      workspacePath,
+      (await readSingleRunState(workspacePath)).runId
+    )
+    expect(pausedState.status).toBe('awaiting_review')
+
+    const adapterAfterRestart = new FakeAdapter({
+      'node-b': {
+        output: 'Downstream output after restart'
+      }
+    })
+    const engineAfterRestart = WorkflowEngine.createForTesting({
+      adapter: adapterAfterRestart,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    const recoveredSender = new FakeSender()
+    engineAfterRestart.hydratePausedReviewRuntime(
+      workflow,
+      workspacePath,
+      recoveredSender,
+      pausedState
+    )
+
+    await engineAfterRestart.approveReview(reviewAction(pausedState.runId, 'node-a'))
+
+    const finalState = await readSingleRunState(workspacePath)
+    expect(finalState.status).toBe('completed')
+    expect(finalState.nodes['node-a']?.reviewStatus).toBe('approved')
+    expect(finalState.nodes['node-b']?.status).toBe('completed')
+    expect(adapterAfterRestart.executeCalls.map((call) => call.nodeId)).toEqual(['node-b'])
+
+    const trace = await readTrace(workspacePath, pausedState.runId)
+    expectTraceOrder(trace, [
+      'node-a:node.review_requested',
+      'node-a:node.review_approved',
+      'node-b:node.ready',
+      'node-b:node.running',
+      'workflow:workflow.completed'
+    ])
+    expect(trace.find((event) => event.type === 'node.review_approved')).toMatchObject({
+      data: {
+        recoveredAfterRestart: true
+      }
+    })
+  })
+
+  it('hydrates a parallel review parent and unlocks a shared downstream node correctly', async () => {
+    const initialStore = new RunStateStore()
+    const adapterBeforeRestart = new FakeAdapter({
+      'node-a': {
+        output: 'Completed parent'
+      },
+      'node-b': {
+        output: 'Review parent'
+      },
+      'node-c': {
+        output: 'Shared downstream before restart'
+      }
+    })
+    const engineBeforeRestart = WorkflowEngine.createForTesting({
+      adapter: adapterBeforeRestart,
+      memoryManager,
+      runStateStore: initialStore,
+      artifactGateService: new ArtifactGateService()
+    })
+    const workflow = createWorkflow(
+      [createNode('node-a'), createNode('node-b', { humanReview: true }), createNode('node-c')],
+      [
+        { id: 'edge-a-c', source: 'node-a', target: 'node-c' },
+        { id: 'edge-b-c', source: 'node-b', target: 'node-c' }
+      ]
+    )
+
+    await engineBeforeRestart.start(workflow, workspacePath, new FakeSender())
+    const pausedState = await initialStore.readRun(
+      workspacePath,
+      (await readSingleRunState(workspacePath)).runId
+    )
+    expect(pausedState.nodes['node-a']?.status).toBe('completed')
+    expect(pausedState.nodes['node-b']?.status).toBe('awaiting_review')
+    expect(pausedState.nodes['node-c']?.status).toBe('pending')
+
+    const adapterAfterRestart = new FakeAdapter({
+      'node-c': {
+        output: 'Shared downstream after restart'
+      }
+    })
+    const engineAfterRestart = WorkflowEngine.createForTesting({
+      adapter: adapterAfterRestart,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    engineAfterRestart.hydratePausedReviewRuntime(
+      workflow,
+      workspacePath,
+      new FakeSender(),
+      pausedState
+    )
+
+    await engineAfterRestart.approveReview(reviewAction(pausedState.runId, 'node-b'))
+
+    const finalState = await readSingleRunState(workspacePath)
+    expect(finalState.status).toBe('completed')
+    expect(finalState.nodes['node-c']?.status).toBe('completed')
+    expect(adapterAfterRestart.executeCalls.map((call) => call.nodeId)).toEqual(['node-c'])
+  })
+
+  it('rejects a recovered review checkpoint and finalizes the workflow as rejected', async () => {
+    const initialStore = new RunStateStore()
+    const engineBeforeRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter({
+        'node-a': {
+          output: 'Needs review'
+        }
+      }),
+      memoryManager,
+      runStateStore: initialStore,
+      artifactGateService: new ArtifactGateService()
+    })
+    const workflow = createWorkflow([createNode('node-a', { humanReview: true })])
+
+    await engineBeforeRestart.start(workflow, workspacePath, new FakeSender())
+    const pausedState = await initialStore.readRun(
+      workspacePath,
+      (await readSingleRunState(workspacePath)).runId
+    )
+    const engineAfterRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter(),
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    const recoveredSender = new FakeSender()
+    engineAfterRestart.hydratePausedReviewRuntime(
+      workflow,
+      workspacePath,
+      recoveredSender,
+      pausedState
+    )
+
+    await engineAfterRestart.rejectReview({
+      ...reviewAction(pausedState.runId, 'node-a'),
+      comment: 'Not acceptable'
+    })
+
+    const finalState = await readSingleRunState(workspacePath)
+    expect(finalState.status).toBe('rejected')
+    expect(finalState.nodes['node-a']?.reviewStatus).toBe('rejected')
+    const trace = await readTrace(workspacePath, pausedState.runId)
+    expect(trace.find((event) => event.type === 'node.review_rejected')).toMatchObject({
+      data: {
+        recoveredAfterRestart: true
+      }
+    })
+    expect(
+      recoveredSender.events.some((event) => event.channel === IpcChannels.WORKFLOW_COMPLETED)
+    ).toBe(true)
+  })
+
+  it('reruns a recovered review node and pauses again with a new attempt', async () => {
+    const initialStore = new RunStateStore()
+    const engineBeforeRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter({
+        'node-a': {
+          output: 'First review output'
+        }
+      }),
+      memoryManager,
+      runStateStore: initialStore,
+      artifactGateService: new ArtifactGateService()
+    })
+    const workflow = createWorkflow([createNode('node-a', { humanReview: true })])
+
+    await engineBeforeRestart.start(workflow, workspacePath, new FakeSender())
+    const pausedState = await initialStore.readRun(
+      workspacePath,
+      (await readSingleRunState(workspacePath)).runId
+    )
+
+    const engineAfterRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter({
+        'node-a': {
+          output: 'Second review output'
+        }
+      }),
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    engineAfterRestart.hydratePausedReviewRuntime(
+      workflow,
+      workspacePath,
+      new FakeSender(),
+      pausedState
+    )
+
+    await engineAfterRestart.rerunReviewNode(reviewAction(pausedState.runId, 'node-a'))
+
+    const rerunState = await readSingleRunState(workspacePath)
+    expect(rerunState.status).toBe('awaiting_review')
+    expect(rerunState.nodes['node-a']?.attempts).toBe(2)
+    expect(rerunState.nodes['node-a']?.reviewStatus).toBe('pending')
+    expect(
+      await readFile(
+        join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-1', 'node-a.md'),
+        'utf8'
+      )
+    ).toContain('Second review output')
+
+    const trace = await readTrace(workspacePath, pausedState.runId)
+    expect(trace.find((event) => event.type === 'node.rerun_requested')).toMatchObject({
+      data: {
+        recoveredAfterRestart: true
+      }
+    })
+  })
+
+  it('aborts a recovered paused review run as aborted', async () => {
+    const initialStore = new RunStateStore()
+    const engineBeforeRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter({
+        'node-a': {
+          output: 'Needs review'
+        }
+      }),
+      memoryManager,
+      runStateStore: initialStore,
+      artifactGateService: new ArtifactGateService()
+    })
+    const workflow = createWorkflow([createNode('node-a', { humanReview: true })])
+
+    await engineBeforeRestart.start(workflow, workspacePath, new FakeSender())
+    const pausedState = await initialStore.readRun(
+      workspacePath,
+      (await readSingleRunState(workspacePath)).runId
+    )
+
+    const engineAfterRestart = WorkflowEngine.createForTesting({
+      adapter: new FakeAdapter(),
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    engineAfterRestart.hydratePausedReviewRuntime(
+      workflow,
+      workspacePath,
+      new FakeSender(),
+      pausedState
+    )
+
+    await engineAfterRestart.abort(undefined, AbortReason.USER_REQUESTED)
+
+    const finalState = await readSingleRunState(workspacePath)
+    expect(finalState.status).toBe('aborted')
+    expect(finalState.nodes['node-a']?.status).toBe('aborted')
+  })
+
   it('reruns a paused review node and overwrites its saved output before re-pausing', async () => {
     let executionCount = 0
     const adapter = new FakeAdapter({

@@ -1,7 +1,7 @@
-import { mkdtemp, readdir, readFile, rm } from 'fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Workflow } from '@shared'
 import { RunStateStore } from '../services/run-state-store'
 
@@ -214,5 +214,69 @@ describe('RunStateStore', () => {
       reviewSource: 'manual',
       reviewStatus: 'pending'
     })
+  })
+
+  it('lists valid awaiting-review runs newest first and skips invalid files', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const store = new RunStateStore()
+    const workflow = createWorkflow()
+
+    await store.initializeRun({
+      workspacePath,
+      workflow,
+      executionNodeIds: new Set(['node-a']),
+      runId: 'run-old'
+    })
+    await store.initializeRun({
+      workspacePath,
+      workflow,
+      executionNodeIds: new Set(['node-b']),
+      runId: 'run-new'
+    })
+    await store.initializeRun({
+      workspacePath,
+      workflow,
+      executionNodeIds: new Set(['node-a']),
+      runId: 'run-completed'
+    })
+
+    await store.markNodeRunning(workspacePath, 'run-old', 'node-a', '2026-05-15T01:00:00.000Z')
+    await store.markNodeAwaitingReview(workspacePath, 'run-old', 'node-a', {
+      completedAt: '2026-05-15T01:01:00.000Z',
+      reviewSource: 'node'
+    })
+    await store.markNodeRunning(workspacePath, 'run-new', 'node-b', '2026-05-15T02:00:00.000Z')
+    await store.markNodeAwaitingReview(workspacePath, 'run-new', 'node-b', {
+      completedAt: '2026-05-15T02:01:00.000Z',
+      reviewSource: 'node'
+    })
+    await store.markNodeRunning(
+      workspacePath,
+      'run-completed',
+      'node-a',
+      '2026-05-15T03:00:00.000Z'
+    )
+    await store.markNodeCompleted(workspacePath, 'run-completed', 'node-a', {
+      completedAt: '2026-05-15T03:01:00.000Z'
+    })
+    await store.finalizeWorkflow(
+      workspacePath,
+      'run-completed',
+      'completed',
+      '2026-05-15T03:02:00.000Z'
+    )
+
+    await mkdir(join(workspacePath, '.fluxion', 'runs'), { recursive: true })
+    await writeFile(join(workspacePath, '.fluxion', 'runs', 'corrupt.json'), '{', 'utf8')
+
+    const runs = await store.listAwaitingReviewRuns(workspacePath)
+
+    expect(runs.map((run) => run.runId)).toEqual(['run-new', 'run-old'])
+    expect(runs.every((run) => run.status === 'awaiting_review')).toBe(true)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping invalid run state file:'),
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
   })
 })

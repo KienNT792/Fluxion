@@ -184,13 +184,37 @@ export function buildWorkflowDocument(): Workflow {
 
 export function hydrateWorkspaceState(payload: WorkspaceOpenedPayload): void {
   const entryBehavior = getContextEntryBehavior(payload)
-  useWorkflowStore.getState().hydrateWorkspace(payload)
-  useWorkflowStore.getState().setContextState(payload.contextStatus, payload.contextSummary ?? null)
-  useWorkflowStore.getState().setContextSetupOpen(entryBehavior.autoOpenModal)
+  const workflowStore = useWorkflowStore.getState()
+  workflowStore.hydrateWorkspace(payload)
+  workflowStore.setContextState(payload.contextStatus, payload.contextSummary ?? null)
+  workflowStore.setContextSetupOpen(entryBehavior.autoOpenModal)
   const executionStore = useExecutionStore.getState()
   executionStore.resetExecution(payload.workflow.nodes.map((node) => node.id))
-  executionStore.setWorkflowStatus('idle')
   executionStore.setWorkflowError(null)
+
+  if (payload.recoveredReview) {
+    executionStore.setActiveRunId(payload.recoveredReview.runId)
+    executionStore.setWorkflowStatus('paused')
+
+    for (const nodeId of payload.recoveredReview.nodeIds) {
+      executionStore.addReviewNode(nodeId)
+      executionStore.setNodeStatus(nodeId, 'paused')
+      executionStore.setNodeOutputPath(nodeId, payload.recoveredReview.nodeOutputPaths[nodeId])
+      executionStore.setNodeAttemptCount(
+        nodeId,
+        payload.recoveredReview.nodeAttemptCounts[nodeId] ?? 1
+      )
+    }
+
+    const [firstReviewNodeId] = payload.recoveredReview.nodeIds
+    if (firstReviewNodeId) {
+      workflowStore.followTerminalNode(firstReviewNodeId)
+      workflowStore.requestReviewFocus(firstReviewNodeId)
+    }
+    return
+  }
+
+  executionStore.setWorkflowStatus('idle')
 }
 
 export async function loadWorkspaceFromPath(workspacePath: string): Promise<void> {
@@ -400,6 +424,27 @@ export async function approveReviewNode(nodeId: NodeId): Promise<void> {
   const workflowStore = useWorkflowStore.getState()
   const executionStore = useExecutionStore.getState()
   if (!executionStore.activeRunId) {
+    return
+  }
+
+  const outputFilePath = executionStore.nodeOutputPaths[nodeId]
+  if (!workflowStore.workspacePath || !outputFilePath) {
+    executionStore.setWorkflowError(
+      'Cannot approve review node because its output file is missing. Rerun or reject the node.'
+    )
+    return
+  }
+
+  try {
+    await window.api.readWorkspaceTextFile({
+      workspacePath: workflowStore.workspacePath,
+      filePath: outputFilePath,
+      maxBytes: 1
+    })
+  } catch {
+    executionStore.setWorkflowError(
+      'Cannot approve review node because its output file is missing. Rerun or reject the node.'
+    )
     return
   }
 

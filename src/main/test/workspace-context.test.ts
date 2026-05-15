@@ -3,9 +3,35 @@ import matter from 'gray-matter'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyProjectContextDraft, normalizeProjectContextDraft } from '@shared'
+import { createEmptyProjectContextDraft, normalizeProjectContextDraft, Workflow } from '@shared'
 import { memoryManager } from '../services/memory-manager'
+import { RunStateStore } from '../services/run-state-store'
 import { workspaceService } from '../services/workspace.service'
+
+function createWorkflow(id: string, name: string): Workflow {
+  return {
+    id,
+    name,
+    executionMode: 'auto',
+    nodes: [
+      {
+        id: 'review-node',
+        type: 'agentNode',
+        label: 'Review node',
+        position: { x: 0, y: 0 },
+        data: {
+          provider: 'codex',
+          model: 'gpt-5.5',
+          prompt: 'Review this',
+          humanReview: true
+        }
+      }
+    ],
+    edges: [],
+    createdAt: '2026-05-15T00:00:00.000Z',
+    updatedAt: '2026-05-15T00:00:00.000Z'
+  }
+}
 
 describe('workspaceService project context', () => {
   let workspacePath: string
@@ -170,6 +196,78 @@ describe('workspaceService project context', () => {
       'watcher',
       'ready'
     ])
+  })
+
+  it('loads the workflow that owns the newest paused review run and returns recovery metadata', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workspace-review-recovery-'))
+    const workflowsDir = join(workspacePath, '.fluxion', 'workflows')
+    await mkdir(workflowsDir, { recursive: true })
+    const olderWorkflow = createWorkflow('workflow-old', 'Older Workflow')
+    const newestWorkflow = createWorkflow('workflow-new', 'Newest Workflow')
+    await writeFile(
+      join(workflowsDir, 'older.fluxion.json'),
+      JSON.stringify(olderWorkflow, null, 2),
+      'utf8'
+    )
+    await writeFile(
+      join(workflowsDir, 'newest.fluxion.json'),
+      JSON.stringify(newestWorkflow, null, 2),
+      'utf8'
+    )
+    await memoryManager.saveNodeOutput(workspacePath, newestWorkflow.id, {
+      runId: 'run-new',
+      nodeId: 'review-node',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-15T02:00:00.000Z',
+      completedAt: '2026-05-15T02:01:00.000Z',
+      content: 'Pending output'
+    })
+
+    const store = new RunStateStore()
+    await store.initializeRun({
+      workspacePath,
+      workflow: olderWorkflow,
+      executionNodeIds: new Set(['review-node']),
+      runId: 'run-old'
+    })
+    await store.markNodeRunning(workspacePath, 'run-old', 'review-node')
+    await store.markNodeAwaitingReview(workspacePath, 'run-old', 'review-node', {
+      completedAt: '2026-05-15T01:01:00.000Z',
+      reviewSource: 'node'
+    })
+    await store.initializeRun({
+      workspacePath,
+      workflow: newestWorkflow,
+      executionNodeIds: new Set(['review-node']),
+      runId: 'run-new'
+    })
+    await store.markNodeRunning(workspacePath, 'run-new', 'review-node')
+    await store.markNodeAwaitingReview(workspacePath, 'run-new', 'review-node', {
+      completedAt: '2026-05-15T02:01:00.000Z',
+      reviewSource: 'node'
+    })
+
+    const payload = await workspaceService.loadWorkspace(workspacePath, {
+      send: vi.fn()
+    } as unknown as Electron.WebContents)
+    await workspaceService.dispose()
+
+    expect(payload.workflow.id).toBe('workflow-new')
+    expect(payload.activeWorkflowId).toBe('workflow-new')
+    expect(payload.recoveredReview).toMatchObject({
+      workflowId: 'workflow-new',
+      runId: 'run-new',
+      nodeIds: ['review-node'],
+      executionMode: 'auto',
+      nodeAttemptCounts: {
+        'review-node': 1
+      }
+    })
+    expect(payload.recoveredReview?.nodeOutputPaths['review-node']).toContain(
+      join('.fluxion', 'memory', 'short-term', 'workflow-new', 'review-node.md')
+    )
   })
 
   it('emits a loading error event when opening fails', async () => {

@@ -59,6 +59,18 @@ export interface WorkspaceOpenedPayload {
   legacyWorkflowDetected: boolean
   /** Backup path produced by the latest legacy workflow migration, when applicable. */
   legacyWorkflowBackupFilePath?: string
+  /** Pending paused review recovered from persisted run state, when present. */
+  recoveredReview?: RecoveredReviewPayload
+}
+
+export interface RecoveredReviewPayload {
+  workflowId: string
+  runId: string
+  nodeIds: NodeId[]
+  nodeOutputPaths: Partial<Record<NodeId, string>>
+  nodeAttemptCounts: Partial<Record<NodeId, number>>
+  executionMode: ExecutionMode
+  updatedAt: string
 }
 
 export type WorkspaceLoadingStep = 'init' | 'loadWorkflows' | 'loadContext' | 'watcher' | 'ready'

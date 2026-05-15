@@ -1,3 +1,4 @@
+import { Dirent } from 'fs'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import {
@@ -45,6 +46,10 @@ function nowIso(): string {
 
 function runFilePath(workspacePath: string, runId: string): string {
   return path.join(workspacePath, '.fluxion', 'runs', `${runId}.json`)
+}
+
+function runsDirectoryPath(workspacePath: string): string {
+  return path.join(workspacePath, '.fluxion', 'runs')
 }
 
 function sortNodeIds(nodeIds: string[]): string[] {
@@ -112,6 +117,48 @@ export class RunStateStore {
     const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
     this.states.set(this.key(workspacePath, runId), state)
     return structuredClone(state)
+  }
+
+  public async listAwaitingReviewRuns(workspacePath: string): Promise<WorkflowRunState[]> {
+    const resolvedWorkspacePath = path.resolve(workspacePath)
+    const directory = runsDirectoryPath(resolvedWorkspacePath)
+
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      const errorCode =
+        typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+      if (errorCode === 'ENOENT') {
+        return []
+      }
+      throw error
+    }
+
+    const states: WorkflowRunState[] = []
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+        continue
+      }
+
+      const filePath = path.join(directory, entry.name)
+      try {
+        const content = await fs.readFile(filePath, 'utf8')
+        const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+        this.states.set(this.key(resolvedWorkspacePath, state.runId), state)
+
+        if (state.status === 'awaiting_review' && state.awaitingReviewNodeIds.length > 0) {
+          states.push(state)
+        }
+      } catch (error) {
+        console.warn(`Skipping invalid run state file: ${filePath}`, error)
+      }
+    }
+
+    states.sort((left, right) => {
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    })
+    return states.map((state) => structuredClone(state))
   }
 
   public async markNodeRunning(

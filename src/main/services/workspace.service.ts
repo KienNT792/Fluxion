@@ -9,12 +9,15 @@ import {
   ContextScanResult,
   ContextSaveMode,
   createEmptyProjectContextDraft,
+  ExecutionMode,
   IpcChannels,
   formatProjectContextMarkdown,
   normalizeProjectContextDraft,
+  NodeId,
   PROJECT_CONTEXT_VERSION,
   ProjectContextDraft,
   ProjectContextOnboarding,
+  RecoveredReviewPayload,
   resolveProjectContextStatus,
   Workflow,
   WorkflowNode,
@@ -28,6 +31,7 @@ import {
 } from '@shared'
 import { scanWorkspaceContext } from './context-scout.service'
 import { memoryManager } from './memory-manager'
+import { runStateStore } from './run-state-store'
 
 const workflowNodeDataSchema = z
   .object({
@@ -469,6 +473,50 @@ export class WorkspaceService {
     return { workflows, legacyWorkflowDetected, legacyWorkflowPath }
   }
 
+  private async buildRecoveredReviewPayload(
+    workspacePath: string,
+    workflow: Workflow,
+    run: {
+      workflowId: string
+      runId: string
+      awaitingReviewNodeIds: string[]
+      executionMode: ExecutionMode
+      updatedAt: string
+      nodes: Record<string, { attempts: number }>
+    }
+  ): Promise<RecoveredReviewPayload | undefined> {
+    const availableNodeIds = new Set(workflow.nodes.map((node) => node.id))
+    const nodeIds = run.awaitingReviewNodeIds.filter((nodeId) => availableNodeIds.has(nodeId))
+    if (nodeIds.length === 0) {
+      return undefined
+    }
+
+    const nodeOutputPaths: Partial<Record<NodeId, string>> = {}
+    const nodeAttemptCounts: Partial<Record<NodeId, number>> = {}
+
+    for (const nodeId of nodeIds) {
+      const outputPath = memoryManager.getNodeOutputPath(workspacePath, workflow.id, nodeId)
+      nodeOutputPaths[nodeId] = outputPath
+      nodeAttemptCounts[nodeId] = run.nodes[nodeId]?.attempts ?? 1
+
+      try {
+        await fs.access(outputPath)
+      } catch (error) {
+        console.warn(`Recovered review output is missing for node ${nodeId}: ${outputPath}`, error)
+      }
+    }
+
+    return {
+      workflowId: run.workflowId,
+      runId: run.runId,
+      nodeIds,
+      nodeOutputPaths,
+      nodeAttemptCounts,
+      executionMode: run.executionMode,
+      updatedAt: run.updatedAt
+    }
+  }
+
   public async loadWorkspace(
     workspacePath: string,
     sender: Electron.WebContents
@@ -497,9 +545,14 @@ export class WorkspaceService {
       )
       let isNewWorkspace = false
       const { workflows, legacyWorkflowDetected } = await this.scanWorkflows(resolvedWorkspacePath)
+      const awaitingReviewRuns = await runStateStore.listAwaitingReviewRuns(resolvedWorkspacePath)
+      const newestRecoverableRun = awaitingReviewRuns.find((run) =>
+        workflows.some((candidate) => candidate.id === run.workflowId)
+      )
 
       let activeWorkflowFilePath: string
       let workflow: Workflow
+      let recoveredReview: RecoveredReviewPayload | undefined
 
       // If no workflows exist, create a default one
       if (workflows.length === 0) {
@@ -533,9 +586,19 @@ export class WorkspaceService {
               (candidate) => normalizePathForCompare(candidate.filePath) === preferredActivePath
             )
           : undefined
-        const workflowToLoad = preferredActiveWorkflow ?? workflows[0]
+        const recoveredWorkflow = newestRecoverableRun
+          ? workflows.find((candidate) => candidate.id === newestRecoverableRun.workflowId)
+          : undefined
+        const workflowToLoad = recoveredWorkflow ?? preferredActiveWorkflow ?? workflows[0]
         activeWorkflowFilePath = workflowToLoad.filePath
         workflow = await this.readWorkflowFromDisk(activeWorkflowFilePath)
+        if (recoveredWorkflow && newestRecoverableRun && recoveredWorkflow.id === workflow.id) {
+          recoveredReview = await this.buildRecoveredReviewPayload(
+            resolvedWorkspacePath,
+            workflow,
+            newestRecoverableRun
+          )
+        }
       }
       this.emitWorkspaceLoading(sender, resolvedWorkspacePath, activeStep, 'done')
 
@@ -574,7 +637,8 @@ export class WorkspaceService {
         isNewWorkspace,
         contextStatus,
         contextSummary,
-        legacyWorkflowDetected
+        legacyWorkflowDetected,
+        recoveredReview
       }
     } catch (error) {
       this.emitWorkspaceLoading(
