@@ -50,6 +50,59 @@ describe('MemoryManager', () => {
     expect(parsed.content.trimEnd()).toBe('Final answer');
   });
 
+  it('writes attempt history while preserving the latest output path', async () => {
+    const latestPath = await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
+      runId: 'run-1',
+      nodeId: 'node-a',
+      attempt: 1,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'First attempt',
+    });
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
+      runId: 'run-1',
+      nodeId: 'node-a',
+      attempt: 2,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:02.000Z',
+      completedAt: '2026-05-06T00:00:03.000Z',
+      content: 'Second attempt',
+    });
+
+    const attemptOnePath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      '.history',
+      'run-1',
+      'node-a',
+      'attempt-1.md'
+    );
+    const attemptTwoPath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      '.history',
+      'run-1',
+      'node-a',
+      'attempt-2.md'
+    );
+
+    expect(await readFile(latestPath, 'utf8')).toContain('Second attempt');
+    expect(await readFile(attemptOnePath, 'utf8')).toContain('First attempt');
+    expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second attempt');
+    expect(matter(await readFile(attemptTwoPath, 'utf8')).data).toMatchObject({ attempt: 2 });
+  });
+
   it('compiles context from both V1 and V2 short-term memory files', async () => {
     const shortTermDir = join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-2');
     await mkdir(shortTermDir, { recursive: true });
@@ -84,5 +137,56 @@ describe('MemoryManager', () => {
     expect(context).toContain('Legacy node output');
     expect(context).toContain('Output from Node node-v2 (codex / gpt-5.5)');
     expect(context).toContain('Modern node output');
+  });
+
+  it('reports context sources and a stable compiled context hash', async () => {
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-3', {
+      runId: 'run-3',
+      nodeId: 'node-a',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'Source output',
+    });
+
+    const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-3', [
+      'node-a',
+    ]);
+    const repeatReport = await memoryManager.compileContextWithSources(workspacePath, 'workflow-3', [
+      'node-a',
+    ]);
+
+    expect(report.compiledContext).toContain('Source output');
+    expect(report.contextHash).toBe(repeatReport.contextHash);
+    expect(report.contextBytes).toBe(Buffer.byteLength(report.compiledContext, 'utf8'));
+    expect(report.contextChars).toBe(report.compiledContext.length);
+    expect(report.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'global',
+          path: '.fluxion/memory/global-context.md',
+          included: true,
+          bytes: expect.any(Number),
+          hash: expect.any(String),
+        }),
+        expect.objectContaining({
+          type: 'short-term',
+          path: '.fluxion/memory/short-term/workflow-3/node-a.md',
+          included: true,
+          nodeId: 'node-a',
+          runId: 'run-3',
+          bytes: expect.any(Number),
+          hash: expect.any(String),
+        }),
+        expect.objectContaining({
+          type: 'long-term',
+          path: '.fluxion/memory/long-term/index.md',
+          included: false,
+          warning: expect.any(String),
+        }),
+      ])
+    );
   });
 });

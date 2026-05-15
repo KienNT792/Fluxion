@@ -95,7 +95,12 @@ describe('WorkflowTraceStore', () => {
 
     expect(warnSpy).toHaveBeenCalledWith(
       'Failed to append workflow trace event:',
-      expect.any(Error)
+      expect.objectContaining({
+        tracePath,
+        runId: 'run-1',
+        type: 'workflow.started',
+        error: expect.any(Error),
+      })
     );
   });
 });

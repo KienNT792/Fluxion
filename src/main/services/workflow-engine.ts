@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import * as path from 'path';
 import { WorkflowTraceEvent, WorkflowTraceEventType } from '@core';
 import {
@@ -8,6 +8,7 @@ import {
   IpcChannels,
   NodeId,
   NodeStatus,
+  CompiledMemoryContext,
   SaveNodeOutputParams,
   Workflow,
   WorkflowReviewActionPayload,
@@ -32,16 +33,15 @@ export interface WorkflowEventSender {
   send(channel: string, payload: unknown): void;
 }
 
+type WorkflowMemoryManager = Pick<
+  MemoryManager,
+  'initWorkspace' | 'compileContext' | 'saveNodeOutput' | 'getNodeOutputPath' | 'deleteNodeOutput'
+> &
+  Partial<Pick<MemoryManager, 'compileContextWithSources' | 'getNodeOutputHistoryPath'>>;
+
 interface WorkflowEngineDependencies {
   adapter?: IAgentAdapter;
-  memoryManager?: Pick<
-    MemoryManager,
-    | 'initWorkspace'
-    | 'compileContext'
-    | 'saveNodeOutput'
-    | 'getNodeOutputPath'
-    | 'deleteNodeOutput'
-  >;
+  memoryManager?: WorkflowMemoryManager;
   runStateStore?: Pick<
     RunStateStore,
     | 'initializeRun'
@@ -127,14 +127,7 @@ export class WorkflowEngine {
   private haltError: string | null = null;
   private readonly activeNodes: Set<NodeId> = new Set();
   private readonly adapter: IAgentAdapter;
-  private readonly memoryManager: Pick<
-    MemoryManager,
-    | 'initWorkspace'
-    | 'compileContext'
-    | 'saveNodeOutput'
-    | 'getNodeOutputPath'
-    | 'deleteNodeOutput'
-  >;
+  private readonly memoryManager: WorkflowMemoryManager;
   private readonly runStateStore: Pick<
     RunStateStore,
     | 'initializeRun'
@@ -424,6 +417,29 @@ export class WorkflowEngine {
     return path.relative(workspacePath, absolutePath).replaceAll(path.sep, '/');
   }
 
+  private async compileNodeContext(
+    workspacePath: string,
+    workflowId: string,
+    previousNodeIds: NodeId[]
+  ): Promise<CompiledMemoryContext> {
+    if (this.memoryManager.compileContextWithSources) {
+      return this.memoryManager.compileContextWithSources(workspacePath, workflowId, previousNodeIds);
+    }
+
+    const compiledContext = await this.memoryManager.compileContext(
+      workspacePath,
+      workflowId,
+      previousNodeIds
+    );
+    return {
+      compiledContext,
+      sources: [],
+      contextHash: createHash('sha256').update(compiledContext, 'utf8').digest('hex'),
+      contextBytes: Buffer.byteLength(compiledContext, 'utf8'),
+      contextChars: compiledContext.length,
+    };
+  }
+
   private getFinalRunStatus(): 'completed' | 'failed' | 'aborted' | 'rejected' {
     if (this.haltReason === 'aborted') {
       return 'aborted';
@@ -656,26 +672,31 @@ export class WorkflowEngine {
         node.id
       );
       const startedAt = runningState.nodes[node.id]?.startedAt ?? new Date().toISOString();
+      const attempt = runningState.nodes[node.id]?.attempts;
 
       this.activeNodes.add(node.id);
       this.sendNodeStatus(runtime.sender, node.id, 'running');
       await this.trace(runtime, 'node.running', node.id, {
-        attempt: runningState.nodes[node.id]?.attempts,
+        attempt,
         startedAt,
       });
 
-      const context = await this.memoryManager.compileContext(
+      const contextReport = await this.compileNodeContext(
         runtime.workspacePath,
         runtime.workflow.id,
         previousNodeIds
       );
+      const context = contextReport.compiledContext;
       runtime.sender.send(IpcChannels.MEMORY_CONTEXT_READY, {
         nodeId: node.id,
         compiledContext: context,
       });
       await this.trace(runtime, 'node.context_compiled', node.id, {
         previousNodeIds,
-        contextBytes: Buffer.byteLength(context, 'utf8'),
+        contextBytes: contextReport.contextBytes,
+        contextChars: contextReport.contextChars,
+        contextHash: contextReport.contextHash,
+        sources: contextReport.sources,
       });
 
       const fullPrompt = buildPrompt(node, context);
@@ -775,10 +796,24 @@ export class WorkflowEngine {
       const outputFilePath = await this.memoryManager.saveNodeOutput(
         runtime.workspacePath,
         runtime.workflow.id,
-        this.createSaveNodeOutputParams(node, runtime.runId, startedAt, completedAt, result)
+        this.createSaveNodeOutputParams(node, runtime.runId, startedAt, completedAt, result, attempt)
       );
+      const historyOutputFilePath =
+        attempt !== undefined && this.memoryManager.getNodeOutputHistoryPath
+          ? this.memoryManager.getNodeOutputHistoryPath(
+              runtime.workspacePath,
+              runtime.workflow.id,
+              runtime.runId,
+              node.id,
+              attempt
+            )
+          : undefined;
       await this.trace(runtime, 'node.output_saved', node.id, {
         outputFilePath: this.toWorkspaceRelative(runtime.workspacePath, outputFilePath),
+        historyOutputFilePath: historyOutputFilePath
+          ? this.toWorkspaceRelative(runtime.workspacePath, historyOutputFilePath)
+          : undefined,
+        attempt,
         completedAt,
       });
 
@@ -962,11 +997,13 @@ export class WorkflowEngine {
     runId: string,
     startedAt: string,
     completedAt: string,
-    result: AgentResult
+    result: AgentResult,
+    attempt?: number
   ): SaveNodeOutputParams {
     return {
       runId,
       nodeId: node.id,
+      attempt,
       runner: node.data.runner ?? 'codex',
       model: node.data.model,
       status: 'completed',

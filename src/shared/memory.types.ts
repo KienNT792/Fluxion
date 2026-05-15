@@ -5,7 +5,7 @@ import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types';
 /**
  * Tiered storage levels inside .fluxion/memory/.
  * - GLOBAL:     global-context.md — Pinned rules, never pruned.
- * - SHORT_TERM: short-term/{nodeId}.md — Raw output of recent nodes. Pruned after workflow completes.
+ * - SHORT_TERM: short-term/{workflowId}/{nodeId}.md plus .history/ attempts.
  * - LONG_TERM:  long-term/index.md — Summarised history across sessions.
  */
 export enum MemoryTier {
@@ -44,6 +44,7 @@ export interface FrontmatterMetadataV2 {
   schemaVersion: '2.0';
   nodeId: NodeId;
   runId: string;
+  attempt?: number;
   runner: RunnerId | string;
   model: ModelId;
   status: 'completed';
@@ -72,6 +73,7 @@ export interface NodeMemoryOutput {
 export interface SaveNodeOutputParams {
   runId: string;
   nodeId: NodeId;
+  attempt?: number;
   runner: RunnerId | string;
   model: ModelId;
   status: 'completed';
@@ -87,4 +89,25 @@ export interface WorkspaceMemory {
   workspacePath: string;
   /** Raw content of global-context.md (the Pinned context). */
   globalContext: string;
+}
+
+export type MemoryContextSourceType = 'global' | 'short-term' | 'long-term';
+
+export interface MemoryContextSource {
+  type: MemoryContextSourceType;
+  path: string;
+  included: boolean;
+  nodeId?: NodeId;
+  runId?: string;
+  bytes?: number;
+  hash?: string;
+  warning?: string;
+}
+
+export interface CompiledMemoryContext {
+  compiledContext: string;
+  sources: MemoryContextSource[];
+  contextHash: string;
+  contextBytes: number;
+  contextChars: number;
 }

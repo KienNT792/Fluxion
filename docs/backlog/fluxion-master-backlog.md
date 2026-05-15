@@ -37,6 +37,7 @@ Backlog nay dung de dua Fluxion di tu prototype hien tai thanh mot Windows-first
 - P0/P0.1/P1 runtime foundation cho Codex CLI tren Windows da xong.
 - Run-state persistence, artifact gates, V2 memory frontmatter, workflow-level `Auto` / `Manual` execution mode, dynamic Codex capability discovery, readiness onboarding, va local Windows smoke baseline da duoc wire xong tu cac pass truoc.
 - Runtime UX da duoc lam ro them: terminal/log cleanup direction, output preview, stopping state, review CTA/section, duplicate review-action prevention, va retry/rerun attempt separators.
+- Workflow optimization Sprint 2 da add trace JSONL evaluator, context provenance, output attempt lineage, trace-write diagnostics, va process-record cleanup.
 - Codex approval guardrail Phase 1 da xong: `on-request` va `untrusted` bi chan truoc spawn tru khi approval protocol duoc xac nhan `supported`.
 - Codex approval protocol probe Phase 2A da xong va hien ket luan `unsupported`; Phase 2B approval host van bi block.
 - Gap con lai co tac dong lon nhat hien nay la manual desktop smoke runtime UX batch, lint baseline cleanup, provider config validation, richer frontmatter validation, va sau do moi quay lai `Explain with AI`.

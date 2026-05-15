@@ -21,7 +21,13 @@ export class WorkflowTraceStore {
         await fs.appendFile(tracePath, `${JSON.stringify(parsed)}\n`, 'utf8');
       });
     } catch (error) {
-      console.warn('Failed to append workflow trace event:', error);
+      console.warn('Failed to append workflow trace event:', {
+        tracePath,
+        runId: event.runId,
+        type: event.type,
+        nodeId: event.nodeId,
+        error,
+      });
     }
   }
 

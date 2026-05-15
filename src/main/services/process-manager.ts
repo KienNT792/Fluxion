@@ -36,6 +36,10 @@ export class ProcessManager {
     return count;
   }
 
+  public getTrackedCount(): number {
+    return this.processes.size;
+  }
+
   public spawnProcess(nodeId: string, command: string, args: string[], options: SpawnOptions): ChildProcess {
     if (this.getActiveCount() >= this.maxConcurrent) {
       throw new Error(`Process pool limit reached (${this.maxConcurrent}). Cannot spawn process for node ${nodeId}.`);
@@ -43,26 +47,29 @@ export class ProcessManager {
 
     const child = spawn(command, args, { ...options, windowsHide: true });
 
-    if (child.pid) {
-      this.processes.set(child.pid, {
-        pid: child.pid,
+    const pid = child.pid;
+    if (pid) {
+      this.processes.set(pid, {
+        pid,
         nodeId,
         process: child,
         status: 'running',
       });
 
       child.on('exit', () => {
-        const record = this.processes.get(child.pid!);
+        const record = this.processes.get(pid);
         if (record && record.status === 'running') {
           record.status = 'completed';
         }
+        this.processes.delete(pid);
       });
-      
+
       child.on('error', () => {
-        const record = this.processes.get(child.pid!);
+        const record = this.processes.get(pid);
         if (record && record.status === 'running') {
           record.status = 'completed'; // treated as done
         }
+        this.processes.delete(pid);
       });
     }
 
@@ -84,12 +91,21 @@ export class ProcessManager {
         execFile('taskkill', ['/pid', String(pid), '/T'], { windowsHide: true }, (err) => {
           if (!err) {
             record.status = 'killed';
+            this.processes.delete(pid);
+            resolve();
+            return;
+          }
+          if (!this.processes.has(pid)) {
             resolve();
             return;
           }
 
           // If gentle kill fails or doesn't exit within timeout, force kill
           setTimeout(() => {
+            if (!this.processes.has(pid)) {
+              resolve();
+              return;
+            }
             execFile(
               'taskkill',
               ['/pid', String(pid), '/T', '/F'],
@@ -100,6 +116,7 @@ export class ProcessManager {
                 reject(forceErr);
               } else {
                 record.status = 'killed';
+                this.processes.delete(pid);
                 resolve();
               }
             });
@@ -117,6 +134,7 @@ export class ProcessManager {
             // Process already dead
           }
           record.status = 'killed';
+          this.processes.delete(pid);
           resolve();
         }, timeoutMs);
       }

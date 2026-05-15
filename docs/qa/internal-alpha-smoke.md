@@ -37,6 +37,11 @@ work.
 - Create a failing node, run it, then retry from that node.
 - Run a workflow with a human-review checkpoint, then approve, rerun, and reject from the review UI.
 - Confirm output previews and output file actions open, reveal, and copy the expected path.
+- After a completed run, inspect `.fluxion/runs/<runId>.trace.jsonl` and confirm it includes
+  `workflow.started`, `node.context_compiled` with `sources`, `node.output_saved` with attempt
+  lineage, and a terminal workflow event.
+- Run `npm run eval:workflow -- --workspace <path> --run <runId>` against the trace and confirm it
+  returns `ok: true`.
 
 ## Context And Settings
 

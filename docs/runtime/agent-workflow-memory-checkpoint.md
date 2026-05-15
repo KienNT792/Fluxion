@@ -109,11 +109,11 @@ Recommended memory layers for Fluxion:
 | Layer | Role | Current Fluxion Equivalent | Notes |
 | --- | --- | --- | --- |
 | Runtime state | Exact run/node state for resume, retry, review, and status | `.fluxion/runs/<runId>.json` | Must remain exact, structured, and schema-versioned. |
-| Short-term memory | Recent node outputs and immediate workflow context | `.fluxion/memory/short-term/<workflowId>/<nodeId>.md` | Currently overwritten by node ID; useful but not lineage-complete. |
+| Short-term memory | Recent node outputs and immediate workflow context | `.fluxion/memory/short-term/<workflowId>/<nodeId>.md` plus `.history/<runId>/<nodeId>/attempt-<n>.md` | Latest path remains compatibility path; history preserves rerun/review attempts. |
 | Global workspace context | Durable project rules and high-level context | `.fluxion/memory/global-context.md` | Good anchor for project-level context. |
 | Long-term memory | Summaries, repeated findings, durable lessons | `.fluxion/memory/long-term/index.md` if present | Currently optional and not actively managed. |
 | Workflow memory | Reusable procedural patterns from past successful workflows | Not implemented | Candidate for future AWM-style routine extraction. |
-| Trace memory | Structured execution record for debugging/evals | Partial via terminal logs and run state | Needs structured trace events. |
+| Trace memory | Structured execution record for debugging/evals | `.fluxion/runs/<runId>.trace.jsonl` | Schema v1 trace now records workflow/node lifecycle, process telemetry, context provenance, and output lineage. |
 
 ### Session Memory Strategies
 
@@ -316,38 +316,68 @@ Checks:
 | DAG lifecycle | 4/5 | Topological scheduling, parallel batches, retry-from-node, halt-on-failure are implemented. |
 | Node I/O contract | 4/5 | `requires` and `produces` artifact gates exist and validate workspace-relative paths. |
 | Run state | 4/5 | `.fluxion/runs/<runId>.json` tracks node attempts, status, review, exit code, artifacts. |
-| Short-term memory | 3/5 | Upstream output injection works, but output is stored by workflow/node path and lacks lineage history. |
+| Short-term memory | 3.5/5 | Upstream output injection works; latest path is stable and attempt history is now retained. |
 | Long-term memory | 1.5/5 | Optional `long-term/index.md` is read but no lifecycle manages it. |
 | Review lifecycle | 3.5/5 | Manual mode and node review gates work; restart recovery for paused review is not implemented. |
 | Process lifecycle | 3.5/5 | Child process spawn, stdout/stderr streaming, and Windows process-tree abort exist. |
-| Process telemetry | 1/5 | No peak RAM, CPU time, token/cost, timeout, or process heartbeat telemetry. |
+| Process telemetry | 3/5 | PID, display command, start/end, duration, exit code, abort reason, and stdout/stderr bytes are traced; peak RAM, CPU, token/cost, timeout, and heartbeat remain future work. |
 | Renderer RAM control | 3/5 | Terminal logs are capped at 1000 entries per node. |
-| Observability | 3/5 | Terminal logs and run state exist; no structured trace model yet. |
-| Eval readiness | 1.5/5 | No first-class dataset, grader, trace scoring, or regression eval harness. |
-| Memory safety | 2/5 | Raw memory paths are stable, but no poisoning, freshness, conflict, or provenance controls beyond frontmatter. |
+| Observability | 4/5 | Terminal logs, run state, trace JSONL, process telemetry, context provenance, and output lineage exist. |
+| Eval readiness | 2.5/5 | A deterministic local trace evaluator exists; datasets/model graders are still future work. |
+| Memory safety | 2.5/5 | Context sources are traced, but poisoning, freshness, conflict, and promotion controls remain future work. |
 
 ## Key Gaps
 
-### Structured Trace Gap
+### Structured Trace Baseline
 
-Current logs are useful for human inspection but not enough for systematic eval. Fluxion should eventually write a structured trace per run.
+Fluxion writes one append-only JSONL trace per run:
 
-Candidate trace events:
+```text
+.fluxion/runs/<runId>.trace.jsonl
+```
+
+Event shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "runId": "run-id",
+  "workflowId": "workflow-id",
+  "nodeId": "node-id",
+  "type": "node.context_compiled",
+  "timestamp": "2026-05-10T00:00:00.000Z",
+  "data": {}
+}
+```
+
+Current trace events:
 
 - `workflow.started`
+- `workflow.completed`
+- `workflow.failed`
+- `workflow.aborted`
+- `workflow.rejected`
 - `node.ready`
+- `node.requires_validated`
+- `node.produces_snapshot`
+- `node.running`
 - `node.context_compiled`
+- `node.execution_started`
+- `node.execution_completed`
 - `node.process_spawned`
-- `node.stdout`
-- `node.stderr`
 - `node.process_exited`
-- `node.artifact_validated`
+- `node.produces_validated`
 - `node.output_saved`
 - `node.review_requested`
 - `node.review_approved`
 - `node.review_rejected`
 - `node.rerun_requested`
-- `workflow.completed`
+- `node.failed`
+- `node.aborted`
+
+`node.context_compiled.data` includes `previousNodeIds`, `contextBytes`, `contextChars`, `contextHash`, and `sources`. Each source has `type`, `path`, `included`, and optional `nodeId`, `runId`, `bytes`, `hash`, and `warning`.
+
+`node.output_saved.data` includes the compatibility output path, the attempt number, and the attempt history path when available.
 
 ### Process Telemetry Gap
 
@@ -409,7 +439,7 @@ Trajectory eval examples:
 
 ## Recommended Update Roadmap
 
-### P1: Structured Runtime Trace
+### P1: Structured Runtime Trace [DONE]
 
 Add an append-only trace file:
 
@@ -481,7 +511,7 @@ Candidate entry:
 }
 ```
 
-### P4: Memory Injection Report
+### P4: Memory Injection Report [BASELINE DONE]
 
 For each node, persist which memory/context sources were injected:
 
@@ -491,36 +521,38 @@ For each node, persist which memory/context sources were injected:
   "contextSources": [
     {
       "type": "global",
-      "path": ".fluxion/memory/global-context.md"
+      "path": ".fluxion/memory/global-context.md",
+      "included": true
     },
     {
-      "type": "upstream-output",
+      "type": "short-term",
       "nodeId": "node-a",
-      "path": ".fluxion/memory/short-term/workflow/node-a.md"
+      "path": ".fluxion/memory/short-term/workflow/node-a.md",
+      "included": true
     }
   ],
   "compiledContextHash": "sha256..."
 }
 ```
 
-### P5: Eval Harness
+### P5: Eval Harness [BASELINE DONE]
 
 Add a local eval runner for saved workflows and traces.
 
-Candidate command:
+Current deterministic command:
 
 ```powershell
-npm run eval:workflow -- --workflow <id> --dataset <path>
+npm run eval:workflow -- --workspace <path> --run <runId>
 ```
 
 Initial graders can be deterministic:
 
-- graph validation
-- required artifact presence
-- produced artifact freshness
-- expected review gates
-- no workspace escape
-- run-state transition consistency
+- workflow start/end consistency
+- node start/end consistency
+- process spawn/exit consistency
+- artifact validation before output save
+- review requested before approve/reject
+- no events after terminal workflow final
 
 Model graders can come later.
 

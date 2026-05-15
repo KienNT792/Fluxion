@@ -347,6 +347,44 @@ describe('WorkflowEngine', () => {
           event.data?.stdoutBytes === 12
       )
     ).toBe(true);
+    expect(
+      trace.find((event) => event.nodeId === 'node-b' && event.type === 'node.context_compiled')
+    ).toMatchObject({
+      data: {
+        contextBytes: expect.any(Number),
+        contextChars: expect.any(Number),
+        contextHash: expect.any(String),
+        sources: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'short-term',
+            path: '.fluxion/memory/short-term/workflow-1/node-a.md',
+            included: true,
+            nodeId: 'node-a',
+            runId: runState.runId,
+            bytes: expect.any(Number),
+            hash: expect.any(String),
+          }),
+        ]),
+      },
+    });
+    expect(
+      trace.find((event) => event.nodeId === 'node-a' && event.type === 'node.output_saved')
+    ).toMatchObject({
+      data: {
+        outputFilePath: '.fluxion/memory/short-term/workflow-1/node-a.md',
+        historyOutputFilePath: `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
+        attempt: 1,
+      },
+    });
+    const memoryContextReady = sender.events.find(
+      (event) =>
+        event.channel === IpcChannels.MEMORY_CONTEXT_READY &&
+        (event.payload as { nodeId?: string }).nodeId === 'node-b'
+    );
+    expect(memoryContextReady?.payload).toEqual({
+      nodeId: 'node-b',
+      compiledContext: expect.any(String),
+    });
   });
 
   it('tracks currentNodeIds for parallel nodes while the batch is running', async () => {
@@ -765,6 +803,18 @@ describe('WorkflowEngine', () => {
       'node-a.md'
     );
     expect(await readFile(outputPath, 'utf8')).toContain('First review output');
+    const attemptOnePath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      '.history',
+      runState.runId,
+      'node-a',
+      'attempt-1.md'
+    );
+    expect(await readFile(attemptOnePath, 'utf8')).toContain('First review output');
 
     await engine.rerunReviewNode(reviewAction(runState.runId, 'node-a'));
 
@@ -774,6 +824,31 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.attempts).toBe(2);
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-a']);
     expect(await readFile(outputPath, 'utf8')).toContain('Second review output');
+    const attemptTwoPath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      '.history',
+      runState.runId,
+      'node-a',
+      'attempt-2.md'
+    );
+    expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second review output');
+    const trace = await readTrace(workspacePath, runState.runId);
+    expect(
+      trace.find(
+        (event) =>
+          event.nodeId === 'node-a' &&
+          event.type === 'node.output_saved' &&
+          event.data?.attempt === 2
+      )
+    ).toMatchObject({
+      data: {
+        historyOutputFilePath: `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-2.md`,
+      },
+    });
   });
 
   it('pauses every completed node in manual execution mode and resumes only after approval', async () => {

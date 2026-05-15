@@ -237,7 +237,7 @@ Ket qua mong muon:
 - Trace write failures va process record lifecycle co diagnostic/hardening toi thieu.
 - Existing `.fluxion/runs/<runId>.json`, IPC renderer/preload, va UI trace viewer khong nam trong scope.
 
-### S2-000 Sprint 1 checkpoint and backlog hygiene [READY]
+### S2-000 Sprint 1 checkpoint and backlog hygiene [DONE]
 
 Priority: `P1`
 
@@ -252,12 +252,12 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Checkpoint doc reflect actual trace schema version and event names.
-- [ ] Backlog khong con mark `FX-WO-009` blocked by completed work.
-- [ ] Runtime smoke checklist co buoc inspect `.trace.jsonl`.
-- [ ] Khong thay doi runtime behavior.
+- [x] Checkpoint doc reflect actual trace schema version and event names.
+- [x] Backlog khong con mark `FX-WO-009` blocked by completed work.
+- [x] Runtime smoke checklist co buoc inspect `.trace.jsonl`.
+- [x] Khong thay doi runtime behavior.
 
-### FX-WO-006 Add memory source report for compiled context [READY]
+### FX-WO-006 Add memory source report for compiled context [DONE]
 
 Priority: `P1`
 
@@ -274,11 +274,11 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Global context source duoc listed.
-- [ ] Upstream node output source duoc listed voi nodeId/path.
-- [ ] Missing optional long-term source khong fail.
-- [ ] Context hash stable cho cung content.
-- [ ] Existing `MEMORY_CONTEXT_READY` IPC van hoat dong.
+- [x] Global context source duoc listed.
+- [x] Upstream node output source duoc listed voi nodeId/path.
+- [x] Missing optional long-term source khong fail.
+- [x] Context hash stable cho cung content.
+- [x] Existing `MEMORY_CONTEXT_READY` IPC van hoat dong.
 
 Files likely touched:
 
@@ -286,7 +286,7 @@ Files likely touched:
 - `src/main/services/workflow-engine.ts`
 - `src/main/test/memory-manager.test.ts`
 
-### FX-WO-007 Preserve output lineage across attempts [DISCOVERY]
+### FX-WO-007 Preserve output lineage across attempts [DONE]
 
 Priority: `P1`
 
@@ -313,11 +313,11 @@ or:
 
 Acceptance:
 
-- [ ] Existing latest path remains available to downstream context.
-- [ ] Attempt history file is written for every completed/paused attempt.
-- [ ] Review rerun keeps previous output available.
-- [ ] UI can still preview latest output without changes.
-- [ ] Trace/run evidence can identify which attempt produced which output file.
+- [x] Existing latest path remains available to downstream context.
+- [x] Attempt history file is written for every completed/paused attempt.
+- [x] Review rerun keeps previous output available.
+- [x] UI can still preview latest output without changes.
+- [x] Trace/run evidence can identify which attempt produced which output file.
 
 Files likely touched:
 
@@ -326,7 +326,7 @@ Files likely touched:
 - `src/main/test/workflow-engine.test.ts`
 - `src/main/test/memory-manager.test.ts`
 
-### FX-WO-009 Add local workflow trace evaluator [READY]
+### FX-WO-009 Add local workflow trace evaluator [DONE]
 
 Priority: `P2`
 
@@ -351,10 +351,10 @@ npm run eval:workflow -- --workspace <path> --run <runId>
 
 Acceptance:
 
-- [ ] Eval returns pass/fail plus JSON summary.
-- [ ] Bad/missing event order is reported with runId/nodeId.
-- [ ] Script works on Windows PowerShell.
-- [ ] No model call required.
+- [x] Eval returns pass/fail plus JSON summary.
+- [x] Bad/missing event order is reported with runId/nodeId.
+- [x] Script works on Windows PowerShell.
+- [x] No model call required.
 
 Files likely touched:
 
@@ -362,7 +362,7 @@ Files likely touched:
 - `package.json`
 - `src/core/test` or script tests if pattern exists
 
-### FX-WO-013 Trace health diagnostics and process cleanup hardening [READY]
+### FX-WO-013 Trace health diagnostics and process cleanup hardening [DONE]
 
 Priority: `P1`
 
@@ -382,10 +382,10 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Trace append failure still does not fail workflow execution.
-- [ ] Trace warning includes enough run/path/event context for diagnosis.
-- [ ] Completed/error process records do not accumulate indefinitely in normal runs.
-- [ ] Abort and `killAll()` behavior remain Windows-safe.
+- [x] Trace append failure still does not fail workflow execution.
+- [x] Trace warning includes enough run/path/event context for diagnosis.
+- [x] Completed/error process records do not accumulate indefinitely in normal runs.
+- [x] Abort and `killAll()` behavior remain Windows-safe.
 
 Files likely touched:
 
@@ -498,11 +498,11 @@ Acceptance:
 | FX-WO-003 Codex process telemetry counters | P0 | DONE | 1 |
 | FX-WO-004 Persist process telemetry into trace | P1 | DONE | 1 |
 | FX-WO-005 Trace smoke assertions | P1 | DONE | 1 |
-| S2-000 Sprint 1 checkpoint/backlog hygiene | P1 | READY | 2 |
-| FX-WO-006 Memory source report | P1 | READY | 2 |
-| FX-WO-007 Output lineage across attempts | P1 | DISCOVERY | 2 |
-| FX-WO-009 Local workflow trace evaluator | P2 | READY | 2 |
-| FX-WO-013 Trace health diagnostics and process cleanup | P1 | READY | 2 |
+| S2-000 Sprint 1 checkpoint/backlog hygiene | P1 | DONE | 2 |
+| FX-WO-006 Memory source report | P1 | DONE | 2 |
+| FX-WO-007 Output lineage across attempts | P1 | DONE | 2 |
+| FX-WO-009 Local workflow trace evaluator | P2 | DONE | 2 |
+| FX-WO-013 Trace health diagnostics and process cleanup | P1 | DONE | 2 |
 | FX-WO-008 Memory index schema | P2 | BLOCKED | 3 |
 | FX-WO-010 Node rubric markdown template | P2 | READY | 3 |
 | FX-WO-011 Paused review recovery design | P1 | DISCOVERY | 4 |
@@ -596,7 +596,7 @@ npm test -- src/main/test/workflow-engine.test.ts src/main/test/codex-cli-runner
 Suggested verification:
 
 ```powershell
-npm test -- src/main/test/memory-manager.test.ts src/main/test/workflow-engine.test.ts src/main/test/workflow-trace-store.test.ts src/main/test/codex-cli-runner.test.ts
+npm test -- src/main/test/memory-manager.test.ts src/main/test/workflow-engine.test.ts src/main/test/workflow-trace-store.test.ts src/main/test/codex-cli-runner.test.ts src/main/test/process-manager.test.ts src/main/test/workflow-trace-eval.test.ts
 npm run typecheck
 ```
 
