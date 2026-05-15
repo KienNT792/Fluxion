@@ -169,6 +169,7 @@ function createWorkflow(
 
 async function readSingleRunState(workspacePath: string): Promise<{
   runId: string
+  flowContextId?: string
   status: string
   executionMode: 'auto' | 'manual'
   currentNodeIds: string[]
@@ -190,6 +191,7 @@ async function readSingleRunState(workspacePath: string): Promise<{
   const fileName = files.find((file) => file.endsWith('.json'))!
   return JSON.parse(await readFile(join(runsDir, fileName), 'utf8')) as {
     runId: string
+    flowContextId?: string
     status: string
     executionMode: 'auto' | 'manual'
     currentNodeIds: string[]
@@ -304,6 +306,7 @@ describe('WorkflowEngine', () => {
 
     const runState = await readSingleRunState(workspacePath)
     expect(runState.status).toBe('completed')
+    expect(runState.flowContextId).toBe(runState.runId)
     expect(runState.currentNodeIds).toEqual([])
     expect(runState.nodes['node-a']?.status).toBe('completed')
     expect(runState.nodes['node-b']?.status).toBe('completed')
@@ -322,6 +325,7 @@ describe('WorkflowEngine', () => {
     })
 
     const trace = await readTrace(workspacePath, runState.runId)
+    expect(trace.every((event) => event.flowContextId === runState.flowContextId)).toBe(true)
     const eventKeys = traceKeys(trace)
     expect(eventKeys[0]).toBe('workflow:workflow.started')
     expect(eventKeys.at(-1)).toBe('workflow:workflow.completed')

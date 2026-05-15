@@ -59,6 +59,7 @@ interface WorkflowRuntime {
   workspacePath: string
   sender: WorkflowEventSender
   runId: string
+  flowContextId: string
   startTime: number
   executionNodeIds: Set<NodeId>
   nodes: Map<NodeId, WorkflowNode>
@@ -261,7 +262,8 @@ export class WorkflowEngine {
       sender,
       runState.runId,
       this.parseRunStartTime(runState),
-      executionNodeIds
+      executionNodeIds,
+      runState.flowContextId ?? runState.runId
     )
 
     const missingWorkflowNodeIds = [...executionNodeIds].filter(
@@ -467,6 +469,7 @@ export class WorkflowEngine {
     const event: WorkflowTraceEvent = {
       schemaVersion: 1,
       runId: runtime.runId,
+      flowContextId: runtime.flowContextId,
       workflowId: runtime.workflow.id,
       type,
       timestamp: new Date().toISOString()
@@ -583,7 +586,8 @@ export class WorkflowEngine {
     sender: WorkflowEventSender,
     runId: string,
     startTime: number,
-    executionNodeIds: Set<NodeId>
+    executionNodeIds: Set<NodeId>,
+    flowContextId = runId
   ): WorkflowRuntime {
     const nodes = new Map<NodeId, WorkflowNode>()
     workflow.nodes
@@ -619,6 +623,7 @@ export class WorkflowEngine {
       workspacePath,
       sender,
       runId,
+      flowContextId,
       startTime,
       executionNodeIds,
       nodes,

@@ -36,6 +36,7 @@ export interface NodeRunState {
 export interface WorkflowRunState {
   schemaVersion: 1
   runId: string
+  flowContextId?: string
   workflowId: string
   executionMode: ExecutionMode
   status: RunStatus

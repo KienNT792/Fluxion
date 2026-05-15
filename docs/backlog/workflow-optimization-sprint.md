@@ -549,7 +549,7 @@ Ket qua mong muon:
 - Prompt assembly co duong mo cho provider can stable prefix cache, nhung Codex CLI van giu behavior mac dinh.
 - Secrets khong duoc persist trong context snapshot hoac delta.
 
-### FX-WO-014 Write flow context ADR and contracts [READY]
+### FX-WO-014 Write flow context ADR and contracts [DONE]
 
 Priority: `P0`
 
@@ -566,20 +566,22 @@ Deliverable:
   - `commit-safe state`
 - Ghi ro non-goal: sprint nay khong bao toan shared shell state, runspace, `cwd`, env vars, hay background process giua nodes.
 - Ghi ro Codex CLI la runtime mac dinh; OpenAI Responses la provider path optional.
+- Reference ADR: [`docs/runtime/flow-owned-context.md`](../runtime/flow-owned-context.md).
+- ADR nay la terminology source of truth cho cac item Sprint 5-7 lien quan flow-owned context.
 
 Acceptance:
 
-- [ ] ADR neu ro vi sao flow so huu context va node chi la operation.
-- [ ] ADR co migration path tu `flowContextId = runId` sang context id rieng neu can.
-- [ ] ADR co rollback strategy de bo qua context store moi ma workflow cu van chay.
-- [ ] ADR link den cac backlog item Sprint 5-7.
+- [x] ADR neu ro vi sao flow so huu context va node chi la operation.
+- [x] ADR co migration path tu `flowContextId = runId` sang context id rieng neu can.
+- [x] ADR co rollback strategy de bo qua context store moi ma workflow cu van chay.
+- [x] ADR link den cac backlog item Sprint 5-7.
 
 Files likely touched:
 
 - `docs/runtime/flow-owned-context.md`
 - `docs/backlog/workflow-optimization-sprint.md`
 
-### FX-WO-015 Add flowContextId to run state and trace [READY]
+### FX-WO-015 Add flowContextId to run state and trace [DONE]
 
 Priority: `P0`
 
@@ -595,11 +597,11 @@ Deliverable:
 
 Acceptance:
 
-- [ ] New run state file contains `flowContextId`.
-- [ ] Old run state without `flowContextId` still parses.
-- [ ] Trace for new run can be correlated by `runId` va `flowContextId`.
-- [ ] Tests cover schema compatibility and fallback behavior.
-- [ ] Renderer contracts khong bi mo rong tru khi can cho debug/display.
+- [x] New run state file contains `flowContextId`.
+- [x] Old run state without `flowContextId` still parses.
+- [x] Trace for new run can be correlated by `runId` va `flowContextId`.
+- [x] Tests cover schema compatibility and fallback behavior.
+- [x] Renderer contracts khong bi mo rong tru khi can cho debug/display.
 
 Files likely touched:
 
@@ -982,8 +984,8 @@ Files likely touched:
 | FX-WO-010 Node rubric markdown template | P2 | READY | 3 |
 | FX-WO-011 Paused review recovery design | P1 | DISCOVERY | 4 |
 | FX-WO-012 Memory promotion guardrails | P3 | READY | 4 |
-| FX-WO-014 Flow context ADR and contracts | P0 | READY | 5 |
-| FX-WO-015 flowContextId in run state and trace | P0 | READY | 5 |
+| FX-WO-014 Flow context ADR and contracts | P0 | DONE | 5 |
+| FX-WO-015 flowContextId in run state and trace | P0 | DONE | 5 |
 | FX-WO-016 Append-only flow context store | P0 | READY | 5 |
 | FX-WO-017 ContextSnapshot and ContextDelta contracts | P0 | READY | 5 |
 | FX-WO-018 Cache-friendly prompt layout guard | P1 | READY | 5 |

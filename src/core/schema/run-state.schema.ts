@@ -37,6 +37,7 @@ export const NodeRunStateSchema = z.object({
 export const WorkflowRunStateSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().min(1),
+  flowContextId: z.string().min(1).optional(),
   workflowId: z.string().min(1),
   executionMode: ExecutionModeSchema.default('auto'),
   status: RunStatusSchema,

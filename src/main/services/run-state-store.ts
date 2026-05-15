@@ -64,6 +64,17 @@ function isWorkflowPendingReview(state: WorkflowRunState): boolean {
   return state.awaitingReviewNodeIds.length > 0
 }
 
+function resolveFlowContextId(state: WorkflowRunState): string {
+  return state.flowContextId ?? state.runId
+}
+
+function withFlowContextFallback(state: WorkflowRunState): WorkflowRunState {
+  return {
+    ...state,
+    flowContextId: resolveFlowContextId(state)
+  }
+}
+
 export class RunStateStore {
   private readonly writeQueues = new Map<string, Promise<unknown>>()
   private readonly states = new Map<string, WorkflowRunState>()
@@ -91,6 +102,7 @@ export class RunStateStore {
     const state = WorkflowRunStateSchema.parse({
       schemaVersion: 1,
       runId: options.runId,
+      flowContextId: options.runId,
       workflowId: options.workflow.id,
       executionMode: options.executionMode ?? options.workflow.executionMode ?? 'auto',
       status: 'running',
@@ -102,9 +114,10 @@ export class RunStateStore {
       nodes
     })
 
-    this.states.set(this.key(options.workspacePath, options.runId), state)
-    await this.writeState(options.workspacePath, state)
-    return state
+    const normalizedState = withFlowContextFallback(state)
+    this.states.set(this.key(options.workspacePath, options.runId), normalizedState)
+    await this.writeState(options.workspacePath, normalizedState)
+    return normalizedState
   }
 
   public async readRun(workspacePath: string, runId: string): Promise<WorkflowRunState> {
@@ -114,7 +127,9 @@ export class RunStateStore {
     }
 
     const content = await fs.readFile(runFilePath(workspacePath, runId), 'utf8')
-    const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+    const state = withFlowContextFallback(
+      WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+    )
     this.states.set(this.key(workspacePath, runId), state)
     return structuredClone(state)
   }
@@ -144,7 +159,9 @@ export class RunStateStore {
       const filePath = path.join(directory, entry.name)
       try {
         const content = await fs.readFile(filePath, 'utf8')
-        const state = WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+        const state = withFlowContextFallback(
+          WorkflowRunStateSchema.parse(JSON.parse(content) as unknown)
+        )
         this.states.set(this.key(resolvedWorkspacePath, state.runId), state)
 
         if (state.status === 'awaiting_review' && state.awaitingReviewNodeIds.length > 0) {
@@ -365,7 +382,7 @@ export class RunStateStore {
       updated.currentNodeIds = sortNodeIds(updated.currentNodeIds)
       updated.awaitingReviewNodeIds = sortNodeIds(updated.awaitingReviewNodeIds)
       updated.updatedAt = nowIso()
-      const parsed = WorkflowRunStateSchema.parse(updated)
+      const parsed = withFlowContextFallback(WorkflowRunStateSchema.parse(updated))
       this.states.set(mapKey, parsed)
       await this.writeState(workspacePath, parsed)
       return structuredClone(parsed)
@@ -388,7 +405,7 @@ export class RunStateStore {
   }
 
   private async writeState(workspacePath: string, state: WorkflowRunState): Promise<void> {
-    const parsed = WorkflowRunStateSchema.parse(state)
+    const parsed = withFlowContextFallback(WorkflowRunStateSchema.parse(state))
     const filePath = runFilePath(workspacePath, parsed.runId)
     const directory = path.dirname(filePath)
     const tempPath = `${filePath}.tmp`

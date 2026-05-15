@@ -30,6 +30,7 @@ export interface WorkflowTraceEvent<
 > {
   schemaVersion: 1
   runId: string
+  flowContextId?: string
   workflowId: string
   nodeId?: string
   type: WorkflowTraceEventType

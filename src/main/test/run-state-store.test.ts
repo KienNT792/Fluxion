@@ -66,6 +66,7 @@ describe('RunStateStore', () => {
 
     const state = await store.readRun(workspacePath, 'run-1')
     expect(state.status).toBe('running')
+    expect(state.flowContextId).toBe('run-1')
     expect(state.executionMode).toBe('auto')
     expect(Object.keys(state.nodes)).toEqual(['node-a'])
     expect(state.nodes['node-a']).toMatchObject({
@@ -77,6 +78,48 @@ describe('RunStateStore', () => {
       outputArtifactPaths: []
     })
     expect(state.awaitingReviewNodeIds).toEqual([])
+
+    const persisted = (await readRunJson(workspacePath)) as { flowContextId?: string }
+    expect(persisted.flowContextId).toBe('run-1')
+  })
+
+  it('resolves legacy runs without flowContextId by falling back to runId', async () => {
+    const store = new RunStateStore()
+    const runsDir = join(workspacePath, '.fluxion', 'runs')
+    await mkdir(runsDir, { recursive: true })
+    await writeFile(
+      join(runsDir, 'run-legacy.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          runId: 'run-legacy',
+          workflowId: 'workflow-1',
+          executionMode: 'auto',
+          status: 'awaiting_review',
+          updatedAt: '2026-05-15T00:00:00.000Z',
+          currentNodeIds: [],
+          awaitingReviewNodeIds: ['node-a'],
+          nodes: {
+            'node-a': {
+              nodeId: 'node-a',
+              runner: 'codex',
+              status: 'awaiting_review',
+              attempts: 1,
+              outputArtifactPaths: []
+            }
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf8'
+    )
+
+    const state = await store.readRun(workspacePath, 'run-legacy')
+    expect(state.flowContextId).toBe('run-legacy')
+
+    const awaitingReviewRuns = await store.listAwaitingReviewRuns(workspacePath)
+    expect(awaitingReviewRuns[0]?.flowContextId).toBe('run-legacy')
   })
 
   it('preserves concurrent updates for parallel nodes', async () => {

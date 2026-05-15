@@ -9,6 +9,7 @@ function createEvent(overrides: Partial<WorkflowTraceEvent> = {}): WorkflowTrace
   const event: WorkflowTraceEvent = {
     schemaVersion: 1,
     runId: 'run-1',
+    flowContextId: 'run-1',
     workflowId: 'workflow-1',
     type: 'node.running',
     timestamp: '2026-05-10T00:00:00.000Z',
@@ -47,12 +48,19 @@ describe('WorkflowTraceStore', () => {
     expect(events[0]).toMatchObject({
       schemaVersion: 1,
       runId: 'run-1',
+      flowContextId: 'run-1',
       workflowId: 'workflow-1'
     })
   })
 
   it('validates trace event schema', () => {
     expect(() => WorkflowTraceEventSchema.parse(createEvent())).not.toThrow()
+    expect(() =>
+      WorkflowTraceEventSchema.parse({
+        ...createEvent(),
+        flowContextId: undefined
+      })
+    ).not.toThrow()
     expect(() =>
       WorkflowTraceEventSchema.parse({
         ...createEvent(),

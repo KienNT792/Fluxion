@@ -6,6 +6,7 @@ describe('WorkflowRunStateSchema', () => {
     const parsed = WorkflowRunStateSchema.parse({
       schemaVersion: 1,
       runId: 'run-1',
+      flowContextId: 'run-1',
       workflowId: 'workflow-1',
       executionMode: 'auto',
       status: 'pending',
@@ -26,10 +27,28 @@ describe('WorkflowRunStateSchema', () => {
     })
 
     expect(parsed.status).toBe('pending')
+    expect(parsed.flowContextId).toBe('run-1')
     expect(parsed.executionMode).toBe('auto')
     expect(parsed.nodes['node-a']?.runner).toBe('codex')
     expect(parsed.nodes['node-a']?.runnerSessionId).toBe('session-123')
     expect(parsed.nodes['node-a']?.model).toBe('gpt-5.5')
+  })
+
+  it('accepts a legacy run state without flowContextId', () => {
+    const parsed = WorkflowRunStateSchema.parse({
+      schemaVersion: 1,
+      runId: 'run-legacy',
+      workflowId: 'workflow-1',
+      executionMode: 'auto',
+      status: 'pending',
+      updatedAt: '2026-05-05T00:00:00.000Z',
+      currentNodeIds: [],
+      awaitingReviewNodeIds: [],
+      nodes: {}
+    })
+
+    expect(parsed.runId).toBe('run-legacy')
+    expect(parsed.flowContextId).toBeUndefined()
   })
 
   it('rejects an unsupported status', () => {
