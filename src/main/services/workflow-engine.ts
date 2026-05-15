@@ -17,6 +17,7 @@ import {
 import { CodexCliAdapter } from '../adapters/codex-cli.adapter'
 import { IAgentAdapter } from '../adapters/base.adapter'
 import { artifactGateService, ArtifactGateService, ArtifactSnapshot } from './artifact-gate-service'
+import { flowContextStore, FlowContextStore } from './flow-context-store'
 import { memoryManager, MemoryManager } from './memory-manager'
 import { InitializeRunOptions, runStateStore, RunStateStore } from './run-state-store'
 import { workflowTraceStore, WorkflowTraceStore } from './workflow-trace-store'
@@ -51,6 +52,7 @@ interface WorkflowEngineDependencies {
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >
+  flowContextStore?: Pick<FlowContextStore, 'getContextPath' | 'initializeRunContext'>
   traceStore?: Pick<WorkflowTraceStore, 'append'>
 }
 
@@ -139,6 +141,10 @@ export class WorkflowEngine {
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >
+  private readonly flowContextStore: Pick<
+    FlowContextStore,
+    'getContextPath' | 'initializeRunContext'
+  >
   private readonly traceStore: Pick<WorkflowTraceStore, 'append'>
   private currentRuntime: WorkflowRuntime | null = null
   private continuationPromise: Promise<void> | null = null
@@ -148,6 +154,7 @@ export class WorkflowEngine {
     this.memoryManager = dependencies.memoryManager ?? memoryManager
     this.runStateStore = dependencies.runStateStore ?? runStateStore
     this.artifactGateService = dependencies.artifactGateService ?? artifactGateService
+    this.flowContextStore = dependencies.flowContextStore ?? flowContextStore
     this.traceStore = dependencies.traceStore ?? workflowTraceStore
   }
 
@@ -179,7 +186,7 @@ export class WorkflowEngine {
 
     try {
       await this.memoryManager.initWorkspace(workspacePath)
-      await this.runStateStore.initializeRun({
+      const runState = await this.runStateStore.initializeRun({
         workspacePath,
         workflow,
         executionNodeIds,
@@ -193,7 +200,8 @@ export class WorkflowEngine {
         sender,
         runId,
         startTime,
-        executionNodeIds
+        executionNodeIds,
+        runState.flowContextId ?? runId
       )
       this.currentRuntime = runtime
 
@@ -201,6 +209,19 @@ export class WorkflowEngine {
         executionMode: runtime.executionMode,
         nodeCount: runtime.nodes.size,
         resumeFromNodeId
+      })
+      const flowContext = await this.flowContextStore.initializeRunContext({
+        workspacePath,
+        runId,
+        workflowId: workflow.id,
+        flowContextId: runtime.flowContextId
+      })
+      await this.trace(runtime, 'workflow.context_initialized', undefined, {
+        contextFilePath: this.toWorkspaceRelative(
+          workspacePath,
+          this.flowContextStore.getContextPath(workspacePath, runId)
+        ),
+        version: flowContext.version
       })
 
       await this.continueCurrentRuntime()

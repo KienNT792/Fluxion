@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FlowContextDocument } from '@core'
 import { Workflow } from '@shared'
 import { RunStateStore } from '../services/run-state-store'
 
@@ -40,7 +41,10 @@ function createWorkflow(): Workflow {
 async function readRunJson(workspacePath: string): Promise<unknown> {
   const runsDir = join(workspacePath, '.fluxion', 'runs')
   const files = await readdir(runsDir)
-  const filePath = join(runsDir, files[0]!)
+  const filePath = join(
+    runsDir,
+    files.find((file) => file.endsWith('.json') && !file.endsWith('.context.json'))!
+  )
   return JSON.parse(await readFile(filePath, 'utf8')) as unknown
 }
 
@@ -311,11 +315,33 @@ describe('RunStateStore', () => {
 
     await mkdir(join(workspacePath, '.fluxion', 'runs'), { recursive: true })
     await writeFile(join(workspacePath, '.fluxion', 'runs', 'corrupt.json'), '{', 'utf8')
+    await writeFile(
+      join(workspacePath, '.fluxion', 'runs', 'run-new.context.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        flowContextId: 'run-new',
+        runId: 'run-new',
+        workflowId: 'workflow-1',
+        version: 1,
+        createdAt: '2026-05-15T02:01:00.000Z',
+        updatedAt: '2026-05-15T02:01:00.000Z',
+        latestSnapshot: {
+          memorySourceRefs: [],
+          artifactRefs: [],
+          runStateRef: '.fluxion/runs/run-new.json',
+          providerState: {},
+          semanticSummary: ''
+        },
+        deltas: []
+      } satisfies FlowContextDocument)}\n`,
+      'utf8'
+    )
 
     const runs = await store.listAwaitingReviewRuns(workspacePath)
 
     expect(runs.map((run) => run.runId)).toEqual(['run-new', 'run-old'])
     expect(runs.every((run) => run.status === 'awaiting_review')).toBe(true)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('Skipping invalid run state file:'),
       expect.any(Error)

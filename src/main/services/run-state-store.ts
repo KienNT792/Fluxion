@@ -152,7 +152,11 @@ export class RunStateStore {
 
     const states: WorkflowRunState[] = []
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+      if (
+        !entry.isFile() ||
+        !entry.name.endsWith('.json') ||
+        entry.name.endsWith('.context.json')
+      ) {
         continue
       }
 

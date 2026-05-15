@@ -1,5 +1,6 @@
 export const WORKFLOW_TRACE_EVENT_TYPES = [
   'workflow.started',
+  'workflow.context_initialized',
   'workflow.completed',
   'workflow.failed',
   'workflow.aborted',

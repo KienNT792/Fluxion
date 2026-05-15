@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { WorkflowTraceEvent, WorkflowTraceEventSchema } from '@core'
+import { FlowContextDocument, WorkflowTraceEvent, WorkflowTraceEventSchema } from '@core'
 import {
   AbortReason,
   AgentChunk,
@@ -188,7 +188,7 @@ async function readSingleRunState(workspacePath: string): Promise<{
 }> {
   const runsDir = join(workspacePath, '.fluxion', 'runs')
   const files = await readdir(runsDir)
-  const fileName = files.find((file) => file.endsWith('.json'))!
+  const fileName = files.find((file) => file.endsWith('.json') && !file.endsWith('.context.json'))!
   return JSON.parse(await readFile(join(runsDir, fileName), 'utf8')) as {
     runId: string
     flowContextId?: string
@@ -208,6 +208,13 @@ async function readSingleRunState(workspacePath: string): Promise<{
       }
     >
   }
+}
+
+async function readSingleRunContext(workspacePath: string): Promise<FlowContextDocument> {
+  const runsDir = join(workspacePath, '.fluxion', 'runs')
+  const files = await readdir(runsDir)
+  const fileName = files.find((file) => file.endsWith('.context.json'))!
+  return JSON.parse(await readFile(join(runsDir, fileName), 'utf8')) as FlowContextDocument
 }
 
 async function readTrace(workspacePath: string, runId: string): Promise<WorkflowTraceEvent[]> {
@@ -305,8 +312,12 @@ describe('WorkflowEngine', () => {
     await engine.start(workflow, workspacePath, sender)
 
     const runState = await readSingleRunState(workspacePath)
+    const runContext = await readSingleRunContext(workspacePath)
     expect(runState.status).toBe('completed')
     expect(runState.flowContextId).toBe(runState.runId)
+    expect(runContext.flowContextId).toBe(runState.runId)
+    expect(runContext.latestSnapshot.runStateRef).toBe(`.fluxion/runs/${runState.runId}.json`)
+    expect(runContext.version).toBe(1)
     expect(runState.currentNodeIds).toEqual([])
     expect(runState.nodes['node-a']?.status).toBe('completed')
     expect(runState.nodes['node-b']?.status).toBe('completed')
@@ -331,6 +342,7 @@ describe('WorkflowEngine', () => {
     expect(eventKeys.at(-1)).toBe('workflow:workflow.completed')
     expectTraceOrder(trace, [
       'workflow:workflow.started',
+      'workflow:workflow.context_initialized',
       'node-a:node.ready',
       'node-a:node.running',
       'node-a:node.process_spawned',
@@ -341,6 +353,12 @@ describe('WorkflowEngine', () => {
       'node-b:node.output_saved',
       'workflow:workflow.completed'
     ])
+    expect(trace.find((event) => event.type === 'workflow.context_initialized')).toMatchObject({
+      data: {
+        contextFilePath: `.fluxion/runs/${runState.runId}.context.json`,
+        version: 1
+      }
+    })
     expect(trace.find((event) => event.type === 'node.process_spawned')).toMatchObject({
       nodeId: 'node-a',
       data: {
@@ -394,6 +412,48 @@ describe('WorkflowEngine', () => {
       nodeId: 'node-b',
       compiledContext: expect.any(String)
     })
+  })
+
+  it('fails the workflow when flow context initialization fails', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Node A output'
+      }
+    })
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService(),
+      flowContextStore: {
+        getContextPath(currentWorkspacePath: string, runId: string): string {
+          return join(currentWorkspacePath, '.fluxion', 'runs', `${runId}.context.json`)
+        },
+        async initializeRunContext(): Promise<FlowContextDocument> {
+          throw new Error('Flow context initialization failed.')
+        }
+      }
+    })
+    const sender = new FakeSender()
+    const workflow = createWorkflow([createNode('node-a')])
+
+    await engine.start(workflow, workspacePath, sender)
+
+    const runState = await readSingleRunState(workspacePath)
+    expect(runState.status).toBe('failed')
+    expect(
+      sender.events.find((event) => event.channel === IpcChannels.WORKFLOW_COMPLETED)
+    ).toMatchObject({
+      payload: expect.objectContaining({
+        workflowId: 'workflow-1',
+        success: false,
+        error: 'Flow context initialization failed.'
+      })
+    })
+
+    const trace = await readTrace(workspacePath, runState.runId)
+    expectTraceOrder(trace, ['workflow:workflow.started', 'workflow:workflow.failed'])
+    expect(trace.some((event) => event.type === 'workflow.context_initialized')).toBe(false)
   })
 
   it('tracks currentNodeIds for parallel nodes while the batch is running', async () => {
