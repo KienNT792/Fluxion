@@ -1,10 +1,14 @@
 import { createHash, randomUUID } from 'crypto'
 import * as path from 'path'
 import {
+  ContextArtifactRef,
+  ContextCommitResult,
+  ContextDelta,
   ContextMemorySourceRef,
   ContextSnapshot,
   ContextSnapshotSchema,
   FlowContextDocument,
+  NodeRunState,
   WorkflowRunState,
   WorkflowTraceEvent,
   WorkflowTraceEventType
@@ -62,7 +66,7 @@ interface WorkflowEngineDependencies {
   >
   flowContextStore?: Pick<
     FlowContextStore,
-    'getContextPath' | 'initializeRunContext' | 'readRunContext'
+    'getContextPath' | 'initializeRunContext' | 'readRunContext' | 'commitDelta'
   >
   traceStore?: Pick<WorkflowTraceStore, 'append'>
 }
@@ -91,6 +95,19 @@ type NodeExecutionResult =
   | { nodeId: NodeId; kind: 'awaiting_review' }
   | { nodeId: NodeId; kind: 'failed' }
   | { nodeId: NodeId; kind: 'aborted' }
+
+type ContextCommitState = 'awaiting_review' | 'completed' | 'review_approved'
+
+class ContextCommitFailure extends Error {
+  public constructor(
+    public readonly nodeId: NodeId,
+    public readonly commitState: ContextCommitState,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ContextCommitFailure'
+  }
+}
 
 function buildRunStateRef(runId: string): string {
   return `.fluxion/runs/${runId}.json`
@@ -265,7 +282,7 @@ export class WorkflowEngine {
   >
   private readonly flowContextStore: Pick<
     FlowContextStore,
-    'getContextPath' | 'initializeRunContext' | 'readRunContext'
+    'getContextPath' | 'initializeRunContext' | 'readRunContext' | 'commitDelta'
   >
   private readonly traceStore: Pick<WorkflowTraceStore, 'append'>
   private currentRuntime: WorkflowRuntime | null = null
@@ -431,24 +448,57 @@ export class WorkflowEngine {
       throw new Error(`Node ${payload.nodeId} is not awaiting review.`)
     }
 
-    await this.runStateStore.markReviewApproved(
-      runtime.workspacePath,
-      runtime.runId,
-      payload.nodeId,
-      {
-        comment: payload.comment
-      }
-    )
-    await this.trace(runtime, 'node.review_approved', payload.nodeId, {
-      hasComment: Boolean(payload.comment?.trim()),
-      ...this.getRecoveredReviewTraceData(runtime)
-    })
-    runtime.awaitingReviewNodeIds.delete(payload.nodeId)
-    this.sendNodeStatus(runtime.sender, payload.nodeId, 'completed')
-    this.unlockNeighbors(runtime, payload.nodeId)
+    try {
+      const approvedState = await this.runStateStore.markReviewApproved(
+        runtime.workspacePath,
+        runtime.runId,
+        payload.nodeId,
+        {
+          comment: payload.comment
+        }
+      )
+      await this.trace(runtime, 'node.review_approved', payload.nodeId, {
+        hasComment: Boolean(payload.comment?.trim()),
+        ...this.getRecoveredReviewTraceData(runtime)
+      })
 
-    if (runtime.awaitingReviewNodeIds.size === 0 && !this.isHalted) {
-      await this.continueCurrentRuntime()
+      const nodeState = approvedState.nodes[payload.nodeId]
+      if (!nodeState) {
+        throw new Error(`Approved review node ${payload.nodeId} is missing persisted state.`)
+      }
+
+      const attempt = this.requireAttempt(payload.nodeId, nodeState.attempts)
+      const outputFilePath = this.memoryManager.getNodeOutputPath(
+        runtime.workspacePath,
+        runtime.workflow.id,
+        payload.nodeId
+      )
+      const finalDelta = this.buildFinalContextDelta(
+        runtime,
+        payload.nodeId,
+        attempt,
+        outputFilePath,
+        nodeState,
+        'review_approved'
+      )
+      await this.commitContextDelta(runtime, payload.nodeId, finalDelta, 'review_approved')
+
+      runtime.awaitingReviewNodeIds.delete(payload.nodeId)
+      this.sendNodeStatus(runtime.sender, payload.nodeId, 'completed')
+      this.unlockNeighbors(runtime, payload.nodeId)
+
+      if (runtime.awaitingReviewNodeIds.size === 0 && !this.isHalted) {
+        await this.continueCurrentRuntime()
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown review approval error.'
+      this.sendNodeStatus(runtime.sender, payload.nodeId, 'error', errorMessage)
+      await this.trace(runtime, 'node.failed', payload.nodeId, {
+        error: errorMessage
+      })
+      this.markWorkflowFailed(errorMessage)
+      await this.finalizeRuntime('failed', errorMessage)
     }
   }
 
@@ -656,6 +706,163 @@ export class WorkflowEngine {
       contextHash: createHash('sha256').update(compiledContext, 'utf8').digest('hex'),
       contextBytes: Buffer.byteLength(compiledContext, 'utf8'),
       contextChars: compiledContext.length
+    }
+  }
+
+  private requireAttempt(nodeId: NodeId, attempt?: number): number {
+    if (typeof attempt === 'number' && attempt >= 1) {
+      return attempt
+    }
+
+    throw new Error(`Node ${nodeId} is missing a valid execution attempt count.`)
+  }
+
+  private buildOutputMemoryRef(
+    relativePath: string,
+    nodeId: NodeId,
+    attempt: number
+  ): ContextMemorySourceRef {
+    return {
+      path: relativePath,
+      kind: 'short-term',
+      nodeId,
+      attempt
+    }
+  }
+
+  private buildArtifactRefs(
+    nodeId: NodeId,
+    attempt: number,
+    artifactPaths: string[]
+  ): ContextArtifactRef[] {
+    return artifactPaths.map((artifactPath) => ({
+      path: artifactPath,
+      required: true,
+      kind: 'produced',
+      nodeId,
+      attempt,
+      validated: true
+    }))
+  }
+
+  private buildReviewEvidenceDelta(
+    runtime: WorkflowRuntime,
+    nodeId: NodeId,
+    attempt: number,
+    historyOutputFilePath?: string
+  ): ContextDelta {
+    if (!historyOutputFilePath) {
+      throw new Error(`Node ${nodeId} is missing a history output path for review evidence.`)
+    }
+
+    return {
+      schemaVersion: 1,
+      flowContextId: runtime.flowContextId,
+      runId: runtime.runId,
+      workflowId: runtime.workflow.id,
+      nodeId,
+      attempt,
+      createdAt: new Date().toISOString(),
+      idempotencyKey: `${runtime.runId}:${nodeId}:${attempt}:awaiting_review`,
+      memoryRefsAdded: [
+        this.buildOutputMemoryRef(
+          this.toWorkspaceRelative(runtime.workspacePath, historyOutputFilePath),
+          nodeId,
+          attempt
+        )
+      ],
+      artifactRefsAddedOrValidated: [],
+      runStateUpdates: {
+        runStateRef: buildRunStateRef(runtime.runId),
+        nodeId,
+        status: 'awaiting_review'
+      },
+      providerStateUpdates: {},
+      semanticSummaryUpdate: '',
+      redaction: {
+        policy: 'flow-context-v1',
+        redactedFields: []
+      }
+    }
+  }
+
+  private buildFinalContextDelta(
+    runtime: WorkflowRuntime,
+    nodeId: NodeId,
+    attempt: number,
+    outputFilePath: string,
+    nodeState: NodeRunState,
+    status: Extract<ContextCommitState, 'completed' | 'review_approved'>
+  ): ContextDelta {
+    return {
+      schemaVersion: 1,
+      flowContextId: runtime.flowContextId,
+      runId: runtime.runId,
+      workflowId: runtime.workflow.id,
+      nodeId,
+      attempt,
+      createdAt: new Date().toISOString(),
+      idempotencyKey: `${runtime.runId}:${nodeId}:${attempt}:${status}`,
+      memoryRefsAdded: [
+        this.buildOutputMemoryRef(
+          this.toWorkspaceRelative(runtime.workspacePath, outputFilePath),
+          nodeId,
+          attempt
+        )
+      ],
+      artifactRefsAddedOrValidated: this.buildArtifactRefs(
+        nodeId,
+        attempt,
+        nodeState.outputArtifactPaths
+      ),
+      runStateUpdates: {
+        runStateRef: buildRunStateRef(runtime.runId),
+        nodeId,
+        status: 'completed',
+        outputArtifactPaths: nodeState.outputArtifactPaths
+      },
+      providerStateUpdates: nodeState.runnerSessionId
+        ? { runnerSessionId: nodeState.runnerSessionId }
+        : {},
+      semanticSummaryUpdate: '',
+      redaction: {
+        policy: 'flow-context-v1',
+        redactedFields: []
+      }
+    }
+  }
+
+  private async commitContextDelta(
+    runtime: WorkflowRuntime,
+    nodeId: NodeId,
+    delta: ContextDelta,
+    commitState: ContextCommitState
+  ): Promise<ContextCommitResult> {
+    try {
+      const { commitResult, idempotentReplay } = await this.flowContextStore.commitDelta({
+        workspacePath: runtime.workspacePath,
+        runId: runtime.runId,
+        delta,
+        commitState
+      })
+      await this.trace(runtime, 'node.context_delta_committed', nodeId, {
+        commitState,
+        deltaIdempotencyKey: commitResult.deltaIdempotencyKey,
+        contextVersion: commitResult.version,
+        memoryRefCount: delta.memoryRefsAdded.length,
+        artifactRefCount: delta.artifactRefsAddedOrValidated.length,
+        providerStateKeys: Object.keys(delta.providerStateUpdates).sort(),
+        idempotentReplay
+      })
+      return commitResult
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown flow context commit failure.'
+      throw new ContextCommitFailure(
+        nodeId,
+        commitState,
+        `Flow context commit failed for node ${nodeId} during ${commitState}: ${errorMessage}`
+      )
     }
   }
 
@@ -929,7 +1136,7 @@ export class WorkflowEngine {
         node.id
       )
       const startedAt = runningState.nodes[node.id]?.startedAt ?? new Date().toISOString()
-      const attempt = runningState.nodes[node.id]?.attempts
+      const attempt = this.requireAttempt(node.id, runningState.nodes[node.id]?.attempts)
 
       this.activeNodes.add(node.id)
       this.sendNodeStatus(runtime.sender, node.id, 'running')
@@ -1108,6 +1315,13 @@ export class WorkflowEngine {
             reviewSource
           }
         )
+        const evidenceDelta = this.buildReviewEvidenceDelta(
+          runtime,
+          node.id,
+          attempt,
+          historyOutputFilePath
+        )
+        await this.commitContextDelta(runtime, node.id, evidenceDelta, 'awaiting_review')
         runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
           nodeId: node.id,
           status: 'paused',
@@ -1128,12 +1342,30 @@ export class WorkflowEngine {
         return { nodeId: node.id, kind: 'awaiting_review' }
       }
 
-      await this.runStateStore.markNodeCompleted(runtime.workspacePath, runtime.runId, node.id, {
-        completedAt,
-        exitCode: result.exitCode,
-        runnerSessionId: result.runnerSessionId,
-        outputArtifactPaths: producedPaths
-      })
+      const completedState = await this.runStateStore.markNodeCompleted(
+        runtime.workspacePath,
+        runtime.runId,
+        node.id,
+        {
+          completedAt,
+          exitCode: result.exitCode,
+          runnerSessionId: result.runnerSessionId,
+          outputArtifactPaths: producedPaths
+        }
+      )
+      const nodeState = completedState.nodes[node.id]
+      if (!nodeState) {
+        throw new Error(`Completed node ${node.id} is missing persisted state.`)
+      }
+      const finalDelta = this.buildFinalContextDelta(
+        runtime,
+        node.id,
+        attempt,
+        outputFilePath,
+        nodeState,
+        'completed'
+      )
+      await this.commitContextDelta(runtime, node.id, finalDelta, 'completed')
 
       this.sendNodeStatus(runtime.sender, node.id, 'completed', undefined, result.exitCode)
       runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
@@ -1144,6 +1376,18 @@ export class WorkflowEngine {
 
       return { nodeId: node.id, kind: 'completed' }
     } catch (error) {
+      if (error instanceof ContextCommitFailure) {
+        runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: error.message })
+        this.sendNodeStatus(runtime.sender, node.id, 'error', error.message)
+        await this.trace(runtime, 'node.failed', node.id, {
+          error: error.message,
+          commitState: error.commitState
+        })
+        this.markWorkflowFailed(error.message)
+        await this.haltActiveNodes(node.id)
+        return { nodeId: node.id, kind: 'failed' }
+      }
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown node execution error'
       runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage })
       this.sendNodeStatus(runtime.sender, node.id, 'error', errorMessage)

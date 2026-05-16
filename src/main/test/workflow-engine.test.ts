@@ -543,7 +543,15 @@ describe('WorkflowEngine', () => {
     expect(runState.flowContextId).toBe(runState.runId)
     expect(runContext.flowContextId).toBe(runState.runId)
     expect(runContext.latestSnapshot.runStateRef).toBe(`.fluxion/runs/${runState.runId}.json`)
-    expect(runContext.version).toBe(1)
+    expect(runContext.version).toBe(3)
+    expect(runContext.deltas).toHaveLength(2)
+    expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
+      '.fluxion/memory/short-term/workflow-1/node-a.md',
+      '.fluxion/memory/short-term/workflow-1/node-b.md'
+    ])
+    expect(runContext.latestSnapshot.providerState).toEqual({
+      runnerSessionId: 'session-b'
+    })
     expect(runState.currentNodeIds).toEqual([])
     expect(runState.nodes['node-a']?.status).toBe('completed')
     expect(runState.nodes['node-b']?.status).toBe('completed')
@@ -577,10 +585,12 @@ describe('WorkflowEngine', () => {
       'node-a:node.process_spawned',
       'node-a:node.process_exited',
       'node-a:node.output_saved',
+      'node-a:node.context_delta_committed',
       'node-b:node.ready',
       'node-b:node.running',
       'node-b:node.context_snapshot_created',
       'node-b:node.output_saved',
+      'node-b:node.context_delta_committed',
       'workflow:workflow.completed'
     ])
     expectTraceOrder(trace, [
@@ -636,11 +646,11 @@ describe('WorkflowEngine', () => {
     ).toMatchObject({
       data: {
         flowContextId: runState.runId,
-        snapshotVersion: 1,
+        snapshotVersion: 2,
         snapshotHash: expect.any(String),
         memorySourceCount: expect.any(Number),
         artifactRefCount: 0,
-        providerStateKeys: []
+        providerStateKeys: ['runnerSessionId']
       }
     })
     expect(
@@ -650,6 +660,26 @@ describe('WorkflowEngine', () => {
         outputFilePath: '.fluxion/memory/short-term/workflow-1/node-a.md',
         historyOutputFilePath: `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
         attempt: 1
+      }
+    })
+    const commitEvents = trace.filter((event) => event.type === 'node.context_delta_committed')
+    expect(commitEvents).toHaveLength(2)
+    expect(commitEvents[0]).toMatchObject({
+      nodeId: 'node-a',
+      data: {
+        commitState: 'completed',
+        contextVersion: 2,
+        deltaIdempotencyKey: `${runState.runId}:node-a:1:completed`,
+        idempotentReplay: false
+      }
+    })
+    expect(commitEvents[1]).toMatchObject({
+      nodeId: 'node-b',
+      data: {
+        commitState: 'completed',
+        contextVersion: 3,
+        deltaIdempotencyKey: `${runState.runId}:node-b:1:completed`,
+        idempotentReplay: false
       }
     })
     const memoryContextReady = sender.events.find(
@@ -682,6 +712,9 @@ describe('WorkflowEngine', () => {
           throw new Error('Flow context initialization failed.')
         },
         async readRunContext(): Promise<FlowContextDocument> {
+          throw new Error('Flow context initialization failed.')
+        },
+        async commitDelta() {
           throw new Error('Flow context initialization failed.')
         }
       }
@@ -784,9 +817,11 @@ describe('WorkflowEngine', () => {
     await engine.start(workflow, workspacePath, sender)
 
     const runState = await readSingleRunState(workspacePath)
+    const runContext = await readSingleRunContext(workspacePath)
     expect(adapter.executeCalls).toHaveLength(0)
     expect(runState.status).toBe('failed')
     expect(runState.nodes['node-a']?.status).toBe('failed')
+    expect(runContext.version).toBe(1)
 
     const trace = await readTrace(workspacePath, runState.runId)
     expectTraceOrder(trace, [
@@ -796,6 +831,7 @@ describe('WorkflowEngine', () => {
       'workflow:workflow.failed'
     ])
     expectNoTraceType(trace, 'node.running', 'node-a')
+    expectNoTraceType(trace, 'node.context_delta_committed')
     expectNoTraceType(trace, 'workflow.completed')
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.failed' })
   })
@@ -829,10 +865,12 @@ describe('WorkflowEngine', () => {
     await engine.start(workflow, workspacePath, sender)
 
     const runState = await readSingleRunState(workspacePath)
+    const runContext = await readSingleRunContext(workspacePath)
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a'])
     expect(runState.status).toBe('failed')
     expect(runState.nodes['node-a']?.status).toBe('failed')
     expect(runState.nodes['node-b']?.status).toBe('pending')
+    expect(runContext.version).toBe(1)
 
     const trace = await readTrace(workspacePath, runState.runId)
     expectTraceOrder(trace, [
@@ -848,6 +886,7 @@ describe('WorkflowEngine', () => {
     ])
     expectNoTraceType(trace, 'node.produces_validated', 'node-a')
     expectNoTraceType(trace, 'node.output_saved', 'node-a')
+    expectNoTraceType(trace, 'node.context_delta_committed')
     expectNoTraceType(trace, 'node.ready', 'node-b')
     expectNoTraceType(trace, 'node.running', 'node-b')
     expectNoTraceType(trace, 'workflow.completed')
@@ -1010,6 +1049,7 @@ describe('WorkflowEngine', () => {
     await engine.start(workflow, workspacePath, sender)
 
     let runState = await readSingleRunState(workspacePath)
+    let runContext = await readSingleRunContext(workspacePath)
     expect(runState.status).toBe('awaiting_review')
     expect(runState.executionMode).toBe('auto')
     expect(runState.awaitingReviewNodeIds).toEqual(['node-a'])
@@ -1017,6 +1057,14 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-a']?.reviewStatus).toBe('pending')
     expect(runState.nodes['node-a']?.reviewSource).toBe('node')
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a'])
+    expect(runContext.version).toBe(2)
+    expect(runContext.deltas.map((delta) => delta.idempotencyKey)).toEqual([
+      `${runState.runId}:node-a:1:awaiting_review`
+    ])
+    expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`
+    ])
+    expect(runContext.latestSnapshot.artifactRefs).toEqual([])
     expect(
       sender.events.some((event) => event.channel === IpcChannels.WORKFLOW_REVIEW_REQUIRED)
     ).toBe(true)
@@ -1030,8 +1078,24 @@ describe('WorkflowEngine', () => {
       'node-a:node.ready',
       'node-a:node.running',
       'node-a:node.output_saved',
+      'node-a:node.context_delta_committed',
       'node-a:node.review_requested'
     ])
+    expect(
+      trace.find(
+        (event) =>
+          event.nodeId === 'node-a' &&
+          event.type === 'node.context_delta_committed' &&
+          event.data?.commitState === 'awaiting_review'
+      )
+    ).toMatchObject({
+      data: {
+        contextVersion: 2,
+        deltaIdempotencyKey: `${runState.runId}:node-a:1:awaiting_review`,
+        artifactRefCount: 0,
+        idempotentReplay: false
+      }
+    })
     expect(trace.find((event) => event.type === 'node.review_requested')).toMatchObject({
       nodeId: 'node-a',
       data: {
@@ -1044,20 +1108,45 @@ describe('WorkflowEngine', () => {
     await engine.approveReview(reviewAction(runState.runId, 'node-a'))
 
     runState = await readSingleRunState(workspacePath)
+    runContext = await readSingleRunContext(workspacePath)
     expect(runState.status).toBe('completed')
     expect(runState.awaitingReviewNodeIds).toEqual([])
     expect(runState.nodes['node-a']?.reviewStatus).toBe('approved')
     expect(runState.nodes['node-b']?.status).toBe('completed')
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b'])
+    expect(runContext.version).toBe(4)
+    expect(runContext.deltas.map((delta) => delta.idempotencyKey)).toEqual([
+      `${runState.runId}:node-a:1:awaiting_review`,
+      `${runState.runId}:node-a:1:review_approved`,
+      `${runState.runId}:node-b:1:completed`
+    ])
+    expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
+      '.fluxion/memory/short-term/workflow-1/node-a.md',
+      '.fluxion/memory/short-term/workflow-1/node-b.md'
+    ])
 
     trace = await readTrace(workspacePath, runState.runId)
     expectTraceOrder(trace, [
       'node-a:node.review_requested',
       'node-a:node.review_approved',
-      'node-b:node.ready',
-      'node-b:node.running',
       'workflow:workflow.completed'
     ])
+    const reviewApprovedIndex = trace.findIndex(
+      (event) => event.nodeId === 'node-a' && event.type === 'node.review_approved'
+    )
+    const reviewApprovedCommitIndex = trace.findIndex(
+      (event) =>
+        event.nodeId === 'node-a' &&
+        event.type === 'node.context_delta_committed' &&
+        event.data?.commitState === 'review_approved'
+    )
+    const nodeBReadyIndex = trace.findIndex(
+      (event) => event.nodeId === 'node-b' && event.type === 'node.ready'
+    )
+    expect(reviewApprovedIndex).toBeGreaterThan(-1)
+    expect(reviewApprovedCommitIndex).toBeGreaterThan(reviewApprovedIndex)
+    expect(nodeBReadyIndex).toBeGreaterThan(reviewApprovedCommitIndex)
     expect(trace.at(-1)).toMatchObject({ type: 'workflow.completed' })
   })
 
@@ -1078,6 +1167,7 @@ describe('WorkflowEngine', () => {
 
     await engine.start(workflow, workspacePath, sender)
     const runState = await readSingleRunState(workspacePath)
+    const pausedContext = await readSingleRunContext(workspacePath)
 
     await engine.rejectReview({
       ...reviewAction(runState.runId, 'node-a'),
@@ -1085,9 +1175,12 @@ describe('WorkflowEngine', () => {
     })
 
     const finalState = await readSingleRunState(workspacePath)
+    const finalContext = await readSingleRunContext(workspacePath)
     expect(finalState.status).toBe('rejected')
     expect(finalState.nodes['node-a']?.status).toBe('rejected')
     expect(finalState.nodes['node-a']?.reviewStatus).toBe('rejected')
+    expect(pausedContext.version).toBe(2)
+    expect(finalContext.version).toBe(2)
 
     const completedEvent = [...sender.events]
       .reverse()
@@ -1098,6 +1191,13 @@ describe('WorkflowEngine', () => {
         error: expect.stringContaining('Review rejected')
       })
     })
+    const trace = await readTrace(workspacePath, runState.runId)
+    expect(
+      trace.filter((event) => event.type === 'node.context_delta_committed').map((event) => ({
+        nodeId: event.nodeId,
+        commitState: event.data?.commitState
+      }))
+    ).toEqual([{ nodeId: 'node-a', commitState: 'awaiting_review' }])
   })
 
   it('hydrates a paused review runtime after restart and resumes downstream after approval', async () => {
@@ -1378,11 +1478,16 @@ describe('WorkflowEngine', () => {
     await engineAfterRestart.abort(undefined, AbortReason.USER_REQUESTED)
 
     const finalState = await readSingleRunState(workspacePath)
+    const finalContext = await readSingleRunContext(workspacePath)
     expect(finalState.status).toBe('aborted')
     expect(finalState.nodes['node-a']?.status).toBe('aborted')
+    expect(finalContext.version).toBe(2)
+    expect(finalContext.deltas.map((delta) => delta.idempotencyKey)).toEqual([
+      `${pausedState.runId}:node-a:1:awaiting_review`
+    ])
   })
 
-  it('reruns a paused review node and overwrites its saved output before re-pausing', async () => {
+  it('reruns a paused review node, preserves prior evidence deltas, and publishes only the latest approved output', async () => {
     let executionCount = 0
     const adapter = new FakeAdapter({
       'node-a': {
@@ -1430,6 +1535,7 @@ describe('WorkflowEngine', () => {
     await engine.rerunReviewNode(reviewAction(runState.runId, 'node-a'))
 
     runState = await readSingleRunState(workspacePath)
+    let runContext = await readSingleRunContext(workspacePath)
     expect(runState.status).toBe('awaiting_review')
     expect(runState.nodes['node-a']?.status).toBe('awaiting_review')
     expect(runState.nodes['node-a']?.attempts).toBe(2)
@@ -1447,6 +1553,15 @@ describe('WorkflowEngine', () => {
       'attempt-2.md'
     )
     expect(await readFile(attemptTwoPath, 'utf8')).toContain('Second review output')
+    expect(runContext.version).toBe(3)
+    expect(runContext.deltas.map((delta) => delta.idempotencyKey)).toEqual([
+      `${runState.runId}:node-a:1:awaiting_review`,
+      `${runState.runId}:node-a:2:awaiting_review`
+    ])
+    expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-2.md`
+    ])
     const trace = await readTrace(workspacePath, runState.runId)
     expect(
       trace.find(
@@ -1460,6 +1575,23 @@ describe('WorkflowEngine', () => {
         historyOutputFilePath: `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-2.md`
       }
     })
+
+    await engine.approveReview(reviewAction(runState.runId, 'node-a'))
+
+    const finalState = await readSingleRunState(workspacePath)
+    runContext = await readSingleRunContext(workspacePath)
+    expect(finalState.status).toBe('completed')
+    expect(runContext.version).toBe(4)
+    expect(runContext.deltas.map((delta) => delta.idempotencyKey)).toEqual([
+      `${runState.runId}:node-a:1:awaiting_review`,
+      `${runState.runId}:node-a:2:awaiting_review`,
+      `${runState.runId}:node-a:2:review_approved`
+    ])
+    expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
+      `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-2.md`,
+      '.fluxion/memory/short-term/workflow-1/node-a.md'
+    ])
   })
 
   it('pauses every completed node in manual execution mode and resumes only after approval', async () => {

@@ -2,8 +2,57 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { FlowContextDocument } from '@core'
+import { ContextDelta, FlowContextDocument } from '@core'
 import { FlowContextStore } from '../services/flow-context-store'
+
+function createDelta(
+  overrides: Partial<ContextDelta> = {},
+  idempotencyKey = 'run-1:node-a:1:completed'
+): ContextDelta {
+  return {
+    schemaVersion: 1,
+    flowContextId: 'run-1',
+    runId: 'run-1',
+    workflowId: 'workflow-1',
+    nodeId: 'node-a',
+    attempt: 1,
+    createdAt: '2026-05-15T00:01:00.000Z',
+    idempotencyKey,
+    memoryRefsAdded: [
+      {
+        path: '.fluxion/memory/short-term/workflow-1/node-a.md',
+        kind: 'short-term',
+        nodeId: 'node-a',
+        attempt: 1
+      }
+    ],
+    artifactRefsAddedOrValidated: [
+      {
+        path: 'docs/output.md',
+        required: true,
+        validated: true,
+        nodeId: 'node-a',
+        attempt: 1,
+        kind: 'produced'
+      }
+    ],
+    runStateUpdates: {
+      runStateRef: '.fluxion/runs/run-1.json',
+      nodeId: 'node-a',
+      status: 'completed',
+      outputArtifactPaths: ['docs/output.md']
+    },
+    providerStateUpdates: {
+      runnerSessionId: 'session-a'
+    },
+    semanticSummaryUpdate: '',
+    redaction: {
+      policy: 'flow-context-v1',
+      redactedFields: []
+    },
+    ...overrides
+  }
+}
 
 describe('FlowContextStore', () => {
   let workspacePath: string
@@ -128,5 +177,111 @@ describe('FlowContextStore', () => {
         flowContextId: 'run-1'
       })
     ).rejects.toThrow()
+  })
+
+  it('commits a delta, updates latest snapshot, and increments the context version', async () => {
+    await store.initializeRunContext({
+      workspacePath,
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      flowContextId: 'run-1',
+      createdAt: '2026-05-15T00:00:00.000Z'
+    })
+
+    const committed = await store.commitDelta({
+      workspacePath,
+      runId: 'run-1',
+      delta: createDelta(),
+      commitState: 'completed'
+    })
+
+    expect(committed).toEqual({
+      commitResult: {
+        schemaVersion: 1,
+        flowContextId: 'run-1',
+        version: 2,
+        committed: true,
+        commitState: 'completed',
+        deltaIdempotencyKey: 'run-1:node-a:1:completed'
+      },
+      idempotentReplay: false
+    })
+
+    const persisted = await store.readRunContext(workspacePath, 'run-1')
+    expect(persisted.version).toBe(2)
+    expect(persisted.deltas).toHaveLength(1)
+    expect(persisted.latestSnapshot).toMatchObject({
+      memorySourceRefs: [
+        {
+          path: '.fluxion/memory/short-term/workflow-1/node-a.md',
+          kind: 'short-term'
+        }
+      ],
+      artifactRefs: [
+        {
+          path: 'docs/output.md',
+          kind: 'produced',
+          validated: true
+        }
+      ],
+      providerState: {
+        runnerSessionId: 'session-a'
+      },
+      runStateRef: '.fluxion/runs/run-1.json',
+      hash: expect.any(String)
+    })
+  })
+
+  it('returns the original commit version for idempotent replay without mutating the document', async () => {
+    await store.initializeRunContext({
+      workspacePath,
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      flowContextId: 'run-1',
+      createdAt: '2026-05-15T00:00:00.000Z'
+    })
+
+    await store.commitDelta({
+      workspacePath,
+      runId: 'run-1',
+      delta: createDelta(),
+      commitState: 'completed'
+    })
+    await store.commitDelta({
+      workspacePath,
+      runId: 'run-1',
+      delta: createDelta(
+        {
+          nodeId: 'node-b',
+          attempt: 1,
+          createdAt: '2026-05-15T00:02:00.000Z'
+        },
+        'run-1:node-b:1:completed'
+      ),
+      commitState: 'completed'
+    })
+
+    const replay = await store.commitDelta({
+      workspacePath,
+      runId: 'run-1',
+      delta: createDelta(),
+      commitState: 'completed'
+    })
+
+    expect(replay).toEqual({
+      commitResult: {
+        schemaVersion: 1,
+        flowContextId: 'run-1',
+        version: 2,
+        committed: true,
+        commitState: 'completed',
+        deltaIdempotencyKey: 'run-1:node-a:1:completed'
+      },
+      idempotentReplay: true
+    })
+
+    const persisted = await store.readRunContext(workspacePath, 'run-1')
+    expect(persisted.version).toBe(3)
+    expect(persisted.deltas).toHaveLength(2)
   })
 })
