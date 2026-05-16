@@ -9,6 +9,7 @@ import {
   AgentProcessStartedChunk,
   AgentNodeData,
   AgentResult,
+  CompiledMemoryContext,
   IpcChannels,
   Workflow,
   WorkflowEdge,
@@ -21,6 +22,7 @@ import { ArtifactGateService } from '../services/artifact-gate-service'
 import { memoryManager } from '../services/memory-manager'
 import { RunStateStore } from '../services/run-state-store'
 import {
+  buildContextSnapshot,
   buildExecutionPrompt,
   WorkflowEngine,
   WorkflowEventSender
@@ -334,6 +336,155 @@ describe('buildExecutionPrompt', () => {
   })
 })
 
+describe('buildContextSnapshot', () => {
+  it('maps memory sources into ordered snapshot refs', () => {
+    const flowContext: FlowContextDocument = {
+      schemaVersion: 1,
+      flowContextId: 'run-1',
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      version: 3,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      latestSnapshot: {
+        memorySourceRefs: [],
+        artifactRefs: [{ path: 'docs/report.md', validated: true }],
+        runStateRef: '.fluxion/runs/run-1.json',
+        providerState: { runnerSessionId: 'session-1' },
+        semanticSummary: 'Existing summary'
+      },
+      deltas: []
+    }
+    const contextReport: CompiledMemoryContext = {
+      compiledContext: '[GLOBAL CONTEXT]\nRules',
+      sources: [
+        {
+          type: 'global',
+          path: '.fluxion/memory/global-context.md',
+          included: true,
+          bytes: 24,
+          hash: 'global-hash'
+        },
+        {
+          type: 'short-term',
+          path: '.fluxion/memory/short-term/workflow-1/node-a.md',
+          included: true,
+          nodeId: 'node-a',
+          runId: 'run-1',
+          bytes: 42,
+          hash: 'node-a-hash'
+        },
+        {
+          type: 'long-term',
+          path: '.fluxion/memory/long-term/index.md',
+          included: false,
+          warning: 'Optional long-term context index was not found.'
+        }
+      ],
+      contextHash: 'context-hash',
+      contextBytes: 24,
+      contextChars: 24
+    }
+
+    const snapshot = buildContextSnapshot(flowContext, contextReport)
+
+    expect(snapshot).toMatchObject({
+      flowContextId: 'run-1',
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      version: 3,
+      artifactRefs: [{ path: 'docs/report.md', validated: true }],
+      runStateRef: '.fluxion/runs/run-1.json',
+      providerState: { runnerSessionId: 'session-1' },
+      semanticSummary: 'Existing summary',
+      memorySourceRefs: [
+        {
+          path: '.fluxion/memory/global-context.md',
+          kind: 'global',
+          hash: 'global-hash',
+          metadata: {
+            included: true,
+            bytes: 24
+          }
+        },
+        {
+          path: '.fluxion/memory/short-term/workflow-1/node-a.md',
+          kind: 'short-term',
+          nodeId: 'node-a',
+          hash: 'node-a-hash',
+          metadata: {
+            included: true,
+            runId: 'run-1',
+            bytes: 42
+          }
+        },
+        {
+          path: '.fluxion/memory/long-term/index.md',
+          kind: 'long-term',
+          metadata: {
+            included: false,
+            warning: 'Optional long-term context index was not found.'
+          }
+        }
+      ],
+      hash: expect.any(String)
+    })
+  })
+
+  it('builds a stable hash for the same snapshot payload', () => {
+    const contextReport: CompiledMemoryContext = {
+      compiledContext: '',
+      sources: [],
+      contextHash: 'context-hash',
+      contextBytes: 0,
+      contextChars: 0
+    }
+
+    const first = buildContextSnapshot(
+      {
+        schemaVersion: 1,
+        flowContextId: 'run-1',
+        runId: 'run-1',
+        workflowId: 'workflow-1',
+        version: 1,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        updatedAt: '2026-05-15T00:00:00.000Z',
+        latestSnapshot: {
+          memorySourceRefs: [],
+          artifactRefs: [],
+          runStateRef: '.fluxion/runs/run-1.json',
+          providerState: { zeta: 1, alpha: 2 },
+          semanticSummary: 'summary'
+        },
+        deltas: []
+      },
+      contextReport
+    )
+    const second = buildContextSnapshot(
+      {
+        schemaVersion: 1,
+        flowContextId: 'run-1',
+        runId: 'run-1',
+        workflowId: 'workflow-1',
+        version: 1,
+        createdAt: '2026-05-15T00:00:00.000Z',
+        updatedAt: '2026-05-15T00:00:00.000Z',
+        latestSnapshot: {
+          memorySourceRefs: [],
+          artifactRefs: [],
+          runStateRef: '.fluxion/runs/run-1.json',
+          providerState: { alpha: 2, zeta: 1 },
+          semanticSummary: 'summary'
+        },
+        deltas: []
+      },
+      contextReport
+    )
+
+    expect(first.hash).toBe(second.hash)
+  })
+})
+
 describe('WorkflowEngine', () => {
   let workspacePath: string
 
@@ -422,13 +573,20 @@ describe('WorkflowEngine', () => {
       'workflow:workflow.context_initialized',
       'node-a:node.ready',
       'node-a:node.running',
+      'node-a:node.context_snapshot_created',
       'node-a:node.process_spawned',
       'node-a:node.process_exited',
       'node-a:node.output_saved',
       'node-b:node.ready',
       'node-b:node.running',
+      'node-b:node.context_snapshot_created',
       'node-b:node.output_saved',
       'workflow:workflow.completed'
+    ])
+    expectTraceOrder(trace, [
+      'node-b:node.context_compiled',
+      'node-b:node.context_snapshot_created',
+      'node-b:node.execution_started'
     ])
     expect(trace.find((event) => event.type === 'workflow.context_initialized')).toMatchObject({
       data: {
@@ -472,6 +630,20 @@ describe('WorkflowEngine', () => {
       }
     })
     expect(
+      trace.find(
+        (event) => event.nodeId === 'node-b' && event.type === 'node.context_snapshot_created'
+      )
+    ).toMatchObject({
+      data: {
+        flowContextId: runState.runId,
+        snapshotVersion: 1,
+        snapshotHash: expect.any(String),
+        memorySourceCount: expect.any(Number),
+        artifactRefCount: 0,
+        providerStateKeys: []
+      }
+    })
+    expect(
       trace.find((event) => event.nodeId === 'node-a' && event.type === 'node.output_saved')
     ).toMatchObject({
       data: {
@@ -507,6 +679,9 @@ describe('WorkflowEngine', () => {
           return join(currentWorkspacePath, '.fluxion', 'runs', `${runId}.context.json`)
         },
         async initializeRunContext(): Promise<FlowContextDocument> {
+          throw new Error('Flow context initialization failed.')
+        },
+        async readRunContext(): Promise<FlowContextDocument> {
           throw new Error('Flow context initialization failed.')
         }
       }
@@ -569,6 +744,17 @@ describe('WorkflowEngine', () => {
       .map((event) => event.nodeId)
       .sort()
     expect(runningNodeIds).toEqual(['node-a', 'node-b'])
+    const snapshotVersions = traceWhileRunning
+      .filter((event) => event.type === 'node.context_snapshot_created')
+      .map((event) => ({
+        nodeId: event.nodeId,
+        version: event.data?.snapshotVersion
+      }))
+      .sort((left, right) => String(left.nodeId).localeCompare(String(right.nodeId)))
+    expect(snapshotVersions).toEqual([
+      { nodeId: 'node-a', version: 1 },
+      { nodeId: 'node-b', version: 1 }
+    ])
     expectNoTraceType(traceWhileRunning, 'workflow.completed')
 
     releaseA.resolve()
@@ -653,6 +839,8 @@ describe('WorkflowEngine', () => {
       'workflow:workflow.started',
       'node-a:node.ready',
       'node-a:node.running',
+      'node-a:node.context_compiled',
+      'node-a:node.context_snapshot_created',
       'node-a:node.execution_started',
       'node-a:node.execution_completed',
       'node-a:node.failed',

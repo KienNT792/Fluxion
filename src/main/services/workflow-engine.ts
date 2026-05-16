@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from 'crypto'
 import * as path from 'path'
-import { WorkflowRunState, WorkflowTraceEvent, WorkflowTraceEventType } from '@core'
+import {
+  ContextMemorySourceRef,
+  ContextSnapshot,
+  ContextSnapshotSchema,
+  FlowContextDocument,
+  WorkflowRunState,
+  WorkflowTraceEvent,
+  WorkflowTraceEventType
+} from '@core'
 import {
   AbortReason,
   AgentResult,
@@ -52,7 +60,10 @@ interface WorkflowEngineDependencies {
     ArtifactGateService,
     'validateRequires' | 'snapshotProduces' | 'validateProduces'
   >
-  flowContextStore?: Pick<FlowContextStore, 'getContextPath' | 'initializeRunContext'>
+  flowContextStore?: Pick<
+    FlowContextStore,
+    'getContextPath' | 'initializeRunContext' | 'readRunContext'
+  >
   traceStore?: Pick<WorkflowTraceStore, 'append'>
 }
 
@@ -81,8 +92,92 @@ type NodeExecutionResult =
   | { nodeId: NodeId; kind: 'failed' }
   | { nodeId: NodeId; kind: 'aborted' }
 
+function buildRunStateRef(runId: string): string {
+  return `.fluxion/runs/${runId}.json`
+}
+
 function joinPromptSections(sections: string[]): string {
   return sections.filter((section) => section.length > 0).join('\n\n')
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortJsonValue(item))
+  }
+
+  if (typeof value !== 'object' || value === null) {
+    return value
+  }
+
+  return Object.keys(value)
+    .sort()
+    .reduce<Record<string, unknown>>((result, key) => {
+      result[key] = sortJsonValue((value as Record<string, unknown>)[key])
+      return result
+    }, {})
+}
+
+function hashSnapshotPayload(
+  snapshot: Omit<
+    ContextSnapshot,
+    'schemaVersion' | 'flowContextId' | 'runId' | 'workflowId' | 'version' | 'createdAt' | 'hash'
+  >
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify(sortJsonValue(snapshot)), 'utf8')
+    .digest('hex')
+}
+
+function buildMemorySourceRef(
+  source: CompiledMemoryContext['sources'][number]
+): ContextMemorySourceRef {
+  const metadata: Record<string, unknown> = {
+    included: source.included
+  }
+
+  if (source.runId) {
+    metadata.runId = source.runId
+  }
+  if (typeof source.bytes === 'number') {
+    metadata.bytes = source.bytes
+  }
+  if (source.warning) {
+    metadata.warning = source.warning
+  }
+
+  return {
+    path: source.path,
+    kind: source.type,
+    nodeId: source.nodeId,
+    hash: source.hash,
+    metadata
+  }
+}
+
+export function buildContextSnapshot(
+  flowContext: FlowContextDocument,
+  contextReport: CompiledMemoryContext
+): ContextSnapshot {
+  const snapshotPayload = {
+    memorySourceRefs: contextReport.sources.map((source) => buildMemorySourceRef(source)),
+    artifactRefs: structuredClone(flowContext.latestSnapshot.artifactRefs),
+    runStateRef: flowContext.latestSnapshot.runStateRef || buildRunStateRef(flowContext.runId),
+    providerState: structuredClone(flowContext.latestSnapshot.providerState),
+    semanticSummary: flowContext.latestSnapshot.semanticSummary
+  }
+
+  const snapshot = ContextSnapshotSchema.parse({
+    schemaVersion: 1,
+    flowContextId: flowContext.flowContextId,
+    runId: flowContext.runId,
+    workflowId: flowContext.workflowId,
+    version: flowContext.version,
+    createdAt: new Date().toISOString(),
+    ...snapshotPayload,
+    hash: hashSnapshotPayload(snapshotPayload)
+  })
+
+  return structuredClone(snapshot) as ContextSnapshot
 }
 
 export function buildExecutionPrompt(node: WorkflowNode, context: string): ExecutionPrompt {
@@ -170,7 +265,7 @@ export class WorkflowEngine {
   >
   private readonly flowContextStore: Pick<
     FlowContextStore,
-    'getContextPath' | 'initializeRunContext'
+    'getContextPath' | 'initializeRunContext' | 'readRunContext'
   >
   private readonly traceStore: Pick<WorkflowTraceStore, 'append'>
   private currentRuntime: WorkflowRuntime | null = null
@@ -859,6 +954,19 @@ export class WorkflowEngine {
         contextChars: contextReport.contextChars,
         contextHash: contextReport.contextHash,
         sources: contextReport.sources
+      })
+      const flowContext = await this.flowContextStore.readRunContext(
+        runtime.workspacePath,
+        runtime.runId
+      )
+      const snapshot = buildContextSnapshot(flowContext, contextReport)
+      await this.trace(runtime, 'node.context_snapshot_created', node.id, {
+        flowContextId: snapshot.flowContextId,
+        snapshotVersion: snapshot.version,
+        snapshotHash: snapshot.hash,
+        memorySourceCount: snapshot.memorySourceRefs.length,
+        artifactRefCount: snapshot.artifactRefs.length,
+        providerStateKeys: Object.keys(snapshot.providerState).sort()
       })
 
       const fullPrompt = buildExecutionPrompt(node, context)
