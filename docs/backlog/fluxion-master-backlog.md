@@ -2,7 +2,7 @@
 
 Date: 2026-05-15
 Workspace: `D:\codex-workflow\Fluxion`
-Source baseline: `README.md`, `docs/assessments/fluxion-project-assessment-2026-05-07.md`, `docs/qa/internal-alpha-smoke-2026-05-15.md`, repo verification on `2026-05-15`
+Source baseline: `README.md`, `docs/assessments/fluxion-project-assessment.md`, `docs/qa/internal-alpha-smoke.md`, repo verification on `2026-05-15`
 
 ## Purpose
 

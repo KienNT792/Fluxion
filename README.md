@@ -67,6 +67,8 @@ Based on the current repository implementation:
 
 * Codex CLI runtime integration
 * DAG workflow execution
+* Run-local `flowContextId` and `.fluxion/runs/<runId>.context.json` sidecar
+* Per-node context snapshots with commit-safe downstream context publishing
 * React Flow visual editor
 * Manual and Auto execution modes
 * Real-time terminal streaming
@@ -163,6 +165,7 @@ This structure keeps:
 * Workspace trust verification
 * Recent workspace reopening
 * `.fluxion/` workspace bootstrap
+* Run-local flow context sidecar and lifecycle trace correlation
 * Context scanning and initialization
 * Source evidence tracking
 * Command and path discovery

@@ -39,7 +39,8 @@ stateDiagram-v2
    - completed upstream nodes satisfy dependencies immediately
    - pending nodes whose prerequisites are already completed go back into `readyQueue`
    - review nodes stay blocked in `awaitingReviewNodeIds` until the user approves, rejects, reruns, or aborts
-4. Review action IPC stays unchanged. Recovery is internal to workspace loading and runtime hydration.
+4. On approval, the engine commits the final flow-context delta before unlocking downstream neighbors, so a recovered review resumes from the same durable state that the downstream node will read.
+5. Review action IPC stays unchanged. Recovery is internal to workspace loading and runtime hydration.
 
 ## Renderer Rules
 
@@ -68,3 +69,9 @@ stateDiagram-v2
 - OpenAI results/state guidance calls out pending approvals as `interruptions` plus a resumable snapshot: [Results and state](https://developers.openai.com/api/docs/guides/agents/results#choose-the-result-surface-you-need)
 - OpenAI running-agents guidance says approvals are expected pauses and should resume from the same state, not a new turn: [Running agents](https://developers.openai.com/api/docs/guides/agents/running-agents#handle-pauses-and-failures-deliberately)
 - OpenAI observability guidance recommends tracing for approvals and other control-flow decisions: [Integrations and observability](https://developers.openai.com/api/docs/guides/agents/integrations-observability#choose-what-lives-in-the-sdk)
+
+## Codex Approval Note
+
+This document is about Fluxion's own paused review lifecycle, not interactive Codex approval hosting.
+
+Current Codex approval-host status remains blocked. See [`codex-approval-status.md`](./codex-approval-status.md).

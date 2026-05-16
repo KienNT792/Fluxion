@@ -18,16 +18,26 @@ That is sufficient for the current local Codex CLI runtime, but it does not yet 
 
 Before adding new schema, storage, or execution behavior, Fluxion needs a frozen architecture decision for flow-owned context so Sprint 5 through Sprint 7 can implement against the same terms and invariants.
 
+## Status
+
+Status as of 2026-05-17:
+
+- `FX-WO-018` prompt layout guard is implemented.
+- `FX-WO-019` per-node `ContextSnapshot` creation is implemented.
+- `FX-WO-020` commit-safe `ContextDelta` lifecycle is implemented.
+- The next backend context item is `FX-WO-021` parallel merge policy.
+
 ## Repository Evidence
 
 - `src/core/runs/run-state.types.ts` and `src/core/schema/run-state.schema.ts` persist `runId`, `workflowId`, workflow status, per-node status, and the additive optional `flowContextId`.
 - `src/core/runs/workflow-trace.types.ts` and `src/core/schema/workflow-trace.schema.ts` persist `runId`, optional `flowContextId`, `workflowId`, `nodeId`, `type`, `timestamp`, and optional `data`.
-- `src/main/services/workflow-engine.ts` initializes run state, emits trace events correlated by `runId` and `flowContextId`, and compiles prompt input from memory context, but it does not create a durable `ContextSnapshot` object or commit a `ContextDelta`.
-- `src/main/services/workflow-engine.ts` currently builds prompts in a provider-agnostic order of compiled context, optional system instruction, then user instruction.
+- `src/main/services/workflow-engine.ts` initializes run state, emits trace events correlated by `runId` and `flowContextId`, compiles prompt input from memory context, builds a per-node `ContextSnapshot`, and commits `ContextDelta` only after commit-safe states.
+- `src/main/services/workflow-engine.ts` now builds provider-specific `ExecutionPrompt` layouts: Codex keeps the legacy flat prompt shape, while OpenAI uses `instructions + input` with a debug `text` flattening.
 - `src/main/services/workflow-engine.ts` already supports paused review hydration from persisted run state, which shows that workflow-level state can be durable across app restarts even when in-memory runtime state is gone.
-- `src/main/adapters/base.adapter.ts` defines adapter execution in terms of a prompt string and final `AgentResult`; there is no snapshot or delta contract at the adapter boundary yet.
+- `src/main/adapters/base.adapter.ts` defines adapter execution in terms of `ExecutionPrompt` plus final `AgentResult`; snapshot/delta contracts remain engine-side and do not leak into IPC or renderer contracts.
 - `src/shared/agent.types.ts` already exposes `runnerSessionId` and process telemetry in `AgentResult`, which is a suitable baseline for future `providerState` references.
-- `src/main/adapters/openai.adapter.ts` currently calls the Responses API with `store: false` and returns plain execution output; it does not yet persist `responseId`, `conversationId`, or other provider-state references.
+- `src/main/services/flow-context-store.ts` persists run-local flow context, supports idempotent `commitDelta(...)` replay by `idempotencyKey`, and recomputes `latestSnapshot.hash` on real commits.
+- `src/main/adapters/openai.adapter.ts` currently calls the Responses API with `store: false`, optional `instructions`, and `input`; it does not yet persist `previous_response_id`, `conversationId`, or other continuation state.
 
 ## Decision
 
@@ -232,12 +242,12 @@ When later items land, rollback must remain simple:
 - `FX-WO-015` add `flowContextId` to run state and trace [DONE]
 - `FX-WO-016` add append-only flow context store [DONE]
 - `FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts in code [DONE]
-- `FX-WO-018` add prompt layout guard for cache-friendly providers
+- `FX-WO-018` add prompt layout guard for cache-friendly providers [DONE]
 
 ### Phase 2: execution lifecycle and deterministic context commits
 
-- `FX-WO-019` build per-node `ContextSnapshot` before execution
-- `FX-WO-020` commit `ContextDelta` only after commit-safe node states
+- `FX-WO-019` build per-node `ContextSnapshot` before execution [DONE]
+- `FX-WO-020` commit `ContextDelta` only after commit-safe node states [DONE]
 - `FX-WO-021` add parallel merge policy for context deltas
 - `FX-WO-022` extend trace evaluator for context lifecycle
 
@@ -252,24 +262,29 @@ The following backlog items implement this ADR in dependency order:
 - [`FX-WO-015` add `flowContextId` to run state and trace](../backlog/workflow-optimization-sprint.md#fx-wo-015-add-flowcontextid-to-run-state-and-trace-done)
 - [`FX-WO-016` add append-only flow context store](../backlog/workflow-optimization-sprint.md#fx-wo-016-add-append-only-flow-context-store-done)
 - [`FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts](../backlog/workflow-optimization-sprint.md#fx-wo-017-define-contextsnapshot-and-contextdelta-contracts-done)
-- [`FX-WO-018` add prompt layout guard for cache-friendly providers](../backlog/workflow-optimization-sprint.md#fx-wo-018-add-prompt-layout-guard-for-cache-friendly-providers-ready)
-- [`FX-WO-019` build per-node `ContextSnapshot` before execution](../backlog/workflow-optimization-sprint.md#fx-wo-019-build-per-node-contextsnapshot-before-execution-discovery)
-- [`FX-WO-020` commit `ContextDelta` only after commit-safe node states](../backlog/workflow-optimization-sprint.md#fx-wo-020-commit-contextdelta-only-after-commit-safe-node-states-discovery)
+- [`FX-WO-018` add prompt layout guard for cache-friendly providers](../backlog/workflow-optimization-sprint.md#fx-wo-018-add-prompt-layout-guard-for-cache-friendly-providers-done)
+- [`FX-WO-019` build per-node `ContextSnapshot` before execution](../backlog/workflow-optimization-sprint.md#fx-wo-019-build-per-node-contextsnapshot-before-execution-done)
+- [`FX-WO-020` commit `ContextDelta` only after commit-safe node states](../backlog/workflow-optimization-sprint.md#fx-wo-020-commit-contextdelta-only-after-commit-safe-node-states-done)
 - [`FX-WO-021` add parallel merge policy for context deltas](../backlog/workflow-optimization-sprint.md#fx-wo-021-add-parallel-merge-policy-for-context-deltas-discovery)
 - [`FX-WO-022` extend trace evaluator for context lifecycle](../backlog/workflow-optimization-sprint.md#fx-wo-022-extend-trace-evaluator-for-context-lifecycle-ready)
 - [`FX-WO-023` add provider-state aware adapter result](../backlog/workflow-optimization-sprint.md#fx-wo-023-add-provider-state-aware-adapter-result-discovery)
 
-Code-facing additions completed by `FX-WO-015` through `FX-WO-017`:
+Code-facing additions completed by `FX-WO-015` through `FX-WO-020`:
 
 - `WorkflowRunState.flowContextId`
 - trace correlation by both `runId` and `flowContextId`
 - run-local `.fluxion/runs/<runId>.context.json` sidecar initialization
 - `FlowContextStore` create/read/reinitialize-existing behavior
+- `FlowContextStore.commitDelta(...)` with idempotent replay and stable snapshot hashing
 - `FlowContextDocument`, `ContextSnapshot`, `ContextDelta`, and `ContextCommitResult` types and schemas
+- provider-specific `ExecutionPrompt` layout with Codex compatibility preserved
+- per-node snapshot creation plus `node.context_snapshot_created`
+- commit-safe delta lifecycle plus `node.context_delta_committed`
+- review evidence commit on `awaiting_review`, final commit on `completed` and `review_approved`
 - secret-like field rejection plus safe secret reference fields for flow-context payloads
 
-Deferred code-facing additions that belong to follow-up implementation:
+Remaining follow-up additions:
 
-- `FX-WO-018` prompt layout guard
-- `FX-WO-019` per-node snapshot creation in the engine
-- `FX-WO-020` commit-safe delta lifecycle
+- `FX-WO-021` deterministic parallel merge policy
+- `FX-WO-022` trace evaluator rules for context lifecycle
+- `FX-WO-023` provider-state aware adapter result

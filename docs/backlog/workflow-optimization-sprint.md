@@ -747,7 +747,7 @@ Files touched:
 - `src/core/schema/flow-context.schema.ts`
 - `src/core/test/flow-context.schema.test.ts`
 
-### FX-WO-018 Add prompt layout guard for cache-friendly providers [READY]
+### FX-WO-018 Add prompt layout guard for cache-friendly providers [DONE]
 
 Priority: `P1`
 
@@ -766,10 +766,10 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Codex CLI prompt output remains behavior-compatible or has explicit snapshot update.
-- [ ] OpenAI prompt layout supports stable prefix then dynamic snapshot.
-- [ ] Prompt builder tests cover both layouts.
-- [ ] No OpenAI adapter runtime migration is required in Sprint 5.
+- [x] Codex CLI prompt output remains behavior-compatible or has explicit snapshot update.
+- [x] OpenAI prompt layout supports stable prefix then dynamic snapshot.
+- [x] Prompt builder tests cover both layouts.
+- [x] No OpenAI adapter runtime migration is required in Sprint 5.
 
 Files likely touched:
 
@@ -791,7 +791,7 @@ Ket qua mong muon:
 - Parallel DAG batch co merge policy ro, khong du vao "last write wins".
 - Trace evaluator score duoc context lifecycle.
 
-### FX-WO-019 Build per-node ContextSnapshot before execution [DISCOVERY]
+### FX-WO-019 Build per-node ContextSnapshot before execution [DONE]
 
 Priority: `P0`
 
@@ -806,10 +806,16 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Snapshot includes `flowContextId`, `version`, source refs, and hash.
-- [ ] Trace records snapshot hash/version.
-- [ ] A -> B workflow shows B snapshot includes A output ref after A commit.
-- [ ] Parallel sibling nodes from the same parent can read the same snapshot version without mutation.
+- [x] Snapshot includes `flowContextId`, `version`, source refs, and hash.
+- [x] Trace records snapshot hash/version.
+- [x] A -> B workflow shows B snapshot includes A output ref after A commit.
+- [x] Parallel sibling nodes from the same parent can read the same snapshot version without mutation.
+
+Implementation notes:
+
+- `WorkflowEngine` now reads the run-local flow context before execution and builds a runtime-only `ContextSnapshot`.
+- Trace emits `node.context_snapshot_created` between `node.context_compiled` and `node.execution_started`.
+- Renderer IPC stays unchanged; snapshot remains a main-process runtime contract.
 
 Files likely touched:
 
@@ -817,7 +823,7 @@ Files likely touched:
 - `src/main/services/flow-context-store.ts`
 - `src/main/test/workflow-engine.test.ts`
 
-### FX-WO-020 Commit ContextDelta only after commit-safe node states [DISCOVERY]
+### FX-WO-020 Commit ContextDelta only after commit-safe node states [DONE]
 
 Priority: `P0`
 
@@ -832,10 +838,16 @@ Commit-safe states:
 
 Acceptance:
 
-- [ ] Failed node output is not added as successful context memory.
-- [ ] Review-pending node does not unblock downstream context as final.
-- [ ] Rerun creates a new delta with a new idempotency key.
-- [ ] Replaying commit for the same idempotency key is safe.
+- [x] Failed node output is not added as successful context memory.
+- [x] Review-pending node does not unblock downstream context as final.
+- [x] Rerun creates a new delta with a new idempotency key.
+- [x] Replaying commit for the same idempotency key is safe.
+
+Implementation notes:
+
+- `FlowContextStore.commitDelta(...)` now handles durable merge, version increment, hash recompute, and idempotent replay by `idempotencyKey`.
+- `awaiting_review` commits only evidence, while `completed` and `review_approved` commit final downstream context.
+- Downstream unlock now happens only after the final approved/success delta commit succeeds.
 
 Files likely touched:
 
@@ -1039,9 +1051,9 @@ Files likely touched:
 | FX-WO-015 flowContextId in run state and trace | P0 | DONE | 5 |
 | FX-WO-016 Append-only flow context store | P0 | DONE | 5 |
 | FX-WO-017 ContextSnapshot and ContextDelta contracts | P0 | DONE | 5 |
-| FX-WO-018 Cache-friendly prompt layout guard | P1 | READY | 5 |
-| FX-WO-019 Per-node ContextSnapshot lifecycle | P0 | DISCOVERY | 6 |
-| FX-WO-020 Commit ContextDelta after safe states | P0 | DISCOVERY | 6 |
+| FX-WO-018 Cache-friendly prompt layout guard | P1 | DONE | 5 |
+| FX-WO-019 Per-node ContextSnapshot lifecycle | P0 | DONE | 6 |
+| FX-WO-020 Commit ContextDelta after safe states | P0 | DONE | 6 |
 | FX-WO-021 Parallel delta merge policy | P0 | DISCOVERY | 6 |
 | FX-WO-022 Context lifecycle trace evaluator | P1 | READY | 6 |
 | FX-WO-023 Provider-state aware adapter result | P1 | DISCOVERY | 7 |
@@ -1221,17 +1233,22 @@ npm run typecheck
 
 ## Suggested Sprint 6 Task Breakdown
 
-### Day 1 - Snapshot creation
+Status 2026-05-17:
 
-- Implement `FX-WO-019`.
-- Emit `node.context_snapshot_created`.
-- Assert version/hash behavior in tests.
+- Day 1 through Day 3 are complete via `FX-WO-019` and `FX-WO-020`.
+- Remaining Sprint 6 backend work starts at `FX-WO-021`.
 
-### Day 2-3 - Commit-safe delta lifecycle
+### Day 1 [DONE] - Snapshot creation
 
-- Implement `FX-WO-020`.
-- Handle completed, review-paused, review-approved, failed, and aborted states explicitly.
-- Add idempotent replay behavior for repeated commit attempts.
+- Implemented `FX-WO-019`.
+- Emitted `node.context_snapshot_created`.
+- Asserted version/hash behavior in tests.
+
+### Day 2-3 [DONE] - Commit-safe delta lifecycle
+
+- Implemented `FX-WO-020`.
+- Handled completed, review-paused, review-approved, failed, and aborted states explicitly.
+- Added idempotent replay behavior for repeated commit attempts.
 
 ### Day 4 - Parallel merge policy
 
@@ -1253,6 +1270,11 @@ npm run typecheck
 ```
 
 ## Sprint 6 Definition of Done
+
+Current status:
+
+- Snapshot creation and commit-safe lifecycle are complete.
+- Remaining Definition of Done items depend on `FX-WO-021` and `FX-WO-022`.
 
 - Each executed node can be tied to a concrete snapshot version and hash.
 - Successful nodes commit context deltas only once.
