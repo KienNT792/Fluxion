@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { AbortReason, AgentChunk, AgentNodeData, AgentResult, NodeId } from '@shared'
 import { RunnerContext, RunnerEvent, WorkflowNodeSchema } from '@core'
-import { BaseAdapter } from './base.adapter'
+import { BaseAdapter, ExecutionPrompt } from './base.adapter'
 import { CodexCliRunner } from '../runners/codex-cli-runner'
 
 // ─── Abort Message ────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ export class CodexCliAdapter extends BaseAdapter {
   public async *execute(
     nodeId: NodeId,
     nodeData: AgentNodeData,
-    prompt: string,
+    prompt: ExecutionPrompt,
     workspacePath: string
   ): AsyncGenerator<AgentChunk, AgentResult, void> {
     this.activeExecutions.add(nodeId)
@@ -218,7 +218,7 @@ export class CodexCliAdapter extends BaseAdapter {
       runId,
       workflowId: 'workflow-runtime',
       node,
-      prompt,
+      prompt: prompt.text,
       workspacePath
     }
 

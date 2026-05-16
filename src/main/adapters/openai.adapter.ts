@@ -8,7 +8,7 @@ import {
   OPENAI_DEFAULT_REASONING_LEVEL,
   isOpenAIReasoningModel
 } from '@shared'
-import { BaseAdapter } from './base.adapter'
+import { BaseAdapter, ExecutionPrompt } from './base.adapter'
 import { settingsService } from '../services/settings.service'
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
@@ -126,7 +126,7 @@ export class OpenAIAdapter extends BaseAdapter {
   public async *execute(
     nodeId: NodeId,
     nodeData: AgentNodeData,
-    prompt: string,
+    prompt: ExecutionPrompt,
     _workspacePath: string
   ): AsyncGenerator<AgentChunk, AgentResult, void> {
     void _workspacePath
@@ -177,13 +177,17 @@ export class OpenAIAdapter extends BaseAdapter {
 
     const requestBody: Record<string, unknown> = {
       model,
-      input: prompt,
+      input: prompt.input,
       store: false,
       text: {
         format: {
           type: 'text'
         }
       }
+    }
+
+    if (prompt.instructions) {
+      requestBody.instructions = prompt.instructions
     }
 
     if (typeof maxTokens === 'number') {

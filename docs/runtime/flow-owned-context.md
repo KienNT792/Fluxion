@@ -229,9 +229,9 @@ When later items land, rollback must remain simple:
 
 ### Phase 1: identity, storage, and contract baseline
 
-- `FX-WO-015` add `flowContextId` to run state and trace
-- `FX-WO-016` add append-only flow context store
-- `FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts in code
+- `FX-WO-015` add `flowContextId` to run state and trace [DONE]
+- `FX-WO-016` add append-only flow context store [DONE]
+- `FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts in code [DONE]
 - `FX-WO-018` add prompt layout guard for cache-friendly providers
 
 ### Phase 2: execution lifecycle and deterministic context commits
@@ -250,8 +250,8 @@ When later items land, rollback must remain simple:
 The following backlog items implement this ADR in dependency order:
 
 - [`FX-WO-015` add `flowContextId` to run state and trace](../backlog/workflow-optimization-sprint.md#fx-wo-015-add-flowcontextid-to-run-state-and-trace-done)
-- [`FX-WO-016` add append-only flow context store](../backlog/workflow-optimization-sprint.md#fx-wo-016-add-append-only-flow-context-store-ready)
-- [`FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts](../backlog/workflow-optimization-sprint.md#fx-wo-017-define-contextsnapshot-and-contextdelta-contracts-ready)
+- [`FX-WO-016` add append-only flow context store](../backlog/workflow-optimization-sprint.md#fx-wo-016-add-append-only-flow-context-store-done)
+- [`FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts](../backlog/workflow-optimization-sprint.md#fx-wo-017-define-contextsnapshot-and-contextdelta-contracts-done)
 - [`FX-WO-018` add prompt layout guard for cache-friendly providers](../backlog/workflow-optimization-sprint.md#fx-wo-018-add-prompt-layout-guard-for-cache-friendly-providers-ready)
 - [`FX-WO-019` build per-node `ContextSnapshot` before execution](../backlog/workflow-optimization-sprint.md#fx-wo-019-build-per-node-contextsnapshot-before-execution-discovery)
 - [`FX-WO-020` commit `ContextDelta` only after commit-safe node states](../backlog/workflow-optimization-sprint.md#fx-wo-020-commit-contextdelta-only-after-commit-safe-node-states-discovery)
@@ -259,11 +259,17 @@ The following backlog items implement this ADR in dependency order:
 - [`FX-WO-022` extend trace evaluator for context lifecycle](../backlog/workflow-optimization-sprint.md#fx-wo-022-extend-trace-evaluator-for-context-lifecycle-ready)
 - [`FX-WO-023` add provider-state aware adapter result](../backlog/workflow-optimization-sprint.md#fx-wo-023-add-provider-state-aware-adapter-result-discovery)
 
-Code-facing additions completed by `FX-WO-015`:
+Code-facing additions completed by `FX-WO-015` through `FX-WO-017`:
 
 - `WorkflowRunState.flowContextId`
 - trace correlation by both `runId` and `flowContextId`
+- run-local `.fluxion/runs/<runId>.context.json` sidecar initialization
+- `FlowContextStore` create/read/reinitialize-existing behavior
+- `FlowContextDocument`, `ContextSnapshot`, `ContextDelta`, and `ContextCommitResult` types and schemas
+- secret-like field rejection plus safe secret reference fields for flow-context payloads
 
-Deferred code-facing additions that belong to follow-up implementation, not this ADR:
+Deferred code-facing additions that belong to follow-up implementation:
 
-- snapshot and delta contracts in `src/core` and `src/shared`
+- `FX-WO-018` prompt layout guard
+- `FX-WO-019` per-node snapshot creation in the engine
+- `FX-WO-020` commit-safe delta lifecycle

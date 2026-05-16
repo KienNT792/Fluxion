@@ -1,7 +1,7 @@
 # Workflow Optimization Backlog and Sprint Plan
 
 Date: 2026-05-10
-Last updated: 2026-05-15
+Last updated: 2026-05-16
 Source checkpoint: `docs/runtime/agent-workflow-memory-checkpoint.md`
 Workspace: `D:\codex-workflow\Fluxion`
 
@@ -17,6 +17,53 @@ Backlog nay gom cac viec can lam de toi uu Fluxion workflow runtime theo huong:
 6. Flow la don vi so huu context; node chi la operation nhan context snapshot va tra context delta.
 
 Pham vi nay khong doi runtime chinh cua Fluxion. Runtime chinh van la local Codex CLI qua `codex exec`.
+
+## Research Reference Pack
+
+Dung section nay nhu source map khi doc, danh gia, hoac cap nhat backlog nay. OpenAI/Codex docs la source of truth cho behavior cua Codex, Responses API, Agents SDK, model, approval, sandbox, va tracing. Cac nguon ngoai OpenAI chi la design reference; khong duoc override Fluxion contract hien tai neu khong co discovery/ADR rieng. Runtime mac dinh cua Fluxion van la local Codex CLI qua `codex exec`; OpenAI Responses va Agents SDK la optional provider/architecture reference.
+
+### OpenAI and Codex primary sources
+
+- [Codex non-interactive mode](https://developers.openai.com/codex/noninteractive): `codex exec` automation model, JSONL stream, final output file, stdin patterns, sandbox guidance.
+- [Codex CLI reference - `codex exec`](https://developers.openai.com/codex/cli/reference#codex-exec): canonical flags for `--json`, `--cd`, `--model`, `--sandbox`, `--output-last-message`, and `codex exec resume`.
+- [Codex agent approvals and security](https://developers.openai.com/codex/agent-approvals-security#sandbox-and-approvals): sandbox vs approval model, non-interactive permissions, network risk, telemetry/security guidance.
+- [Codex AGENTS.md guidance](https://developers.openai.com/codex/guides/agents-md): repo instruction discovery, layering, override behavior, and verification.
+- [OpenAI Agents SDK overview](https://developers.openai.com/api/docs/guides/agents): when application code owns orchestration, tools, approvals, state, and observability.
+- [OpenAI Agents SDK - running agents](https://developers.openai.com/api/docs/guides/agents/running-agents): agent loop, conversation state strategies, streaming, approval pauses, and resumable state.
+- [OpenAI Agents SDK - orchestration and handoffs](https://developers.openai.com/api/docs/guides/agents/orchestration): handoffs vs agents-as-tools, specialist ownership, and when to split agents.
+- [OpenAI Agents SDK - guardrails and human review](https://developers.openai.com/api/docs/guides/agents/guardrails-approvals): approval lifecycle, interruptions, same-run resume, and side-effect gates.
+- [OpenAI Agents SDK - results and state](https://developers.openai.com/api/docs/guides/agents/results): result surfaces, next-turn continuation, pending approvals, and resumable snapshots.
+- [OpenAI Agents SDK - integrations and observability](https://developers.openai.com/api/docs/guides/agents/integrations-observability): traces for model calls, tools, handoffs, guardrails, and custom workflow spans.
+- [OpenAI agent workflow evals](https://developers.openai.com/api/docs/guides/agent-evals): trace grading first, then datasets/eval runs for repeatable workflow scoring.
+- [OpenAI cookbook - evaluation flywheel](https://cookbook.openai.com/examples/evaluation/building_resilient_prompts_using_an_evaluation_flywheel): practical loop for analyzing failures, building datasets, measuring changes, and iterating prompts/workflows.
+- [OpenAI latest model / reasoning-model guidance](https://developers.openai.com/api/docs/guides/latest-model#using-reasoning-models): Responses API state handling, `previous_response_id`, `phase`, prompt caching, compaction, structured outputs, and tool-heavy workflow guidance.
+- [OpenAI cookbook - session memory](https://cookbook.openai.com/examples/agents_sdk/session_memory): context trimming vs summarization tradeoffs, reproducibility, summary drift, and eval implications.
+- [OpenAI cookbook - reliable agents with memory and compaction](https://cookbook.openai.com/examples/agents_sdk/building_reliable_agents_memory_compaction): evidence artifacts, workflow memory, compaction, and human-reviewed source-of-truth boundaries.
+
+### External docs and research references
+
+- [Anthropic - Building effective agents](https://www.anthropic.com/engineering/building-effective-agents): workflow vs agent distinction, prompt chaining, routing, parallelization, orchestrator-workers, and evaluator-optimizer patterns.
+- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence): thread-scoped checkpoints, state snapshots, replay, fault tolerance, human-in-the-loop, memory, and pending writes.
+- [LangSmith - evaluate a complex agent](https://docs.langchain.com/langsmith/evaluate-complex-agent): final-response, single-step, and trajectory eval patterns for multi-step agents.
+- [LlamaIndex agent memory](https://developers.llamaindex.ai/python/framework/module_guides/deploying/agents/memory/): short-term and long-term memory blocks, retrieval, extraction, and memory store patterns.
+- [AutoGen AgentChat memory](https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/memory.html): memory protocol, retrieve/update/inject lifecycle, and RAG-backed memory examples.
+- [Agent Workflow Memory paper](https://arxiv.org/abs/2409.07429): workflow-level memory extraction and reuse from prior agent trajectories.
+- [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/): naming and structure guidance if Fluxion later exports trace/log/metric events beyond local JSONL.
+- [W3C Trace Context](https://www.w3.org/TR/trace-context/): `traceparent`/`tracestate` correlation model if Fluxion traces later need cross-process or external-observability propagation.
+- [Temporal durable execution docs](https://docs.temporal.io/): durable workflow state, retry/replay, activities, and crash recovery as a reference model, not a dependency recommendation.
+- [Netflix Conductor documentation](https://conductor-oss.github.io/conductor/documentation/): JSON workflow definitions, task retries, pause/resume, human tasks, and audit-oriented orchestration patterns.
+
+### Reference routing by backlog area
+
+| Backlog area | Read first |
+| --- | --- |
+| Codex CLI runner, process telemetry, approval guardrails | Codex non-interactive mode; Codex CLI reference; Codex approvals/security |
+| Review gates, rerun, paused review recovery | Agents running agents; guardrails and human review; results and state; LangGraph persistence; Temporal durable execution |
+| Flow-owned context, snapshots, deltas, provider state | Latest model / reasoning-model guidance; Agents running agents; LangGraph persistence; LlamaIndex memory; AutoGen memory |
+| Prompt layout and cache-friendly providers | Latest model / reasoning-model guidance; OpenAI session memory; reliable agents with memory and compaction |
+| Trace schema, telemetry, observability, external export | Agents integrations/observability; OpenAI agent workflow evals; OpenTelemetry semantic conventions; W3C Trace Context |
+| Deterministic graders and future eval loops | OpenAI agent workflow evals; LangSmith complex-agent evals; OpenAI evaluation cookbook; Agent Workflow Memory paper |
+| Future agent autonomy, routing, loops, handoffs | Anthropic building effective agents; Agents orchestration/handoffs; LangGraph persistence |
 
 ## Sprint Theme
 
@@ -614,7 +661,7 @@ Files likely touched:
 - `src/main/test/run-state-store.test.ts`
 - `src/main/test/workflow-engine.test.ts`
 
-### FX-WO-016 Add append-only flow context store [READY]
+### FX-WO-016 Add append-only flow context store [DONE]
 
 Priority: `P0`
 
@@ -650,20 +697,25 @@ Candidate context packet:
 
 Acceptance:
 
-- [ ] Context store initializes when workflow starts.
-- [ ] Store write is Windows-safe and path-built with `path.join()`.
-- [ ] Store write failure is traced and fails the run only when context commit is required for correctness.
-- [ ] Existing memory output files and run state remain unchanged except for optional references.
-- [ ] Tests cover create/read/update and invalid JSON recovery behavior.
+- [x] Context store initializes when workflow starts.
+- [x] Store write is Windows-safe and path-built with `path.join()`.
+- [x] Store initialization failure is traced as workflow failure and fails the run because initial context is required before node execution.
+- [x] Existing memory output files and run state remain unchanged except for additive flow-context sidecar references.
+- [x] Tests cover create/read/reinitialize-existing behavior plus invalid JSON and corrupted file handling.
 
-Files likely touched:
+Files touched:
 
 - `src/main/services/flow-context-store.ts`
 - `src/core/schema/flow-context.schema.ts`
 - `src/core/runs/flow-context.types.ts`
+- `src/core/index.ts`
+- `src/main/services/run-state-store.ts`
+- `src/main/services/workflow-engine.ts`
 - `src/main/test/flow-context-store.test.ts`
+- `src/main/test/run-state-store.test.ts`
+- `src/main/test/workflow-engine.test.ts`
 
-### FX-WO-017 Define ContextSnapshot and ContextDelta contracts [READY]
+### FX-WO-017 Define ContextSnapshot and ContextDelta contracts [DONE]
 
 Priority: `P0`
 
@@ -684,16 +736,15 @@ Deliverable:
 
 Acceptance:
 
-- [ ] Types are exported from the core/shared boundary where engine and adapters can use them.
-- [ ] Delta has `schemaVersion`, `nodeId`, `attempt`, `createdAt`, and `idempotencyKey`.
-- [ ] Schema rejects or redacts direct secret-like fields where practical.
-- [ ] Tests cover additive delta and conflict marker shape.
+- [x] Types are exported from the core boundary where engine and adapters can use them.
+- [x] Delta has `schemaVersion`, `nodeId`, `attempt`, `createdAt`, and `idempotencyKey`.
+- [x] Schema rejects direct secret-like fields and accepts safe `secretRef`, `redactedRef`, or `envVar` references.
+- [x] Tests cover additive delta, required identity fields, secret-like field rejection, safe references, and conflict marker shape.
 
-Files likely touched:
+Files touched:
 
 - `src/core/runs/flow-context.types.ts`
 - `src/core/schema/flow-context.schema.ts`
-- `src/shared/workflow.types.ts` or a new shared context types file
 - `src/core/test/flow-context.schema.test.ts`
 
 ### FX-WO-018 Add prompt layout guard for cache-friendly providers [READY]
@@ -986,8 +1037,8 @@ Files likely touched:
 | FX-WO-012 Memory promotion guardrails | P3 | READY | 4 |
 | FX-WO-014 Flow context ADR and contracts | P0 | DONE | 5 |
 | FX-WO-015 flowContextId in run state and trace | P0 | DONE | 5 |
-| FX-WO-016 Append-only flow context store | P0 | READY | 5 |
-| FX-WO-017 ContextSnapshot and ContextDelta contracts | P0 | READY | 5 |
+| FX-WO-016 Append-only flow context store | P0 | DONE | 5 |
+| FX-WO-017 ContextSnapshot and ContextDelta contracts | P0 | DONE | 5 |
 | FX-WO-018 Cache-friendly prompt layout guard | P1 | READY | 5 |
 | FX-WO-019 Per-node ContextSnapshot lifecycle | P0 | DISCOVERY | 6 |
 | FX-WO-020 Commit ContextDelta after safe states | P0 | DISCOVERY | 6 |

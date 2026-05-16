@@ -274,7 +274,7 @@ export interface TerminalExitPayload {
 // Memory payloads
 export interface MemoryContextReadyPayload {
   nodeId: NodeId
-  /** The fully compiled mega-prompt string ready to be fed to the agent. */
+  /** The compiled memory context used as one input when building the execution prompt. */
   compiledContext: string
 }
 

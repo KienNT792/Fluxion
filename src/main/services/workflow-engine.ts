@@ -15,7 +15,7 @@ import {
   WorkflowNode
 } from '@shared'
 import { CodexCliAdapter } from '../adapters/codex-cli.adapter'
-import { IAgentAdapter } from '../adapters/base.adapter'
+import { ExecutionPrompt, IAgentAdapter } from '../adapters/base.adapter'
 import { artifactGateService, ArtifactGateService, ArtifactSnapshot } from './artifact-gate-service'
 import { flowContextStore, FlowContextStore } from './flow-context-store'
 import { memoryManager, MemoryManager } from './memory-manager'
@@ -81,17 +81,44 @@ type NodeExecutionResult =
   | { nodeId: NodeId; kind: 'failed' }
   | { nodeId: NodeId; kind: 'aborted' }
 
-function buildPrompt(node: WorkflowNode, context: string): string {
-  const promptSections = [context.trim()]
+function joinPromptSections(sections: string[]): string {
+  return sections.filter((section) => section.length > 0).join('\n\n')
+}
+
+export function buildExecutionPrompt(node: WorkflowNode, context: string): ExecutionPrompt {
+  const trimmedContext = context.trim()
   const systemInstruction =
     typeof node.data.systemInstruction === 'string' ? node.data.systemInstruction.trim() : ''
+  const userInstruction = `[USER INSTRUCTION]\n${node.data.prompt}`
 
-  if (systemInstruction) {
-    promptSections.push(`[SYSTEM INSTRUCTION]\n${systemInstruction}`)
+  if (node.data.provider === 'openai') {
+    const input = joinPromptSections([userInstruction, trimmedContext])
+    const text = joinPromptSections([
+      systemInstruction ? `[SYSTEM INSTRUCTION]\n${systemInstruction}` : '',
+      userInstruction,
+      trimmedContext
+    ])
+
+    return {
+      layout: 'openai-responses-v1',
+      text,
+      input,
+      instructions: systemInstruction || undefined
+    }
   }
 
-  promptSections.push(`[USER INSTRUCTION]\n${node.data.prompt}`)
-  return promptSections.filter((section) => section.length > 0).join('\n\n')
+  const text = joinPromptSections([
+    trimmedContext,
+    systemInstruction ? `[SYSTEM INSTRUCTION]\n${systemInstruction}` : '',
+    userInstruction
+  ])
+
+  return {
+    layout: 'codex-legacy-v1',
+    text,
+    input: text,
+    instructions: undefined
+  }
 }
 
 function createWorkflowCompletedPayload(
@@ -834,12 +861,12 @@ export class WorkflowEngine {
         sources: contextReport.sources
       })
 
-      const fullPrompt = buildPrompt(node, context)
+      const fullPrompt = buildExecutionPrompt(node, context)
       await this.trace(runtime, 'node.execution_started', node.id, {
         runner: node.data.runner ?? 'codex',
         provider: node.data.provider,
         model: node.data.model,
-        promptBytes: Buffer.byteLength(fullPrompt, 'utf8')
+        promptBytes: Buffer.byteLength(fullPrompt.text, 'utf8')
       })
       const result = await this.executeNode(node, fullPrompt, runtime)
       await this.trace(runtime, 'node.execution_completed', node.id, {
@@ -1034,7 +1061,7 @@ export class WorkflowEngine {
 
   private async executeNode(
     node: WorkflowNode,
-    fullPrompt: string,
+    fullPrompt: ExecutionPrompt,
     runtime: WorkflowRuntime
   ): Promise<AgentResult> {
     const batches: Record<'stdout' | 'stderr', string[]> = {

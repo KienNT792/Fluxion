@@ -7,18 +7,27 @@ import {
   NodeId
 } from '@shared'
 
+export type PromptLayout = 'codex-legacy-v1' | 'openai-responses-v1'
+
+export interface ExecutionPrompt {
+  layout: PromptLayout
+  text: string
+  input: string
+  instructions?: string
+}
+
 export interface IAgentAdapter {
   /**
-   * Executes the agent with the given node configuration and compiled prompt.
+   * Executes the agent with the given node configuration and provider-specific prompt layout.
    * @param nodeId     Unique identifier of the executing node.
    * @param nodeData   Full node configuration (provider, model, temperature, etc.).
-   * @param prompt     The compiled mega-prompt (global context + user instruction).
+   * @param prompt     Provider-specific prompt layout built by the workflow engine.
    * @param workspacePath  Absolute path to the workspace root.
    */
   execute(
     nodeId: NodeId,
     nodeData: AgentNodeData,
-    prompt: string,
+    prompt: ExecutionPrompt,
     workspacePath: string
   ): AsyncGenerator<AgentChunk, AgentResult, void>
 
@@ -34,7 +43,7 @@ export abstract class BaseAdapter implements IAgentAdapter {
   public abstract execute(
     nodeId: NodeId,
     nodeData: AgentNodeData,
-    prompt: string,
+    prompt: ExecutionPrompt,
     workspacePath: string
   ): AsyncGenerator<AgentChunk, AgentResult, void>
 

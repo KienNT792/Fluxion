@@ -16,10 +16,15 @@ import {
   WorkflowNode
 } from '@shared'
 import { IAgentAdapter } from '../adapters/base.adapter'
+import { ExecutionPrompt } from '../adapters/base.adapter'
 import { ArtifactGateService } from '../services/artifact-gate-service'
 import { memoryManager } from '../services/memory-manager'
 import { RunStateStore } from '../services/run-state-store'
-import { WorkflowEngine, WorkflowEventSender } from '../services/workflow-engine'
+import {
+  buildExecutionPrompt,
+  WorkflowEngine,
+  WorkflowEventSender
+} from '../services/workflow-engine'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -32,7 +37,7 @@ interface AdapterBehavior {
   onStart?: () => void
   onExecute?: (ctx: {
     nodeId: string
-    prompt: string
+    prompt: ExecutionPrompt
     workspacePath: string
   }) => Promise<void> | void
   runnerSessionId?: string
@@ -50,8 +55,11 @@ class FakeSender implements WorkflowEventSender {
 }
 
 class FakeAdapter implements IAgentAdapter {
-  public readonly executeCalls: Array<{ nodeId: string; prompt: string; workspacePath: string }> =
-    []
+  public readonly executeCalls: Array<{
+    nodeId: string
+    prompt: ExecutionPrompt
+    workspacePath: string
+  }> = []
   public readonly abortCalls: Array<{ nodeId: string; reason: AbortReason }> = []
 
   private readonly abortReasons = new Map<string, AbortReason>()
@@ -62,7 +70,7 @@ class FakeAdapter implements IAgentAdapter {
   public async *execute(
     nodeId: string,
     _nodeData: AgentNodeData,
-    prompt: string,
+    prompt: ExecutionPrompt,
     workspacePath: string
   ): AsyncGenerator<AgentChunk, AgentResult, void> {
     this.executeCalls.push({ nodeId, prompt, workspacePath })
@@ -259,6 +267,73 @@ function reviewAction(runId: string, nodeId: string): WorkflowReviewActionPayloa
   }
 }
 
+describe('buildExecutionPrompt', () => {
+  it('keeps Codex prompt layout compatible with the legacy order', () => {
+    const prompt = buildExecutionPrompt(
+      createNode('node-a', {
+        systemInstruction: 'Follow repository rules.',
+        prompt: 'Run tests.'
+      }),
+      '[GLOBAL CONTEXT]\nProject context.'
+    )
+
+    expect(prompt).toEqual({
+      layout: 'codex-legacy-v1',
+      text: [
+        '[GLOBAL CONTEXT]\nProject context.',
+        '[SYSTEM INSTRUCTION]\nFollow repository rules.',
+        '[USER INSTRUCTION]\nRun tests.'
+      ].join('\n\n'),
+      input: [
+        '[GLOBAL CONTEXT]\nProject context.',
+        '[SYSTEM INSTRUCTION]\nFollow repository rules.',
+        '[USER INSTRUCTION]\nRun tests.'
+      ].join('\n\n'),
+      instructions: undefined
+    })
+  })
+
+  it('builds an OpenAI Responses layout with instructions separated from input', () => {
+    const prompt = buildExecutionPrompt(
+      createNode('node-a', {
+        provider: 'openai',
+        systemInstruction: 'Follow repository rules.',
+        prompt: 'Run tests.'
+      }),
+      '[GLOBAL CONTEXT]\nProject context.'
+    )
+
+    expect(prompt.layout).toBe('openai-responses-v1')
+    expect(prompt.instructions).toBe('Follow repository rules.')
+    expect(prompt.input).toBe(
+      ['[USER INSTRUCTION]\nRun tests.', '[GLOBAL CONTEXT]\nProject context.'].join('\n\n')
+    )
+    expect(prompt.text).toBe(
+      [
+        '[SYSTEM INSTRUCTION]\nFollow repository rules.',
+        '[USER INSTRUCTION]\nRun tests.',
+        '[GLOBAL CONTEXT]\nProject context.'
+      ].join('\n\n')
+    )
+  })
+
+  it('omits OpenAI instructions when the system instruction is empty', () => {
+    const prompt = buildExecutionPrompt(
+      createNode('node-a', {
+        provider: 'openai',
+        systemInstruction: '   ',
+        prompt: 'Run tests.'
+      }),
+      '[GLOBAL CONTEXT]\nProject context.'
+    )
+
+    expect(prompt.instructions).toBeUndefined()
+    expect(prompt.input).toBe(
+      ['[USER INSTRUCTION]\nRun tests.', '[GLOBAL CONTEXT]\nProject context.'].join('\n\n')
+    )
+  })
+})
+
 describe('WorkflowEngine', () => {
   let workspacePath: string
 
@@ -323,7 +398,9 @@ describe('WorkflowEngine', () => {
     expect(runState.nodes['node-b']?.status).toBe('completed')
     expect(runState.nodes['node-a']).not.toHaveProperty('processTelemetry')
     expect(adapter.executeCalls.map((call) => call.nodeId)).toEqual(['node-a', 'node-b'])
-    expect(adapter.executeCalls[1]?.prompt).toContain('Output from Node node-a (codex / gpt-5.5)')
+    expect(adapter.executeCalls[1]?.prompt.text).toContain(
+      'Output from Node node-a (codex / gpt-5.5)'
+    )
 
     const completedEvent = sender.events.find(
       (event) => event.channel === IpcChannels.WORKFLOW_COMPLETED
