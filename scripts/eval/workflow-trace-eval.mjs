@@ -15,6 +15,21 @@ const NODE_TERMINAL_TYPES = new Set([
   'node.review_requested'
 ])
 
+const CONTEXT_EVENT_TYPES = new Set([
+  'workflow.context_initialized',
+  'node.context_snapshot_created',
+  'node.context_delta_committed',
+  'node.context_delta_conflicted'
+])
+
+const CONTEXT_NODE_EVENT_TYPES = new Set([
+  'node.context_snapshot_created',
+  'node.context_delta_committed',
+  'node.context_delta_conflicted'
+])
+
+const FINAL_CONTEXT_COMMIT_STATES = new Set(['completed', 'review_approved'])
+
 function parseArgs(argv) {
   const args = new Map()
   for (let index = 0; index < argv.length; index += 1) {
@@ -47,8 +62,54 @@ function indexOfEvent(events, predicate, startIndex = 0) {
   return -1
 }
 
+function lastIndexOfEvent(events, predicate, startIndex = events.length - 1) {
+  for (let index = Math.min(startIndex, events.length - 1); index >= 0; index -= 1) {
+    if (predicate(events[index])) {
+      return index
+    }
+  }
+  return -1
+}
+
 function check(name, ok, message, details = undefined) {
   return { name, ok, message, details }
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function eventData(event) {
+  return isRecord(event.data) ? event.data : {}
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function indexedEvents(events, predicate) {
+  return events
+    .map((event, index) => ({ event, index, data: eventData(event) }))
+    .filter(({ event, data }) => predicate(event, data))
+}
+
+function eventDetails(event, index, extra = {}) {
+  const data = eventData(event)
+  return {
+    eventIndex: index,
+    type: event.type,
+    runId: event.runId,
+    flowContextId: event.flowContextId,
+    nodeId: event.nodeId,
+    snapshotVersion: data.snapshotVersion,
+    contextVersion: data.contextVersion ?? data.currentContextVersion,
+    deltaIdempotencyKey: data.deltaIdempotencyKey,
+    ...extra
+  }
 }
 
 function buildStats(events) {
@@ -65,6 +126,437 @@ function buildStats(events) {
     nodes: nodes.size,
     eventCounts
   }
+}
+
+function addContextInitializedBeforeSnapshotCheck(events, checks, workflowStartIndexes) {
+  const contextNodeEvents = indexedEvents(events, (event) =>
+    CONTEXT_NODE_EVENT_TYPES.has(event.type)
+  )
+  const initEvents = indexedEvents(events, (event) => event.type === 'workflow.context_initialized')
+  const firstContextNodeEvent = contextNodeEvents[0]
+  const initIndex = initEvents[0]?.index ?? -1
+  const workflowStartIndex = workflowStartIndexes[0] ?? -1
+  const ok =
+    contextNodeEvents.length === 0
+      ? initEvents.length <= 1 && (initEvents.length === 0 || workflowStartIndex < initIndex)
+      : initEvents.length === 1 &&
+        workflowStartIndex >= 0 &&
+        workflowStartIndex < initIndex &&
+        initIndex < firstContextNodeEvent.index
+
+  checks.push(
+    check(
+      'context-initialized-before-snapshot',
+      ok,
+      'Flow context must be initialized after workflow start and before node context events.',
+      {
+        workflowStartIndexes,
+        initIndexes: initEvents.map(({ index }) => index),
+        firstContextNodeEvent: firstContextNodeEvent
+          ? eventDetails(firstContextNodeEvent.event, firstContextNodeEvent.index)
+          : undefined
+      }
+    )
+  )
+}
+
+function addContextFlowContextConsistencyCheck(events, checks) {
+  const contextEvents = indexedEvents(events, (event) => CONTEXT_EVENT_TYPES.has(event.type))
+  const initEvents = contextEvents.filter(
+    ({ event }) => event.type === 'workflow.context_initialized'
+  )
+  const expectedFlowContextId =
+    initEvents.length === 1 ? initEvents[0].event.flowContextId : undefined
+  const issues = []
+
+  for (const { event, index } of contextEvents) {
+    if (!isNonEmptyString(event.flowContextId)) {
+      issues.push(eventDetails(event, index, { issue: 'missingFlowContextId' }))
+      continue
+    }
+    if (expectedFlowContextId && event.flowContextId !== expectedFlowContextId) {
+      issues.push(
+        eventDetails(event, index, {
+          issue: 'mismatchedFlowContextId',
+          expectedFlowContextId
+        })
+      )
+    }
+  }
+
+  checks.push(
+    check(
+      'context-flow-context-consistency',
+      issues.length === 0,
+      'All context trace events must carry the initialized flowContextId.',
+      { expectedFlowContextId, issues }
+    )
+  )
+}
+
+function addContextSnapshotOrderAndShapeCheck(events, checks) {
+  const issues = []
+  const snapshots = indexedEvents(events, (event) => event.type === 'node.context_snapshot_created')
+
+  for (const { event, index, data } of snapshots) {
+    const compileIndex = lastIndexOfEvent(
+      events,
+      (candidate) =>
+        candidate.nodeId === event.nodeId && candidate.type === 'node.context_compiled',
+      index - 1
+    )
+    const executionStartedIndex = indexOfEvent(
+      events,
+      (candidate) =>
+        candidate.nodeId === event.nodeId && candidate.type === 'node.execution_started',
+      index + 1
+    )
+    const missingFields = []
+    if (!isFiniteNumber(data.snapshotVersion)) {
+      missingFields.push('snapshotVersion')
+    }
+    if (!isNonEmptyString(data.snapshotHash)) {
+      missingFields.push('snapshotHash')
+    }
+    if (!isNonEmptyString(data.flowContextId)) {
+      missingFields.push('flowContextId')
+    }
+    if (!isFiniteNumber(data.memorySourceCount)) {
+      missingFields.push('memorySourceCount')
+    }
+    if (!isFiniteNumber(data.artifactRefCount)) {
+      missingFields.push('artifactRefCount')
+    }
+
+    if (compileIndex < 0 || executionStartedIndex < 0 || missingFields.length > 0) {
+      issues.push(
+        eventDetails(event, index, {
+          issue: 'invalidSnapshotOrderOrShape',
+          compileIndex,
+          executionStartedIndex,
+          missingFields
+        })
+      )
+    }
+  }
+
+  checks.push(
+    check(
+      'context-snapshot-order-and-shape',
+      issues.length === 0,
+      'Each context snapshot must occur after context compilation, before execution start, and include required snapshot data.',
+      { issues }
+    )
+  )
+}
+
+function addContextDeltaCommitSafeOrderCheck(events, checks) {
+  const issues = []
+  const commits = indexedEvents(events, (event) => event.type === 'node.context_delta_committed')
+
+  for (const { event, index, data } of commits) {
+    const commitState = data.commitState
+    if (!isNonEmptyString(commitState)) {
+      issues.push(eventDetails(event, index, { issue: 'missingCommitState' }))
+      continue
+    }
+
+    if (commitState === 'completed') {
+      const outputSavedIndex = lastIndexOfEvent(
+        events,
+        (candidate) => candidate.nodeId === event.nodeId && candidate.type === 'node.output_saved',
+        index - 1
+      )
+      if (outputSavedIndex < 0) {
+        issues.push(eventDetails(event, index, { issue: 'completedCommitBeforeOutputSaved' }))
+      }
+      continue
+    }
+
+    if (commitState === 'awaiting_review') {
+      const outputSavedIndex = lastIndexOfEvent(
+        events,
+        (candidate) => candidate.nodeId === event.nodeId && candidate.type === 'node.output_saved',
+        index - 1
+      )
+      const reviewRequestedIndex = indexOfEvent(
+        events,
+        (candidate) =>
+          candidate.nodeId === event.nodeId && candidate.type === 'node.review_requested',
+        index + 1
+      )
+      if (outputSavedIndex < 0 || reviewRequestedIndex < 0) {
+        issues.push(
+          eventDetails(event, index, {
+            issue: 'awaitingReviewCommitOutsideReviewWindow',
+            outputSavedIndex,
+            reviewRequestedIndex
+          })
+        )
+      }
+      continue
+    }
+
+    if (commitState === 'review_approved') {
+      const reviewApprovedIndex = lastIndexOfEvent(
+        events,
+        (candidate) =>
+          candidate.nodeId === event.nodeId && candidate.type === 'node.review_approved',
+        index - 1
+      )
+      if (reviewApprovedIndex < 0) {
+        issues.push(eventDetails(event, index, { issue: 'reviewApprovedCommitBeforeApproval' }))
+      }
+      continue
+    }
+
+    issues.push(eventDetails(event, index, { issue: 'unsupportedCommitState', commitState }))
+  }
+
+  checks.push(
+    check(
+      'context-delta-commit-safe-order',
+      issues.length === 0,
+      'Context delta commits must occur only after their commit-safe lifecycle event.',
+      { issues }
+    )
+  )
+}
+
+function addContextNoSuccessCommitAfterTerminalNodeFailureCheck(events, checks) {
+  const issues = []
+  const terminalFailures = indexedEvents(
+    events,
+    (event) => event.type === 'node.failed' || event.type === 'node.aborted'
+  )
+
+  for (const { event, index } of terminalFailures) {
+    const laterCommitIndex = indexOfEvent(
+      events,
+      (candidate) =>
+        candidate.nodeId === event.nodeId && candidate.type === 'node.context_delta_committed',
+      index + 1
+    )
+    if (laterCommitIndex >= 0) {
+      issues.push(
+        eventDetails(events[laterCommitIndex], laterCommitIndex, {
+          issue: 'successCommitAfterTerminalNodeFailure',
+          terminalFailureIndex: index
+        })
+      )
+    }
+  }
+
+  checks.push(
+    check(
+      'context-no-success-commit-after-terminal-node-failure',
+      issues.length === 0,
+      'Failed or aborted nodes must not emit successful context delta commits afterwards.',
+      { issues }
+    )
+  )
+}
+
+function findLatestFinalCommitBefore(events, nodeId, beforeIndex) {
+  for (let index = beforeIndex - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    const data = eventData(event)
+    if (
+      event.nodeId === nodeId &&
+      event.type === 'node.context_delta_committed' &&
+      FINAL_CONTEXT_COMMIT_STATES.has(data.commitState) &&
+      isFiniteNumber(data.contextVersion)
+    ) {
+      return { event, index, data }
+    }
+  }
+  return undefined
+}
+
+function addContextDownstreamSnapshotFreshnessCheck(events, checks) {
+  const issues = []
+  const readyEvents = indexedEvents(events, (event) => event.type === 'node.ready')
+
+  for (const { event, index, data } of readyEvents) {
+    if (!Array.isArray(data.previousNodeIds) || data.previousNodeIds.length === 0) {
+      continue
+    }
+
+    const snapshotIndex = indexOfEvent(
+      events,
+      (candidate) =>
+        candidate.nodeId === event.nodeId && candidate.type === 'node.context_snapshot_created',
+      index + 1
+    )
+    if (snapshotIndex < 0) {
+      issues.push(eventDetails(event, index, { issue: 'missingDownstreamSnapshot' }))
+      continue
+    }
+
+    const snapshotEvent = events[snapshotIndex]
+    const snapshotData = eventData(snapshotEvent)
+    if (!isFiniteNumber(snapshotData.snapshotVersion)) {
+      issues.push(
+        eventDetails(snapshotEvent, snapshotIndex, { issue: 'missingDownstreamSnapshotVersion' })
+      )
+      continue
+    }
+
+    for (const previousNodeId of data.previousNodeIds) {
+      if (!isNonEmptyString(previousNodeId)) {
+        continue
+      }
+
+      const upstreamCommit = findLatestFinalCommitBefore(events, previousNodeId, snapshotIndex)
+      if (!upstreamCommit) {
+        issues.push(
+          eventDetails(snapshotEvent, snapshotIndex, {
+            issue: 'missingUpstreamFinalCommit',
+            upstreamNodeId: previousNodeId
+          })
+        )
+        continue
+      }
+
+      if (snapshotData.snapshotVersion < upstreamCommit.data.contextVersion) {
+        issues.push(
+          eventDetails(snapshotEvent, snapshotIndex, {
+            issue: 'staleDownstreamSnapshot',
+            upstreamNodeId: previousNodeId,
+            requiredContextVersion: upstreamCommit.data.contextVersion,
+            upstreamCommitIndex: upstreamCommit.index
+          })
+        )
+      }
+    }
+  }
+
+  checks.push(
+    check(
+      'context-downstream-snapshot-freshness',
+      issues.length === 0,
+      'Downstream snapshots must be at least as fresh as final upstream context commits.',
+      { issues }
+    )
+  )
+}
+
+function addContextConflictHandledDeterministicallyCheck(events, checks) {
+  const issues = []
+  const conflicts = indexedEvents(events, (event) => event.type === 'node.context_delta_conflicted')
+
+  for (const { event, index, data } of conflicts) {
+    const missingFields = []
+    if (!isNonEmptyString(data.deltaIdempotencyKey)) {
+      missingFields.push('deltaIdempotencyKey')
+    }
+    if (!isFiniteNumber(data.baseSnapshotVersion)) {
+      missingFields.push('baseSnapshotVersion')
+    }
+    if (!isNonEmptyString(data.baseSnapshotHash)) {
+      missingFields.push('baseSnapshotHash')
+    }
+    if (!isFiniteNumber(data.currentContextVersion)) {
+      missingFields.push('currentContextVersion')
+    }
+    if (
+      !isNonEmptyString(data.conflictKind) &&
+      !isNonEmptyString(data.conflictPath) &&
+      !isNonEmptyString(data.conflictReason)
+    ) {
+      missingFields.push('conflictKind|conflictPath|conflictReason')
+    }
+
+    const nodeFailureIndex = indexOfEvent(
+      events,
+      (candidate) => candidate.nodeId === event.nodeId && candidate.type === 'node.failed',
+      index + 1
+    )
+    const laterCommitWithSameKeyIndex = isNonEmptyString(data.deltaIdempotencyKey)
+      ? indexOfEvent(
+          events,
+          (candidate) =>
+            candidate.nodeId === event.nodeId &&
+            candidate.type === 'node.context_delta_committed' &&
+            eventData(candidate).deltaIdempotencyKey === data.deltaIdempotencyKey,
+          index + 1
+        )
+      : -1
+
+    if (missingFields.length > 0 || nodeFailureIndex < 0 || laterCommitWithSameKeyIndex >= 0) {
+      issues.push(
+        eventDetails(event, index, {
+          issue: 'invalidConflictHandling',
+          missingFields,
+          nodeFailureIndex,
+          laterCommitWithSameKeyIndex
+        })
+      )
+    }
+  }
+
+  checks.push(
+    check(
+      'context-conflict-handled-deterministically',
+      issues.length === 0,
+      'Context delta conflicts must include structured evidence, fail the node, and never later commit the same delta.',
+      { issues }
+    )
+  )
+}
+
+function addContextConflictDoesNotUnlockDownstreamCheck(events, checks) {
+  const issues = []
+  const conflicts = indexedEvents(events, (event) => event.type === 'node.context_delta_conflicted')
+
+  for (const { event, index } of conflicts) {
+    if (!isNonEmptyString(event.nodeId)) {
+      continue
+    }
+
+    for (let candidateIndex = index + 1; candidateIndex < events.length; candidateIndex += 1) {
+      const candidate = events[candidateIndex]
+      const candidateData = eventData(candidate)
+      if (
+        candidate.type === 'node.ready' &&
+        Array.isArray(candidateData.previousNodeIds) &&
+        candidateData.previousNodeIds.includes(event.nodeId)
+      ) {
+        issues.push(
+          eventDetails(candidate, candidateIndex, {
+            issue: 'downstreamReadyAfterConflict',
+            conflictNodeId: event.nodeId,
+            conflictIndex: index
+          })
+        )
+      }
+    }
+  }
+
+  checks.push(
+    check(
+      'context-conflict-does-not-unlock-downstream',
+      issues.length === 0,
+      'A conflict-failed node must not unlock downstream nodes.',
+      { issues }
+    )
+  )
+}
+
+function addContextLifecycleChecks(events, checks, workflowStartIndexes) {
+  const hasContextEvents = events.some((event) => CONTEXT_EVENT_TYPES.has(event.type))
+  if (!hasContextEvents) {
+    return
+  }
+
+  addContextInitializedBeforeSnapshotCheck(events, checks, workflowStartIndexes)
+  addContextFlowContextConsistencyCheck(events, checks)
+  addContextSnapshotOrderAndShapeCheck(events, checks)
+  addContextDeltaCommitSafeOrderCheck(events, checks)
+  addContextNoSuccessCommitAfterTerminalNodeFailureCheck(events, checks)
+  addContextDownstreamSnapshotFreshnessCheck(events, checks)
+  addContextConflictHandledDeterministicallyCheck(events, checks)
+  addContextConflictDoesNotUnlockDownstreamCheck(events, checks)
 }
 
 function evaluate(events) {
@@ -192,6 +684,8 @@ function evaluate(events) {
       { issues: reviewIssues }
     )
   )
+
+  addContextLifecycleChecks(events, checks, workflowStartIndexes)
 
   const ok = checks.every((item) => item.ok)
   return {
