@@ -154,6 +154,8 @@ export const ContextDeltaSchema = z
     nodeId: z.string().min(1),
     attempt: z.number().int().min(1),
     createdAt: IsoUtcTimestampSchema,
+    baseSnapshotVersion: z.number().int().min(1).default(1),
+    baseSnapshotHash: z.string().min(1).default('legacy:unknown'),
     idempotencyKey: z.string().min(1),
     memoryRefsAdded: z.array(ContextMemorySourceRefSchema),
     artifactRefsAddedOrValidated: z.array(ContextArtifactRefSchema),
@@ -173,6 +175,8 @@ export const ContextCommitResultSchema = z
     committed: z.boolean(),
     commitState: z.string().min(1),
     deltaIdempotencyKey: z.string().min(1),
+    conflictPath: z.string().min(1).optional(),
+    conflictKind: z.string().min(1).optional(),
     conflictReason: z.string().min(1).optional()
   })
   .strict()

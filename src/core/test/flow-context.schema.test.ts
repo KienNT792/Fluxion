@@ -15,6 +15,8 @@ function createValidContextDelta(): Record<string, unknown> {
     nodeId: 'node-a',
     attempt: 1,
     createdAt: '2026-05-15T00:01:00.000Z',
+    baseSnapshotVersion: 1,
+    baseSnapshotHash: 'sha256:base-1',
     idempotencyKey: 'run-1:node-a:1',
     memoryRefsAdded: [
       {
@@ -43,7 +45,9 @@ function createValidContextDelta(): Record<string, unknown> {
     },
     providerStateUpdates: {
       codex: {
-        runnerSessionId: 'session-1'
+        runnerSessionsByNode: {
+          'node-a': 'session-1'
+        }
       }
     },
     semanticSummaryUpdate: 'Node A produced docs/node-a.md.',
@@ -193,7 +197,9 @@ describe('ContextSnapshotSchema', () => {
       runStateRef: '.fluxion/runs/run-1.json',
       providerState: {
         codex: {
-          runnerSessionId: 'session-1'
+          runnerSessionsByNode: {
+            'node-a': 'session-1'
+          }
         },
         openai: {
           responseId: 'resp_1',
@@ -220,6 +226,8 @@ describe('ContextDeltaSchema', () => {
 
     expect(parsed.nodeId).toBe('node-a')
     expect(parsed.attempt).toBe(1)
+    expect(parsed.baseSnapshotVersion).toBe(1)
+    expect(parsed.baseSnapshotHash).toBe('sha256:base-1')
     expect(parsed.memoryRefsAdded).toHaveLength(1)
     expect(parsed.artifactRefsAddedOrValidated[0]?.validated).toBe(true)
   })
@@ -231,6 +239,17 @@ describe('ContextDeltaSchema', () => {
 
       expect(() => ContextDeltaSchema.parse(delta)).toThrow()
     }
+  })
+
+  it('defaults legacy deltas without base snapshot metadata', () => {
+    const delta = createValidContextDelta()
+    delete delta.baseSnapshotVersion
+    delete delta.baseSnapshotHash
+
+    const parsed = ContextDeltaSchema.parse(delta)
+
+    expect(parsed.baseSnapshotVersion).toBe(1)
+    expect(parsed.baseSnapshotHash).toBe('legacy:unknown')
   })
 
   it('rejects deltas with attempts below one', () => {

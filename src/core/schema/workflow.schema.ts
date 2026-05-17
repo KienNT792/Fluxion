@@ -24,6 +24,7 @@ export const AgentNodeDataSchema = z
     produces: z.array(ArtifactRefSchema).default([]),
     humanReview: z.boolean().default(false),
     retryPolicy: RetryPolicySchema.optional(),
+    contextWriter: z.boolean().optional(),
     maxTokens: z.number().optional(),
     temperature: z.number().optional(),
     reasoningLevel: z.enum(['low', 'medium', 'high', 'xhigh']).optional()

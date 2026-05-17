@@ -17,6 +17,8 @@ function createDelta(
     nodeId: 'node-a',
     attempt: 1,
     createdAt: '2026-05-15T00:01:00.000Z',
+    baseSnapshotVersion: 1,
+    baseSnapshotHash: 'sha256:base-1',
     idempotencyKey,
     memoryRefsAdded: [
       {
@@ -43,7 +45,11 @@ function createDelta(
       outputArtifactPaths: ['docs/output.md']
     },
     providerStateUpdates: {
-      runnerSessionId: 'session-a'
+      codex: {
+        runnerSessionsByNode: {
+          'node-a': 'session-a'
+        }
+      }
     },
     semanticSummaryUpdate: '',
     redaction: {
@@ -225,7 +231,11 @@ describe('FlowContextStore', () => {
         }
       ],
       providerState: {
-        runnerSessionId: 'session-a'
+        codex: {
+          runnerSessionsByNode: {
+            'node-a': 'session-a'
+          }
+        }
       },
       runStateRef: '.fluxion/runs/run-1.json',
       hash: expect.any(String)
@@ -254,7 +264,34 @@ describe('FlowContextStore', () => {
         {
           nodeId: 'node-b',
           attempt: 1,
-          createdAt: '2026-05-15T00:02:00.000Z'
+          createdAt: '2026-05-15T00:02:00.000Z',
+          baseSnapshotVersion: 2,
+          baseSnapshotHash: 'sha256:base-2',
+          memoryRefsAdded: [
+            {
+              path: '.fluxion/memory/short-term/workflow-1/node-b.md',
+              kind: 'short-term',
+              nodeId: 'node-b',
+              attempt: 1
+            }
+          ],
+          artifactRefsAddedOrValidated: [
+            {
+              path: 'docs/output-b.md',
+              required: true,
+              validated: true,
+              nodeId: 'node-b',
+              attempt: 1,
+              kind: 'produced'
+            }
+          ],
+          providerStateUpdates: {
+            codex: {
+              runnerSessionsByNode: {
+                'node-b': 'session-b'
+              }
+            }
+          }
         },
         'run-1:node-b:1:completed'
       ),

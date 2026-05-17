@@ -2,10 +2,12 @@ import { createHash } from 'crypto'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import {
+  ContextArtifactRef,
   ContextCommitResult,
   ContextCommitResultSchema,
   ContextDelta,
   ContextDeltaSchema,
+  ContextMemorySourceRef,
   FlowContextDocument,
   FlowContextDocumentSchema,
   FlowContextLatestSnapshot
@@ -32,6 +34,13 @@ export interface CommitDeltaResult {
 }
 
 type WriteOperation<T> = () => Promise<T>
+type ContextRef = ContextMemorySourceRef | ContextArtifactRef
+
+interface MergeConflict {
+  path: string
+  kind: string
+  reason: string
+}
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -64,12 +73,78 @@ function hashLatestSnapshot(snapshot: Omit<FlowContextLatestSnapshot, 'hash'>): 
     .digest('hex')
 }
 
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value)) ?? 'undefined'
+}
+
+function isDeepEqual(left: unknown, right: unknown): boolean {
+  return stableStringify(left) === stableStringify(right)
+}
+
 function isNotFoundError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
-function upsertRefsByPath<T extends { path: string }>(existing: T[], incoming: T[]): T[] {
-  const merged = existing.map((item) => structuredClone(item))
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function sortRefsByPath<T extends ContextRef>(refs: T[]): T[] {
+  return refs
+    .map((ref) => structuredClone(ref))
+    .sort((left, right) => {
+      const pathCompare = left.path.localeCompare(right.path)
+      return pathCompare === 0
+        ? stableStringify(left).localeCompare(stableStringify(right))
+        : pathCompare
+    })
+}
+
+function findRefConflict<T extends ContextRef>(
+  committedAfterBase: T[],
+  incoming: T[],
+  kind: 'memory_ref' | 'artifact_ref'
+): MergeConflict | undefined {
+  const incomingByPath = new Map<string, T>()
+  const committedByPath = new Map<string, T[]>()
+
+  for (const item of committedAfterBase) {
+    const existingItems = committedByPath.get(item.path) ?? []
+    existingItems.push(item)
+    committedByPath.set(item.path, existingItems)
+  }
+
+  for (const item of incoming) {
+    const existingIncoming = incomingByPath.get(item.path)
+    if (existingIncoming && !isDeepEqual(existingIncoming, item)) {
+      return {
+        kind,
+        path: item.path,
+        reason: `Conflicting ${kind} payload for path ${item.path}.`
+      }
+    }
+    incomingByPath.set(item.path, item)
+
+    const committedItems = committedByPath.get(item.path) ?? []
+    if (committedItems.some((committedItem) => !isDeepEqual(committedItem, item))) {
+      return {
+        kind,
+        path: item.path,
+        reason: `Conflicting ${kind} payload for path ${item.path}.`
+      }
+    }
+  }
+
+  return undefined
+}
+
+function upsertRefsByPath<T extends ContextRef>(existing: T[], incoming: T[]): T[] {
+  const merged = sortRefsByPath(existing)
   const indexes = new Map(merged.map((item, index) => [item.path, index]))
 
   for (const item of incoming) {
@@ -83,10 +158,125 @@ function upsertRefsByPath<T extends { path: string }>(existing: T[], incoming: T
     merged[existingIndex] = {
       ...merged[existingIndex],
       ...structuredClone(item)
+    } as T
+  }
+
+  return sortRefsByPath(merged)
+}
+
+function flattenLeafPaths(
+  value: unknown,
+  prefix: string,
+  result: Map<string, unknown> = new Map()
+): Map<string, unknown> {
+  if (!isPlainRecord(value)) {
+    result.set(prefix, value)
+    return result
+  }
+
+  const entries = Object.entries(value)
+  if (entries.length === 0) {
+    if (prefix !== 'providerState') {
+      result.set(prefix, value)
+    }
+    return result
+  }
+
+  for (const [key, childValue] of entries) {
+    flattenLeafPaths(childValue, `${prefix}.${key}`, result)
+  }
+
+  return result
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  return left === right || left.startsWith(`${right}.`) || right.startsWith(`${left}.`)
+}
+
+function setNestedValue(target: Record<string, unknown>, segments: string[], value: unknown): void {
+  const [head, ...tail] = segments
+  if (!head) {
+    return
+  }
+
+  if (tail.length === 0) {
+    target[head] = structuredClone(value)
+    return
+  }
+
+  const child = target[head]
+  if (!isPlainRecord(child)) {
+    target[head] = {}
+  }
+
+  setNestedValue(target[head] as Record<string, unknown>, tail, value)
+}
+
+function findProviderStateConflict(
+  committedAfterBase: Array<Record<string, unknown>>,
+  incoming: Record<string, unknown>
+): MergeConflict | undefined {
+  const incomingLeafPaths = flattenLeafPaths(incoming, 'providerState')
+
+  for (const [incomingPath, incomingValue] of incomingLeafPaths) {
+    for (const committedUpdate of committedAfterBase) {
+      const committedLeafPaths = flattenLeafPaths(committedUpdate, 'providerState')
+      for (const [committedPath, committedValue] of committedLeafPaths) {
+        if (!pathsOverlap(committedPath, incomingPath)) {
+          continue
+        }
+        if (committedPath === incomingPath && isDeepEqual(committedValue, incomingValue)) {
+          continue
+        }
+
+        return {
+          kind: 'provider_state',
+          path: incomingPath,
+          reason: `Conflicting provider state update at ${incomingPath}.`
+        }
+      }
     }
   }
 
+  return undefined
+}
+
+function mergeProviderState(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  const merged = structuredClone(existing)
+  const incomingLeafPaths = flattenLeafPaths(incoming, 'providerState')
+
+  for (const [incomingPath, incomingValue] of incomingLeafPaths) {
+    setNestedValue(merged, incomingPath.replace(/^providerState\./, '').split('.'), incomingValue)
+  }
+
   return merged
+}
+
+function postBaseDeltas(current: FlowContextDocument, baseSnapshotVersion: number): ContextDelta[] {
+  return current.deltas.filter((_, index) => index + 2 > baseSnapshotVersion)
+}
+
+function buildCommitResult(
+  current: FlowContextDocument,
+  delta: ContextDelta,
+  commitState: string,
+  committed: boolean,
+  conflict?: MergeConflict
+): ContextCommitResult {
+  return ContextCommitResultSchema.parse({
+    schemaVersion: 1,
+    flowContextId: current.flowContextId,
+    version: current.version,
+    committed,
+    commitState,
+    deltaIdempotencyKey: delta.idempotencyKey,
+    conflictPath: conflict?.path,
+    conflictKind: conflict?.kind,
+    conflictReason: conflict?.reason
+  })
 }
 
 export class FlowContextStore {
@@ -184,6 +374,87 @@ export class FlowContextStore {
         }
       }
 
+      if (delta.baseSnapshotVersion > current.version) {
+        return {
+          commitResult: buildCommitResult(current, delta, options.commitState, false, {
+            kind: 'invalid_base_version',
+            path: 'baseSnapshotVersion',
+            reason: `Delta base version ${delta.baseSnapshotVersion} is newer than current context version ${current.version}.`
+          }),
+          idempotentReplay: false
+        }
+      }
+
+      const deltasAfterBase = postBaseDeltas(current, delta.baseSnapshotVersion)
+      const memoryRefConflict = findRefConflict(
+        deltasAfterBase.flatMap((existingDelta) => existingDelta.memoryRefsAdded),
+        delta.memoryRefsAdded,
+        'memory_ref'
+      )
+      if (memoryRefConflict) {
+        return {
+          commitResult: buildCommitResult(
+            current,
+            delta,
+            options.commitState,
+            false,
+            memoryRefConflict
+          ),
+          idempotentReplay: false
+        }
+      }
+
+      const artifactRefConflict = findRefConflict(
+        deltasAfterBase.flatMap((existingDelta) => existingDelta.artifactRefsAddedOrValidated),
+        delta.artifactRefsAddedOrValidated,
+        'artifact_ref'
+      )
+      if (artifactRefConflict) {
+        return {
+          commitResult: buildCommitResult(
+            current,
+            delta,
+            options.commitState,
+            false,
+            artifactRefConflict
+          ),
+          idempotentReplay: false
+        }
+      }
+
+      const providerStateConflict = findProviderStateConflict(
+        deltasAfterBase.map((existingDelta) => existingDelta.providerStateUpdates),
+        delta.providerStateUpdates
+      )
+      if (providerStateConflict) {
+        return {
+          commitResult: buildCommitResult(
+            current,
+            delta,
+            options.commitState,
+            false,
+            providerStateConflict
+          ),
+          idempotentReplay: false
+        }
+      }
+
+      if (
+        delta.semanticSummaryUpdate.trim().length > 0 &&
+        deltasAfterBase.some(
+          (existingDelta) => existingDelta.semanticSummaryUpdate.trim().length > 0
+        )
+      ) {
+        return {
+          commitResult: buildCommitResult(current, delta, options.commitState, false, {
+            kind: 'semantic_summary',
+            path: 'semanticSummary',
+            reason: 'Parallel semantic summary updates are not mergeable in flow context v1.'
+          }),
+          idempotentReplay: false
+        }
+      }
+
       const nextRunStateRef =
         typeof delta.runStateUpdates.runStateRef === 'string'
           ? delta.runStateUpdates.runStateRef
@@ -198,10 +469,10 @@ export class FlowContextStore {
           delta.artifactRefsAddedOrValidated
         ),
         runStateRef: nextRunStateRef,
-        providerState: {
-          ...structuredClone(current.latestSnapshot.providerState),
-          ...structuredClone(delta.providerStateUpdates)
-        },
+        providerState: mergeProviderState(
+          current.latestSnapshot.providerState,
+          delta.providerStateUpdates
+        ),
         semanticSummary:
           (options.commitState === 'completed' || options.commitState === 'review_approved') &&
           delta.semanticSummaryUpdate.trim().length > 0

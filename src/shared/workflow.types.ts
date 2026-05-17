@@ -182,6 +182,8 @@ export interface AgentNodeData {
   humanReview?: boolean
   /** Optional retry settings reserved for future execution policies. */
   retryPolicy?: RetryPolicy
+  /** If true, the engine serializes this node's ready batch for context writes. */
+  contextWriter?: boolean
 
   // Specific to standard models
   maxTokens?: number

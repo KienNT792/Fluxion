@@ -855,7 +855,7 @@ Files likely touched:
 - `src/main/services/flow-context-store.ts`
 - `src/main/test/workflow-engine.test.ts`
 
-### FX-WO-021 Add parallel merge policy for context deltas [DISCOVERY]
+### FX-WO-021 Add parallel merge policy for context deltas [DONE]
 
 Priority: `P0`
 
@@ -869,17 +869,25 @@ Recommended phase-1 policy:
 
 Acceptance:
 
-- [ ] Parallel sibling nodes can append distinct memory/artifact refs.
-- [ ] Conflicting provider-state writes produce deterministic failure or retryable conflict.
-- [ ] Trace records conflict reason with nodeId and context version.
-- [ ] Tests cover successful parallel additive merge and conflict path.
+- [x] Parallel sibling nodes can append distinct memory/artifact refs.
+- [x] Conflicting provider-state writes produce deterministic failure or retryable conflict.
+- [x] Trace records conflict reason with nodeId and context version.
+- [ ] Tests cover successful parallel additive merge and conflict path. Deferred to `FX-WO-022` trace evaluator work or a follow-up test ticket.
+
+Implementation notes:
+
+- `ContextDelta` records `baseSnapshotVersion` and `baseSnapshotHash` for merge decisions and traceability.
+- `FlowContextStore.commitDelta(...)` rejects deterministic memory/artifact/provider-state/semantic-summary conflicts with `committed: false` and no document write.
+- Conflict traces use `node.context_delta_conflicted`; successful commits remain `node.context_delta_committed`.
+- Nodes with `contextWriter: true` serialize the current ready batch.
 
 Files likely touched:
 
 - `src/main/services/workflow-engine.ts`
 - `src/main/services/flow-context-store.ts`
 - `src/core/schema/flow-context.schema.ts`
-- `src/main/test/workflow-engine.test.ts`
+- `src/core/runs/flow-context.types.ts`
+- `src/core/runs/workflow-trace.types.ts`
 
 ### FX-WO-022 Extend trace evaluator for context lifecycle [READY]
 
@@ -929,7 +937,7 @@ Outcome: Adapter co the tra provider references ma khong pha Codex CLI path.
 Deliverable:
 
 - Extend `IAgentAdapter` result with optional `providerStateDelta`.
-- Codex CLI adapter can leave provider state empty or store `runnerSessionId` only.
+- Codex CLI adapter can leave provider state empty or store runner sessions under `codex.runnerSessionsByNode.<nodeId>`.
 - OpenAI adapter can return `responseId`, `conversationId`, usage, and cached-token metrics when available.
 
 Acceptance:
@@ -1054,7 +1062,7 @@ Files likely touched:
 | FX-WO-018 Cache-friendly prompt layout guard | P1 | DONE | 5 |
 | FX-WO-019 Per-node ContextSnapshot lifecycle | P0 | DONE | 6 |
 | FX-WO-020 Commit ContextDelta after safe states | P0 | DONE | 6 |
-| FX-WO-021 Parallel delta merge policy | P0 | DISCOVERY | 6 |
+| FX-WO-021 Parallel delta merge policy | P0 | DONE | 6 |
 | FX-WO-022 Context lifecycle trace evaluator | P1 | READY | 6 |
 | FX-WO-023 Provider-state aware adapter result | P1 | DISCOVERY | 7 |
 | FX-WO-024 OpenAI Responses state wiring | P1 | DEFERRED | 7 |
@@ -1236,7 +1244,7 @@ npm run typecheck
 Status 2026-05-17:
 
 - Day 1 through Day 3 are complete via `FX-WO-019` and `FX-WO-020`.
-- Remaining Sprint 6 backend work starts at `FX-WO-021`.
+- Remaining Sprint 6 backend work starts at `FX-WO-022`.
 
 ### Day 1 [DONE] - Snapshot creation
 
@@ -1250,10 +1258,10 @@ Status 2026-05-17:
 - Handled completed, review-paused, review-approved, failed, and aborted states explicitly.
 - Added idempotent replay behavior for repeated commit attempts.
 
-### Day 4 - Parallel merge policy
+### Day 4 [DONE] - Parallel merge policy
 
-- Implement phase-1 merge rules from `FX-WO-021`.
-- Add deterministic conflict behavior and trace events.
+- Implemented phase-1 merge rules from `FX-WO-021`.
+- Added deterministic conflict behavior and trace events.
 
 ### Day 5 - Evaluator and stabilization
 
@@ -1274,7 +1282,7 @@ npm run typecheck
 Current status:
 
 - Snapshot creation and commit-safe lifecycle are complete.
-- Remaining Definition of Done items depend on `FX-WO-021` and `FX-WO-022`.
+- Remaining Definition of Done items depend on `FX-WO-022`.
 
 - Each executed node can be tied to a concrete snapshot version and hash.
 - Successful nodes commit context deltas only once.

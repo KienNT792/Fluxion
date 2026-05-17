@@ -25,7 +25,8 @@ Status as of 2026-05-17:
 - `FX-WO-018` prompt layout guard is implemented.
 - `FX-WO-019` per-node `ContextSnapshot` creation is implemented.
 - `FX-WO-020` commit-safe `ContextDelta` lifecycle is implemented.
-- The next backend context item is `FX-WO-021` parallel merge policy.
+- `FX-WO-021` parallel merge policy is implemented.
+- The next backend context item is `FX-WO-022` context lifecycle trace evaluator rules.
 
 ## Repository Evidence
 
@@ -116,6 +117,8 @@ Required fields for the phase 1 contract:
 - `nodeId`
 - `attempt`
 - `createdAt`
+- `baseSnapshotVersion`
+- `baseSnapshotHash`
 - `idempotencyKey`
 - `memoryRefsAdded`
 - `artifactRefsAddedOrValidated`
@@ -128,6 +131,7 @@ Required fields for the phase 1 contract:
 Contract rules:
 
 - `idempotencyKey` makes it safe to replay or de-duplicate a commit attempt.
+- `baseSnapshotVersion` and `baseSnapshotHash` record the context snapshot the node executed against so stale parallel commits can be merged or rejected deterministically.
 - `memoryRefsAdded` and `artifactRefsAddedOrValidated` are additive references to persisted outputs or validated artifacts.
 - `runStateUpdates` carries only the minimal context-relevant run-state linkage needed by the context store. It does not replace the main run-state document.
 - `providerStateUpdates` stores only provider references or usage metadata, never raw credentials or authorization material.
@@ -146,13 +150,16 @@ Required fields for the phase 1 contract:
 - `committed`
 - `commitState`
 - `deltaIdempotencyKey`
+- optional `conflictPath`
+- optional `conflictKind`
 - optional `conflictReason`
 
 Contract rules:
 
 - `version` is the post-commit context version when `committed` is true.
+- When `committed` is false, `version` is the current context version and the delta is not written.
 - `commitState` records which safe lifecycle state authorized the commit.
-- `conflictReason` is only populated when a delta is rejected or deferred because of a deterministic merge rule.
+- `conflictPath`, `conflictKind`, and `conflictReason` are only populated when a delta is rejected or deferred because of a deterministic merge rule.
 
 ### `providerState`
 
@@ -160,7 +167,7 @@ Contract rules:
 
 Phase 1 rules:
 
-- Codex CLI may leave `providerState` empty or store `runnerSessionId` only.
+- Codex CLI may leave `providerState` empty or store runner sessions under `codex.runnerSessionsByNode.<nodeId>`.
 - OpenAI provider work may later store `responseId`, `conversationId`, usage, or cached-token references when available.
 - provider state is always subordinate to Fluxion-owned context, run state, trace, and artifacts.
 - provider state must never become the only source of truth for workflow recovery.
@@ -248,7 +255,7 @@ When later items land, rollback must remain simple:
 
 - `FX-WO-019` build per-node `ContextSnapshot` before execution [DONE]
 - `FX-WO-020` commit `ContextDelta` only after commit-safe node states [DONE]
-- `FX-WO-021` add parallel merge policy for context deltas
+- `FX-WO-021` add parallel merge policy for context deltas [DONE]
 - `FX-WO-022` extend trace evaluator for context lifecycle
 
 ### Phase 3: provider-state integration
@@ -265,11 +272,11 @@ The following backlog items implement this ADR in dependency order:
 - [`FX-WO-018` add prompt layout guard for cache-friendly providers](../backlog/workflow-optimization-sprint.md#fx-wo-018-add-prompt-layout-guard-for-cache-friendly-providers-done)
 - [`FX-WO-019` build per-node `ContextSnapshot` before execution](../backlog/workflow-optimization-sprint.md#fx-wo-019-build-per-node-contextsnapshot-before-execution-done)
 - [`FX-WO-020` commit `ContextDelta` only after commit-safe node states](../backlog/workflow-optimization-sprint.md#fx-wo-020-commit-contextdelta-only-after-commit-safe-node-states-done)
-- [`FX-WO-021` add parallel merge policy for context deltas](../backlog/workflow-optimization-sprint.md#fx-wo-021-add-parallel-merge-policy-for-context-deltas-discovery)
+- [`FX-WO-021` add parallel merge policy for context deltas](../backlog/workflow-optimization-sprint.md#fx-wo-021-add-parallel-merge-policy-for-context-deltas-done)
 - [`FX-WO-022` extend trace evaluator for context lifecycle](../backlog/workflow-optimization-sprint.md#fx-wo-022-extend-trace-evaluator-for-context-lifecycle-ready)
 - [`FX-WO-023` add provider-state aware adapter result](../backlog/workflow-optimization-sprint.md#fx-wo-023-add-provider-state-aware-adapter-result-discovery)
 
-Code-facing additions completed by `FX-WO-015` through `FX-WO-020`:
+Code-facing additions completed by `FX-WO-015` through `FX-WO-021`:
 
 - `WorkflowRunState.flowContextId`
 - trace correlation by both `runId` and `flowContextId`
@@ -282,9 +289,13 @@ Code-facing additions completed by `FX-WO-015` through `FX-WO-020`:
 - commit-safe delta lifecycle plus `node.context_delta_committed`
 - review evidence commit on `awaiting_review`, final commit on `completed` and `review_approved`
 - secret-like field rejection plus safe secret reference fields for flow-context payloads
+- `ContextDelta.baseSnapshotVersion` and `ContextDelta.baseSnapshotHash`
+- deterministic additive merge for memory/artifact refs
+- deterministic provider-state and semantic-summary conflict rejection
+- `node.context_delta_conflicted` trace event
+- `contextWriter` ready-batch serialization
 
 Remaining follow-up additions:
 
-- `FX-WO-021` deterministic parallel merge policy
 - `FX-WO-022` trace evaluator rules for context lifecycle
 - `FX-WO-023` provider-state aware adapter result

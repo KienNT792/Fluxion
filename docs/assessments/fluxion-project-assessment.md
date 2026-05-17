@@ -11,7 +11,7 @@ Current repo state:
 
 - Codex CLI remains the primary runtime path.
 - Run-state persistence, artifact gates, retry/review flows, trace JSONL, and flow-owned context baseline are in place.
-- `FX-WO-018`, `FX-WO-019`, and `FX-WO-020` are implemented, so prompt layout, per-node context snapshots, and commit-safe downstream context publishing now exist.
+- `FX-WO-018`, `FX-WO-019`, `FX-WO-020`, and `FX-WO-021` are implemented, so prompt layout, per-node context snapshots, commit-safe downstream context publishing, and deterministic parallel context merge/conflict policy now exist.
 - Windows CI baseline exists for `typecheck`, `test`, and `build`.
 - Local Windows packaging smoke exists through `npm run smoke:win`.
 - Interactive Codex approval hosting remains blocked because current probe evidence is `unsupported`.
@@ -43,7 +43,7 @@ Priority should remain:
 
 1. Finish manual desktop smoke for runtime and review flows.
 2. Continue provider/config and metadata hardening.
-3. Keep `FX-WO-021` as the next flow-context backend step.
+3. Keep `FX-WO-022` as the next flow-context backend step.
 4. Do not start interactive Codex approval host work from the current CLI evidence.
 
 ## Canonical Companion Docs

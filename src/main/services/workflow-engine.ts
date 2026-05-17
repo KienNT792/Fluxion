@@ -97,6 +97,7 @@ type NodeExecutionResult =
   | { nodeId: NodeId; kind: 'aborted' }
 
 type ContextCommitState = 'awaiting_review' | 'completed' | 'review_approved'
+type ContextSnapshotBase = Pick<ContextSnapshot, 'version' | 'hash'>
 
 class ContextCommitFailure extends Error {
   public constructor(
@@ -195,6 +196,36 @@ export function buildContextSnapshot(
   })
 
   return structuredClone(snapshot) as ContextSnapshot
+}
+
+function buildContextSnapshotBase(flowContext: FlowContextDocument): ContextSnapshotBase {
+  const { hash, ...snapshotPayload } = flowContext.latestSnapshot
+
+  return {
+    version: flowContext.version,
+    hash: hash ?? hashSnapshotPayload(snapshotPayload)
+  }
+}
+
+function buildReviewApprovalSnapshotBase(
+  flowContext: FlowContextDocument,
+  runId: string,
+  nodeId: NodeId,
+  attempt: number
+): ContextSnapshotBase {
+  const evidenceKey = `${runId}:${nodeId}:${attempt}:awaiting_review`
+  const evidenceDelta = [...flowContext.deltas]
+    .reverse()
+    .find((delta) => delta.idempotencyKey === evidenceKey)
+
+  if (!evidenceDelta) {
+    return buildContextSnapshotBase(flowContext)
+  }
+
+  return {
+    version: evidenceDelta.baseSnapshotVersion,
+    hash: evidenceDelta.baseSnapshotHash
+  }
 }
 
 export function buildExecutionPrompt(node: WorkflowNode, context: string): ExecutionPrompt {
@@ -473,13 +504,18 @@ export class WorkflowEngine {
         runtime.workflow.id,
         payload.nodeId
       )
+      const flowContext = await this.flowContextStore.readRunContext(
+        runtime.workspacePath,
+        runtime.runId
+      )
       const finalDelta = this.buildFinalContextDelta(
         runtime,
         payload.nodeId,
         attempt,
         outputFilePath,
         nodeState,
-        'review_approved'
+        'review_approved',
+        buildReviewApprovalSnapshotBase(flowContext, runtime.runId, payload.nodeId, attempt)
       )
       await this.commitContextDelta(runtime, payload.nodeId, finalDelta, 'review_approved')
 
@@ -491,8 +527,7 @@ export class WorkflowEngine {
         await this.continueCurrentRuntime()
       }
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown review approval error.'
+      const errorMessage = error instanceof Error ? error.message : 'Unknown review approval error.'
       this.sendNodeStatus(runtime.sender, payload.nodeId, 'error', errorMessage)
       await this.trace(runtime, 'node.failed', payload.nodeId, {
         error: errorMessage
@@ -749,7 +784,8 @@ export class WorkflowEngine {
     runtime: WorkflowRuntime,
     nodeId: NodeId,
     attempt: number,
-    historyOutputFilePath?: string
+    historyOutputFilePath: string | undefined,
+    baseSnapshot: ContextSnapshotBase
   ): ContextDelta {
     if (!historyOutputFilePath) {
       throw new Error(`Node ${nodeId} is missing a history output path for review evidence.`)
@@ -763,6 +799,8 @@ export class WorkflowEngine {
       nodeId,
       attempt,
       createdAt: new Date().toISOString(),
+      baseSnapshotVersion: baseSnapshot.version,
+      baseSnapshotHash: baseSnapshot.hash,
       idempotencyKey: `${runtime.runId}:${nodeId}:${attempt}:awaiting_review`,
       memoryRefsAdded: [
         this.buildOutputMemoryRef(
@@ -792,7 +830,8 @@ export class WorkflowEngine {
     attempt: number,
     outputFilePath: string,
     nodeState: NodeRunState,
-    status: Extract<ContextCommitState, 'completed' | 'review_approved'>
+    status: Extract<ContextCommitState, 'completed' | 'review_approved'>,
+    baseSnapshot: ContextSnapshotBase
   ): ContextDelta {
     return {
       schemaVersion: 1,
@@ -802,6 +841,8 @@ export class WorkflowEngine {
       nodeId,
       attempt,
       createdAt: new Date().toISOString(),
+      baseSnapshotVersion: baseSnapshot.version,
+      baseSnapshotHash: baseSnapshot.hash,
       idempotencyKey: `${runtime.runId}:${nodeId}:${attempt}:${status}`,
       memoryRefsAdded: [
         this.buildOutputMemoryRef(
@@ -822,7 +863,7 @@ export class WorkflowEngine {
         outputArtifactPaths: nodeState.outputArtifactPaths
       },
       providerStateUpdates: nodeState.runnerSessionId
-        ? { runnerSessionId: nodeState.runnerSessionId }
+        ? { codex: { runnerSessionsByNode: { [nodeId]: nodeState.runnerSessionId } } }
         : {},
       semanticSummaryUpdate: '',
       redaction: {
@@ -845,9 +886,33 @@ export class WorkflowEngine {
         delta,
         commitState
       })
+
+      if (!commitResult.committed) {
+        await this.trace(runtime, 'node.context_delta_conflicted', nodeId, {
+          commitState,
+          deltaIdempotencyKey: commitResult.deltaIdempotencyKey,
+          baseSnapshotVersion: delta.baseSnapshotVersion,
+          baseSnapshotHash: delta.baseSnapshotHash,
+          currentContextVersion: commitResult.version,
+          conflictPath: commitResult.conflictPath,
+          conflictKind: commitResult.conflictKind,
+          conflictReason: commitResult.conflictReason,
+          idempotentReplay
+        })
+        throw new ContextCommitFailure(
+          nodeId,
+          commitState,
+          `Flow context merge conflict for node ${nodeId} during ${commitState}: ${
+            commitResult.conflictReason ?? 'Unknown merge conflict.'
+          }`
+        )
+      }
+
       await this.trace(runtime, 'node.context_delta_committed', nodeId, {
         commitState,
         deltaIdempotencyKey: commitResult.deltaIdempotencyKey,
+        baseSnapshotVersion: delta.baseSnapshotVersion,
+        baseSnapshotHash: delta.baseSnapshotHash,
         contextVersion: commitResult.version,
         memoryRefCount: delta.memoryRefsAdded.length,
         artifactRefCount: delta.artifactRefsAddedOrValidated.length,
@@ -856,6 +921,10 @@ export class WorkflowEngine {
       })
       return commitResult
     } catch (error) {
+      if (error instanceof ContextCommitFailure) {
+        throw error
+      }
+
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown flow context commit failure.'
       throw new ContextCommitFailure(
@@ -1056,20 +1125,39 @@ export class WorkflowEngine {
     while (runtime.readyQueue.length > 0 && !this.isHalted) {
       const currentBatch = [...runtime.readyQueue]
       runtime.readyQueue = []
+      const runReadyNode = async (nodeId: NodeId): Promise<NodeExecutionResult> => {
+        const node = runtime.nodes.get(nodeId)
+        if (!node) {
+          throw new Error(`Node ${nodeId} is missing from the runtime graph.`)
+        }
 
-      const batchResults = await Promise.all(
-        currentBatch.map(async (nodeId) => {
-          const node = runtime.nodes.get(nodeId)
-          if (!node) {
-            throw new Error(`Node ${nodeId} is missing from the runtime graph.`)
+        const previousNodeIds = this.getPreviousNodeIds(runtime, nodeId)
+        await this.trace(runtime, 'node.ready', nodeId, {
+          previousNodeIds
+        })
+        return this.runNode(node, runtime, previousNodeIds)
+      }
+
+      if (currentBatch.some((nodeId) => runtime.nodes.get(nodeId)?.data.contextWriter === true)) {
+        for (const nodeId of currentBatch) {
+          const result = await runReadyNode(nodeId)
+          await this.handleNodeResult(runtime, result)
+
+          if (this.isHalted) {
+            await this.finalizeRuntime(this.getFinalRunStatus(), this.haltError ?? undefined)
+            return
           }
 
-          const previousNodeIds = this.getPreviousNodeIds(runtime, nodeId)
-          await this.trace(runtime, 'node.ready', nodeId, {
-            previousNodeIds
-          })
-          return this.runNode(node, runtime, previousNodeIds)
-        })
+          if (runtime.awaitingReviewNodeIds.size > 0) {
+            return
+          }
+        }
+
+        continue
+      }
+
+      const batchResults = await Promise.all(
+        currentBatch.map(async (nodeId) => runReadyNode(nodeId))
       )
 
       for (const result of batchResults) {
@@ -1319,7 +1407,8 @@ export class WorkflowEngine {
           runtime,
           node.id,
           attempt,
-          historyOutputFilePath
+          historyOutputFilePath,
+          snapshot
         )
         await this.commitContextDelta(runtime, node.id, evidenceDelta, 'awaiting_review')
         runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
@@ -1363,7 +1452,8 @@ export class WorkflowEngine {
         attempt,
         outputFilePath,
         nodeState,
-        'completed'
+        'completed',
+        snapshot
       )
       await this.commitContextDelta(runtime, node.id, finalDelta, 'completed')
 

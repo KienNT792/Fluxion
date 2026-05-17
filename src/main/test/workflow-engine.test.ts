@@ -350,7 +350,7 @@ describe('buildContextSnapshot', () => {
         memorySourceRefs: [],
         artifactRefs: [{ path: 'docs/report.md', validated: true }],
         runStateRef: '.fluxion/runs/run-1.json',
-        providerState: { runnerSessionId: 'session-1' },
+        providerState: { codex: { runnerSessionsByNode: { 'node-a': 'session-1' } } },
         semanticSummary: 'Existing summary'
       },
       deltas: []
@@ -395,7 +395,7 @@ describe('buildContextSnapshot', () => {
       version: 3,
       artifactRefs: [{ path: 'docs/report.md', validated: true }],
       runStateRef: '.fluxion/runs/run-1.json',
-      providerState: { runnerSessionId: 'session-1' },
+      providerState: { codex: { runnerSessionsByNode: { 'node-a': 'session-1' } } },
       semanticSummary: 'Existing summary',
       memorySourceRefs: [
         {
@@ -550,7 +550,12 @@ describe('WorkflowEngine', () => {
       '.fluxion/memory/short-term/workflow-1/node-b.md'
     ])
     expect(runContext.latestSnapshot.providerState).toEqual({
-      runnerSessionId: 'session-b'
+      codex: {
+        runnerSessionsByNode: {
+          'node-a': 'session-a',
+          'node-b': 'session-b'
+        }
+      }
     })
     expect(runState.currentNodeIds).toEqual([])
     expect(runState.nodes['node-a']?.status).toBe('completed')
@@ -650,7 +655,7 @@ describe('WorkflowEngine', () => {
         snapshotHash: expect.any(String),
         memorySourceCount: expect.any(Number),
         artifactRefCount: 0,
-        providerStateKeys: ['runnerSessionId']
+        providerStateKeys: ['codex']
       }
     })
     expect(
@@ -1120,6 +1125,10 @@ describe('WorkflowEngine', () => {
       `${runState.runId}:node-a:1:review_approved`,
       `${runState.runId}:node-b:1:completed`
     ])
+    expect(runContext.deltas[1]).toMatchObject({
+      baseSnapshotVersion: runContext.deltas[0]?.baseSnapshotVersion,
+      baseSnapshotHash: runContext.deltas[0]?.baseSnapshotHash
+    })
     expect(runContext.latestSnapshot.memorySourceRefs.map((source) => source.path)).toEqual([
       `.fluxion/memory/short-term/workflow-1/.history/${runState.runId}/node-a/attempt-1.md`,
       '.fluxion/memory/short-term/workflow-1/node-a.md',
@@ -1193,10 +1202,12 @@ describe('WorkflowEngine', () => {
     })
     const trace = await readTrace(workspacePath, runState.runId)
     expect(
-      trace.filter((event) => event.type === 'node.context_delta_committed').map((event) => ({
-        nodeId: event.nodeId,
-        commitState: event.data?.commitState
-      }))
+      trace
+        .filter((event) => event.type === 'node.context_delta_committed')
+        .map((event) => ({
+          nodeId: event.nodeId,
+          commitState: event.data?.commitState
+        }))
     ).toEqual([{ nodeId: 'node-a', commitState: 'awaiting_review' }])
   })
 

@@ -82,6 +82,8 @@ export interface ContextDelta {
   nodeId: string
   attempt: number
   createdAt: string
+  baseSnapshotVersion: number
+  baseSnapshotHash: string
   idempotencyKey: string
   memoryRefsAdded: ContextMemorySourceRef[]
   artifactRefsAddedOrValidated: ContextArtifactRef[]
@@ -99,6 +101,8 @@ export interface ContextCommitResult {
   committed: boolean
   commitState: string
   deltaIdempotencyKey: string
+  conflictPath?: string
+  conflictKind?: string
   conflictReason?: string
 }
 
