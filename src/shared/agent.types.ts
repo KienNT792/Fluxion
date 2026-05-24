@@ -44,6 +44,9 @@ export interface AgentTextChunk {
   type: 'stdout' | 'stderr' | 'status'
   content: string
   timestamp: number
+  category?: 'progress' | 'output' | 'diagnostics'
+  severity?: 'info' | 'warning' | 'error'
+  rawType?: string
 }
 
 export interface AgentProcessStartedChunk {

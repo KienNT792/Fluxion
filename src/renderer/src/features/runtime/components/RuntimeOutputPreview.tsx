@@ -1,6 +1,8 @@
 import React from 'react'
 import { FileOutput } from 'lucide-react'
+import { OutputPreview } from '@renderer/components/ui/OutputPreview'
 import { useExecutionStore } from '@renderer/stores/execution.store'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
 
 function OutputEmptyState(): React.JSX.Element {
   return (
@@ -21,6 +23,11 @@ function OutputEmptyState(): React.JSX.Element {
 
 export function RuntimeOutputPreview(): React.JSX.Element {
   const nodeOutputPaths = useExecutionStore((state) => state.nodeOutputPaths)
+  const nodeAttemptCounts = useExecutionStore((state) => state.nodeAttemptCounts)
+  const nodeStatuses = useExecutionStore((state) => state.nodeStatuses)
+  const workflowError = useExecutionStore((state) => state.workflowError)
+  const setWorkflowError = useExecutionStore((state) => state.setWorkflowError)
+  const workspacePath = useWorkflowStore((state) => state.workspacePath)
   const hasOutputs = Object.values(nodeOutputPaths).some(Boolean)
 
   if (!hasOutputs) {
@@ -29,23 +36,61 @@ export function RuntimeOutputPreview(): React.JSX.Element {
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3">
-      <div className="space-y-1.5">
+      <div className="space-y-3">
         {Object.entries(nodeOutputPaths).map(([nodeId, outputPath]) => {
           if (!outputPath) return null
+          const attemptCount = nodeAttemptCounts[nodeId]
+          const nodeStatus = nodeStatuses[nodeId]
           return (
-            <div
+            <section
               key={nodeId}
-              className="flex items-center gap-2 rounded-md px-2.5 py-1.5"
-              style={{ background: 'var(--color-surface-card)' }}
+              className="overflow-hidden rounded-md"
+              style={{
+                background: 'var(--color-surface-card)',
+                border: '1px solid var(--color-hairline)'
+              }}
             >
-              <FileOutput size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
-              <span
-                className="min-w-0 truncate text-[11px]"
-                style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
+              <div
+                className="flex items-center gap-2 px-2.5 py-1.5"
+                style={{ borderBottom: '1px solid var(--color-hairline-soft)' }}
               >
-                {outputPath}
-              </span>
-            </div>
+                <FileOutput size={12} style={{ color: 'var(--color-muted)', flexShrink: 0 }} />
+                <span
+                  className="min-w-0 truncate text-[11px]"
+                  style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
+                  title={outputPath}
+                >
+                  {outputPath}
+                </span>
+                <span
+                  className="ml-auto shrink-0 text-[10px] uppercase"
+                  style={{
+                    color: nodeStatus === 'paused' ? 'var(--color-timeline-edit)' : 'var(--color-muted)',
+                    fontFamily: 'var(--font-mono)',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  {nodeStatus === 'paused'
+                    ? 'Review'
+                    : attemptCount && attemptCount > 1
+                      ? `Attempt ${attemptCount}`
+                      : 'Latest'}
+                </span>
+              </div>
+
+              <div className="px-2.5 py-2">
+                <OutputPreview
+                  workspacePath={workspacePath}
+                  path={outputPath}
+                  attemptCount={attemptCount}
+                  onError={(message) => {
+                    if (workflowError !== message) {
+                      setWorkflowError(message)
+                    }
+                  }}
+                />
+              </div>
+            </section>
           )
         })}
       </div>

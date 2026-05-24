@@ -84,7 +84,15 @@ export const WelcomeScreen: React.FC = () => {
           ? `v${codexCapabilities.version}`
           : 'Version unknown'
   const authLabel =
-    codexRawReadiness?.code === 'auth_missing' ? 'Not authenticated' : 'Authenticated'
+    isProviderCapabilitiesLoading || !hasFetchedProviderCapabilities
+      ? 'Checking auth'
+      : codexRawReadiness?.code === 'auth_missing'
+        ? 'Not authenticated'
+        : codexCapabilities?.auth?.status === 'authenticated'
+          ? 'Authenticated'
+          : codexCapabilities?.auth?.status === 'missing'
+            ? 'Not authenticated'
+            : 'Auth unknown'
 
   return (
     <div

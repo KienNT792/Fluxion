@@ -6,7 +6,7 @@ import {
   rerunReviewNode
 } from '@renderer/lib/workflow-session'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
-import type { ReviewActionKind } from '@renderer/stores/execution.store'
+import { useExecutionStore, type ReviewActionKind } from '@renderer/stores/execution.store'
 
 interface ReviewBannerProps {
   nodeAttemptCount?: number
@@ -21,6 +21,7 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
   reviewSectionRef,
   selectedNodeId
 }) => {
+  const pendingReviewContext = useExecutionStore((state) => state.pendingReviewByNodeId[selectedNodeId])
   const isReviewActionPending = Boolean(reviewActionInFlight)
   const reviewActionLabel = {
     approve: reviewActionInFlight === 'approve' ? 'Approving...' : 'Approve',
@@ -50,6 +51,51 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
         >
           attempt {nodeAttemptCount ?? 1}
         </span>
+      </div>
+
+      <div
+        className="mt-3 rounded-md px-3 py-2"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)'
+        }}
+      >
+        <div
+          className="text-[10px] uppercase"
+          style={{
+            color: 'var(--color-muted)',
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.06em'
+          }}
+        >
+          Decision Request
+        </div>
+        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--color-body)' }}>
+          {pendingReviewContext?.reviewPrompt ||
+            `Review output from ${selectedNodeId} before continuing.`}
+        </p>
+        <div
+          className="mt-2 flex flex-wrap items-center gap-2 text-[10px]"
+          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+        >
+          <span>
+            {pendingReviewContext?.reviewReason === 'manual'
+              ? 'Manual checkpoint'
+              : 'Node requires human review'}
+          </span>
+          {pendingReviewContext?.agentVerdict ? (
+            <span
+              style={{
+                color:
+                  pendingReviewContext.agentVerdict === 'NEEDS_REVISION'
+                    ? 'var(--color-semantic-error)'
+                    : 'var(--color-timeline-grep)'
+              }}
+            >
+              Agent verdict: {pendingReviewContext.agentVerdict}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">

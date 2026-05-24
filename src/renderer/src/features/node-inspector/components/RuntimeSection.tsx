@@ -10,12 +10,22 @@ import type { WorkflowRuntimeStatus } from '@renderer/stores/execution.store'
 import { InspectorSection as Section } from './InspectorSection'
 import { LABEL_STYLE, READONLY_BLOCK_STYLE, READONLY_INLINE_STYLE } from '../lib/inspector-styles'
 import { getNodeStatusLabel, NODE_STATUS_TONE } from '../lib/node-display'
+import {
+  deriveDurationMs,
+  formatDurationMs,
+  useRuntimeNow
+} from '@renderer/features/runtime/lib/runtime-metrics'
 
 interface RuntimeSectionProps {
   nodeAttemptCount?: number
   nodeError?: string
   nodeExitCode?: number | null
   nodeOutputPath?: string
+  nodeRunMetrics?: {
+    startedAt?: string
+    completedAt?: string
+    durationMs?: number
+  }
   nodeStatus: NodeStatus
   onError: (error: string | null) => void
   selectedNodeId: NodeId
@@ -29,6 +39,7 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
   nodeError,
   nodeExitCode,
   nodeOutputPath,
+  nodeRunMetrics,
   nodeStatus,
   onError,
   selectedNodeId,
@@ -37,6 +48,14 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
   workspacePath
 }) => {
   const nodeStatusLabel = getNodeStatusLabel(nodeStatus)
+  const now = useRuntimeNow(nodeStatus === 'running')
+  const durationLabel = formatDurationMs(
+    deriveDurationMs({
+      ...nodeRunMetrics,
+      isRunning: nodeStatus === 'running',
+      now
+    })
+  )
 
   return (
     <Section title="Output">
@@ -47,6 +66,11 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
           label={nodeStatusLabel}
           animate={nodeStatus === 'running' || nodeStatus === 'stopping'}
         />
+      </div>
+
+      <div>
+        <label style={LABEL_STYLE}>Run Duration</label>
+        <div style={READONLY_INLINE_STYLE}>{durationLabel ?? 'n/a'}</div>
       </div>
 
       <div>

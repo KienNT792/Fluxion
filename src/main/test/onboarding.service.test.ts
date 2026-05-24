@@ -100,6 +100,7 @@ describe('onboarding.service', () => {
     {
       name: 'Node',
       files: {
+        'pnpm-lock.yaml': 'lockfileVersion: 9.0',
         'package.json': JSON.stringify({
           name: 'node-app',
           description: 'Node app',
@@ -110,7 +111,7 @@ describe('onboarding.service', () => {
         'src/main/index.ts': 'export {}'
       },
       expectedStack: 'Electron',
-      expectedCommand: 'npm run typecheck'
+      expectedCommand: 'pnpm typecheck'
     },
     {
       name: 'Python',
@@ -136,12 +137,13 @@ describe('onboarding.service', () => {
       name: 'Monorepo',
       files: {
         'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - packages/*\n',
+        'pnpm-lock.yaml': 'lockfileVersion: 9.0',
         'package.json': JSON.stringify({ name: 'mono', scripts: { test: 'vitest run' } }),
         'apps/web/package.json': JSON.stringify({ name: 'web' }),
         'packages/lib/package.json': JSON.stringify({ name: 'lib' })
       },
       expectedStack: 'Monorepo',
-      expectedCommand: 'npm run test'
+      expectedCommand: 'pnpm test'
     }
   ])(
     'creates a deterministic packet from $name fixtures',

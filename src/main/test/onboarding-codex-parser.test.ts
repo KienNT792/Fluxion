@@ -143,6 +143,30 @@ describe('onboarding-codex-parser', () => {
       risk: 'read only',
       expectedCategory: 'e2e',
       expectedRisk: 'safe'
+    },
+    {
+      category: 'QA',
+      risk: 'low',
+      expectedCategory: 'test',
+      expectedRisk: 'safe'
+    },
+    {
+      category: 'Playwright',
+      risk: 'medium',
+      expectedCategory: 'e2e',
+      expectedRisk: 'needs-approval'
+    },
+    {
+      category: 'Seed',
+      risk: 'high',
+      expectedCategory: 'db',
+      expectedRisk: 'needs-approval'
+    },
+    {
+      category: 'Style Check',
+      risk: 'low',
+      expectedCategory: 'lint',
+      expectedRisk: 'safe'
     }
   ])(
     'normalizes command category $category and risk $risk to canonical enums',

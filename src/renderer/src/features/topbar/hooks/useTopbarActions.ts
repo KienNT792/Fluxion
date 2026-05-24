@@ -154,7 +154,7 @@ export function useTopbarActions({
   const handleAbort = useCallback((): void => {
     const previousStatus = workflowStatus
     setWorkflowStatus('stopping')
-    setWorkflowError('Stopping workflow...')
+    setWorkflowError(null)
     void window.api.abortWorkflow().catch((error) => {
       const message = error instanceof Error ? error.message : 'Failed to abort workflow.'
       if (useExecutionStore.getState().workflowStatus === 'stopping') {

@@ -26,11 +26,14 @@ export function useIpcListeners(): void {
     setCompiledContext,
     setActiveRunId,
     addReviewNode,
+    clearReviewActionInFlight,
     clearReviewNodes,
     setNodeError,
     setNodeExitCode,
     setNodeOutputPath,
+    setNodeRunMetrics,
     setNodeStatus,
+    setPendingReviewContext,
     removeReviewNode,
     setWorkflowError,
     setWorkflowStatus
@@ -111,16 +114,40 @@ export function useIpcListeners(): void {
     )
 
     const unsubTerminal = window.api.onTerminalDataBatch((payload: TerminalDataBatchPayload) => {
+      const isNonFatalTransportNoise =
+        payload.sourceType === 'stderr' &&
+        payload.batch.some((chunk) => chunk.includes('Transport channel closed'))
+
       const formattedBatch =
         payload.sourceType === 'stderr'
-          ? payload.batch.map((chunk) => formatTerminalStderrEntry(chunk))
+          ? payload.batch.map((chunk) =>
+              isNonFatalTransportNoise
+                ? `\x1b[33m[diagnostic]\x1b[0m ${chunk}`
+                : formatTerminalStderrEntry(chunk)
+            )
           : payload.batch
 
-      appendLogs(payload.nodeId, formattedBatch)
+      appendLogs(payload.nodeId, formattedBatch, {
+        sourceType: payload.sourceType,
+        category:
+          isNonFatalTransportNoise && payload.category === 'diagnostics'
+            ? 'diagnostics'
+            : payload.category,
+        severity:
+          isNonFatalTransportNoise && payload.severity
+            ? 'warning'
+            : payload.severity,
+        rawType: isNonFatalTransportNoise ? 'non-fatal-stderr' : payload.rawType
+      })
     })
 
     const unsubTerminalError = window.api.onTerminalError((payload: TerminalErrorPayload) => {
-      appendLogs(payload.nodeId, [formatTerminalErrorEntry(payload.error)])
+      appendLogs(payload.nodeId, [formatTerminalErrorEntry(payload.error)], {
+        sourceType: 'stderr',
+        category: 'diagnostics',
+        severity: 'error',
+        rawType: 'terminal-error'
+      })
       if (payload.nodeId !== 'system') {
         setNodeError(payload.nodeId, payload.error)
       } else {
@@ -130,17 +157,54 @@ export function useIpcListeners(): void {
 
     const unsubTerminalExit = window.api.onTerminalExit((payload: TerminalExitPayload) => {
       setNodeExitCode(payload.nodeId, payload.code)
-      appendLogs(payload.nodeId, [formatTerminalExitEntry(payload.code)])
+      const state = useExecutionStore.getState()
+      const hasNonFatalDiagnostic =
+        payload.code === 0 &&
+        (state.runtimeLogs[payload.nodeId] ?? []).some(
+          (entry) =>
+            entry.category === 'diagnostics' &&
+            entry.severity !== 'error' &&
+            entry.rawType === 'non-fatal-stderr'
+        )
+
+      if (hasNonFatalDiagnostic) {
+        appendLogs(
+          payload.nodeId,
+          ['\x1b[33m[diagnostic]\x1b[0m Process completed successfully with non-fatal diagnostics.\n'],
+          {
+            sourceType: 'stdout',
+            category: 'progress',
+            severity: 'warning',
+            rawType: 'diagnostic-summary'
+          }
+        )
+      }
+
+      appendLogs(payload.nodeId, [formatTerminalExitEntry(payload.code)], {
+        sourceType: 'stdout',
+        category: 'progress',
+        severity: payload.code === 0 || payload.code === null ? 'info' : 'warning',
+        rawType: 'process.exit'
+      })
     })
 
     const unsubStatus = window.api.onWorkflowNodeStatus((payload: WorkflowNodeStatusPayload) => {
       setNodeStatus(payload.nodeId, payload.status)
+      setNodeRunMetrics(payload.nodeId, {
+        startedAt: payload.startedAt,
+        completedAt: payload.completedAt,
+        durationMs: payload.durationMs
+      })
       if (payload.status === 'running') {
         setWorkflowStatus('running')
         followRunningNodeIfNeeded(payload.nodeId)
       }
+      if (payload.status === 'completed') {
+        setNodeError(payload.nodeId, undefined)
+      }
       if (payload.status !== 'paused') {
         removeReviewNode(payload.nodeId)
+        setPendingReviewContext(payload.nodeId, undefined)
       }
       if (payload.error) {
         setNodeError(payload.nodeId, payload.error)
@@ -163,6 +227,15 @@ export function useIpcListeners(): void {
         addReviewNode(payload.nodeId)
         setNodeStatus(payload.nodeId, 'paused')
         setNodeOutputPath(payload.nodeId, payload.outputFilePath)
+        setPendingReviewContext(payload.nodeId, {
+          nodeId: payload.nodeId,
+          reviewReason: payload.reviewReason ?? 'node',
+          reviewPrompt:
+            payload.reviewPrompt?.trim() || `Review output from ${payload.nodeId} before continuing.`,
+          agentVerdict: payload.agentVerdict,
+          requestedAt: payload.requestedAt
+        })
+        setWorkflowError(null)
         setWorkflowStatus('paused')
       }
     )
@@ -172,6 +245,7 @@ export function useIpcListeners(): void {
     })
 
     const unsubCompleted = window.api.onWorkflowCompleted((payload: WorkflowCompletedPayload) => {
+      clearReviewActionInFlight()
       clearReviewNodes()
       setActiveRunId(undefined)
       if (payload.aborted) {
@@ -199,6 +273,7 @@ export function useIpcListeners(): void {
   }, [
     appendLogs,
     addReviewNode,
+    clearReviewActionInFlight,
     clearReviewNodes,
     recordWorkspaceChange,
     recordWorkspaceLoadingEvent,
@@ -208,7 +283,9 @@ export function useIpcListeners(): void {
     setNodeError,
     setNodeExitCode,
     setNodeOutputPath,
+    setNodeRunMetrics,
     setNodeStatus,
+    setPendingReviewContext,
     setWorkflowError,
     setWorkflowStatus
   ])

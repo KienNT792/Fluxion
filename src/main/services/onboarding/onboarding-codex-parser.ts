@@ -117,6 +117,72 @@ function normalizeOnboardingCommandCategory(value: unknown): NormalizedCommandEn
   if (COMMAND_CATEGORY_ALIASES[normalized]) {
     return { value: COMMAND_CATEGORY_ALIASES[normalized], normalized: true }
   }
+  if (normalized) {
+    if (
+      normalized.includes('test') ||
+      normalized.includes('verify') ||
+      normalized.includes('check') ||
+      normalized.includes('qa') ||
+      normalized.includes('spec')
+    ) {
+      return { value: 'test', normalized: true }
+    }
+    if (normalized.includes('lint') || normalized.includes('format') || normalized.includes('style')) {
+      return { value: 'lint', normalized: true }
+    }
+    if (
+      normalized.includes('type') ||
+      normalized.includes('tsc') ||
+      normalized.includes('typing') ||
+      normalized.includes('static-analysis')
+    ) {
+      return { value: 'typecheck', normalized: true }
+    }
+    if (
+      normalized.includes('dev') ||
+      normalized.includes('serve') ||
+      normalized.includes('start') ||
+      normalized.includes('watch') ||
+      normalized.includes('local')
+    ) {
+      return { value: 'dev', normalized: true }
+    }
+    if (
+      normalized.includes('build') ||
+      normalized.includes('compile') ||
+      normalized.includes('bundle') ||
+      normalized.includes('package')
+    ) {
+      return { value: 'build', normalized: true }
+    }
+    if (
+      normalized.includes('e2e') ||
+      normalized.includes('playwright') ||
+      normalized.includes('cypress') ||
+      normalized.includes('integration')
+    ) {
+      return { value: 'e2e', normalized: true }
+    }
+    if (
+      normalized.includes('db') ||
+      normalized.includes('database') ||
+      normalized.includes('migration') ||
+      normalized.includes('migrate') ||
+      normalized.includes('seed') ||
+      normalized.includes('schema')
+    ) {
+      return { value: 'db', normalized: true }
+    }
+    if (
+      normalized.includes('setup') ||
+      normalized.includes('install') ||
+      normalized.includes('bootstrap') ||
+      normalized.includes('deps') ||
+      normalized.includes('dependency')
+    ) {
+      return { value: 'setup', normalized: true }
+    }
+  }
 
   return { value, normalized: false }
 }

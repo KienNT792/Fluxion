@@ -79,6 +79,7 @@ describe('context-scout.service', () => {
         }
       })
     )
+    await writeWorkspaceFile(workspacePath, 'pnpm-lock.yaml', 'lockfileVersion: 9.0')
     await writeWorkspaceFile(
       workspacePath,
       'README.md',
@@ -92,9 +93,9 @@ describe('context-scout.service', () => {
     expect(result.detectedFields.primaryStack).toEqual(
       expect.arrayContaining(['Electron', 'React', 'Vite', 'TypeScript'])
     )
-    expect(result.detectedFields.packageManagers).toEqual(expect.arrayContaining(['npm']))
+    expect(result.detectedFields.packageManagers).toEqual(expect.arrayContaining(['pnpm']))
     expect(result.detectedFields.verificationCommands).toEqual(
-      expect.arrayContaining(['npm run typecheck', 'npm run test'])
+      expect.arrayContaining(['pnpm typecheck', 'pnpm test'])
     )
     expect(result.detectedFields.importantPaths).toEqual(
       expect.arrayContaining(['package.json', 'src'])

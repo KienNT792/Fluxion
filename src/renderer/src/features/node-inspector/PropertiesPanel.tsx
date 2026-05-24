@@ -79,6 +79,9 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
   const nodeAttemptCount = useExecutionStore((state) =>
     selectedNodeId ? state.nodeAttemptCounts[selectedNodeId] : undefined
   )
+  const nodeRunMetrics = useExecutionStore((state) =>
+    selectedNodeId ? state.nodeRunMetrics[selectedNodeId] : undefined
+  )
   const reviewActionInFlight = useExecutionStore((state) =>
     selectedNodeId ? state.reviewActionInFlightByNodeId[selectedNodeId] : undefined
   )
@@ -262,6 +265,7 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
               nodeError={nodeError}
               nodeExitCode={nodeExitCode}
               nodeOutputPath={nodeOutputPath}
+              nodeRunMetrics={nodeRunMetrics}
               nodeStatus={nodeStatus}
               onError={setWorkflowError}
               selectedNodeId={selectedNodeId}
@@ -280,13 +284,13 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
         </div>
       </div>
 
-      <NodeTextEditors
-        activeTextEditor={activeTextEditor}
-        promptValue={String(localData.prompt ?? '')}
-        setActiveTextEditor={setActiveTextEditor}
-        setLocalData={setLocalData}
-        systemInstructionValue={String(localData.systemInstruction ?? '')}
-      />
+        <NodeTextEditors
+          activeTextEditor={activeTextEditor}
+          promptValue={String(localData.prompt ?? '')}
+          setActiveTextEditor={setActiveTextEditor}
+          setLocalData={setLocalData}
+          systemInstructionValue={String(localData.systemInstruction ?? '')}
+        />
     </>
   )
 }

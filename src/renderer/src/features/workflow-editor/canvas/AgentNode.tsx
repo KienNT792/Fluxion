@@ -16,6 +16,11 @@ import {
   getAgentNodeVisualState,
   type AgentNodeVisualState
 } from './lib/agent-node-display'
+import {
+  deriveDurationMs,
+  formatDurationMs,
+  useRuntimeNow
+} from '@renderer/features/runtime/lib/runtime-metrics'
 
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>
 
@@ -45,6 +50,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
   const status = useExecutionStore((state) => state.nodeStatuses[id] ?? 'idle')
   const nodeError = useExecutionStore((state) => state.nodeErrors[id])
   const workflowStatus = useExecutionStore((state) => state.workflowStatus)
+  const nodeRunMetrics = useExecutionStore((state) => state.nodeRunMetrics[id])
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
   const isSelected = useWorkflowStore((state) => state.selectedNodeId === id)
   const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus)
@@ -66,6 +72,14 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
     workflowStatus !== 'paused'
   const canInspectLogs = status !== 'idle'
   const isDimmedWhileRunning = status === 'idle' && workflowStatus === 'running'
+  const now = useRuntimeNow(status === 'running')
+  const durationLabel = formatDurationMs(
+    deriveDurationMs({
+      ...nodeRunMetrics,
+      isRunning: status === 'running',
+      now
+    })
+  )
 
   return (
     <div
@@ -125,6 +139,15 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+          {durationLabel ? (
+            <span
+              className="text-[9px]"
+              style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+              title="Run duration"
+            >
+              {durationLabel}
+            </span>
+          ) : null}
           {status !== 'idle' && (
             <span
               className="text-[8px] uppercase"

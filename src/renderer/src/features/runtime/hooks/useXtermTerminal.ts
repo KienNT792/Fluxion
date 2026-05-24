@@ -18,6 +18,8 @@ interface UseXtermTerminalOptions {
   displayName: string
   isDark: boolean
   terminalLogs: string[]
+  getLiveLogs?: (nodeId: string) => string[]
+  getLiveCursor?: (nodeId: string) => number
   terminalNodeId: string | null
   theme: string
 }
@@ -34,6 +36,8 @@ export function useXtermTerminal({
   clearLogs,
   displayName,
   isDark,
+  getLiveCursor,
+  getLiveLogs,
   terminalLogs,
   terminalNodeId,
   theme
@@ -116,8 +120,10 @@ export function useXtermTerminal({
     })
 
     const executionState = useExecutionStore.getState()
-    const historyLogs = executionState.terminalLogs[terminalNodeId] || []
-    let lastLogCursor = executionState.terminalLogCursors[terminalNodeId] ?? historyLogs.length
+    const historyLogs = getLiveLogs ? getLiveLogs(terminalNodeId) : executionState.terminalLogs[terminalNodeId] || []
+    let lastLogCursor = getLiveCursor
+      ? getLiveCursor(terminalNodeId)
+      : (executionState.terminalLogCursors[terminalNodeId] ?? historyLogs.length)
 
     if (historyLogs.length > 0) {
       writeLogHistory(term, historyLogs)
@@ -126,8 +132,10 @@ export function useXtermTerminal({
     }
 
     const unsubscribe = useExecutionStore.subscribe((state) => {
-      const newLogs = state.terminalLogs[terminalNodeId] || []
-      const nextLogCursor = state.terminalLogCursors[terminalNodeId] ?? newLogs.length
+      const newLogs = getLiveLogs ? getLiveLogs(terminalNodeId) : state.terminalLogs[terminalNodeId] || []
+      const nextLogCursor = getLiveCursor
+        ? getLiveCursor(terminalNodeId)
+        : (state.terminalLogCursors[terminalNodeId] ?? newLogs.length)
 
       if (newLogs.length === 0) {
         if (nextLogCursor !== lastLogCursor || lastLogCursor !== 0) {
@@ -170,7 +178,7 @@ export function useXtermTerminal({
       xtermInstance.current = null
       fitAddonInstance.current = null
     }
-  }, [terminalNodeId, theme, isDark, displayName])
+  }, [terminalNodeId, theme, isDark, displayName, getLiveLogs, getLiveCursor])
 
   const handleClear = (): void => {
     if (!terminalNodeId) {

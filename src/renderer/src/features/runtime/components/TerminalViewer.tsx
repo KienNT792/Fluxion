@@ -8,6 +8,7 @@ import { Copy, Terminal, Trash2 } from 'lucide-react'
 import { truncateTerminalText } from '@renderer/lib/terminal'
 import { useXtermTerminal } from '../hooks/useXtermTerminal'
 import { STATUS_DOT } from '../lib/runtime-status'
+import { RuntimeLogCategory } from '@renderer/stores/execution.store'
 
 const EMPTY_TERMINAL_LOGS: string[] = []
 
@@ -21,9 +22,13 @@ export const TerminalViewer: React.FC = () => {
       ? (state.terminalLogs[terminalNodeId] ?? EMPTY_TERMINAL_LOGS)
       : EMPTY_TERMINAL_LOGS
   )
+  const runtimeLogs = useExecutionStore((state) =>
+    terminalNodeId ? (state.runtimeLogs[terminalNodeId] ?? []) : []
+  )
   const status = useExecutionStore((state) =>
     terminalNodeId ? (state.nodeStatuses[terminalNodeId] ?? 'idle') : 'idle'
   )
+  const [logFilter, setLogFilter] = React.useState<RuntimeLogCategory>('progress')
 
   const theme = useThemeStore((state) => state.theme)
   const isDark = theme === 'dark'
@@ -32,12 +37,23 @@ export const TerminalViewer: React.FC = () => {
   const nodeLabel = activeNode?.data?.label as string | undefined
   const nodeModel = activeNode?.data?.model as string | undefined
   const displayName = nodeLabel || nodeModel || terminalNodeId || ''
+  const filteredLogs = React.useMemo(() => {
+    if (runtimeLogs.length === 0) {
+      return terminalLogs
+    }
+    return runtimeLogs
+      .filter((entry) => entry.category === logFilter)
+      .map((entry) => entry.content)
+  }, [logFilter, runtimeLogs, terminalLogs])
+  const filteredCursor = filteredLogs.length
   const { copyFeedback, handleClear, handleCopyAll, handleCopySelection, terminalRef } =
     useXtermTerminal({
       clearLogs,
       displayName,
+      getLiveCursor: () => filteredCursor,
+      getLiveLogs: () => filteredLogs,
       isDark,
-      terminalLogs,
+      terminalLogs: filteredLogs,
       terminalNodeId,
       theme
     })
@@ -101,6 +117,7 @@ export const TerminalViewer: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <LogFilterTabs value={logFilter} onChange={setLogFilter} />
           {copyFeedback ? (
             <span
               className="text-[10px]"
@@ -141,6 +158,42 @@ export const TerminalViewer: React.FC = () => {
         style={{ background: isDark ? '#161614' : '#fafaf7' }}
         ref={terminalRef}
       />
+    </div>
+  )
+}
+
+function LogFilterTabs({
+  value,
+  onChange
+}: {
+  value: RuntimeLogCategory
+  onChange: (value: RuntimeLogCategory) => void
+}): React.JSX.Element {
+  const options: RuntimeLogCategory[] = ['progress', 'output', 'diagnostics']
+
+  return (
+    <div
+      className="flex items-center rounded-sm p-0.5"
+      style={{ background: 'var(--color-surface-card)', border: '1px solid var(--color-hairline-soft)' }}
+    >
+      {options.map((option) => {
+        const active = option === value
+        return (
+          <button
+            key={option}
+            type="button"
+            className="rounded-sm px-1.5 py-0.5 text-[10px]"
+            style={{
+              background: active ? 'var(--color-canvas)' : 'transparent',
+              color: active ? 'var(--color-ink)' : 'var(--color-muted)',
+              fontFamily: 'var(--font-mono)'
+            }}
+            onClick={() => onChange(option)}
+          >
+            {option === 'progress' ? 'Progress' : option === 'output' ? 'Output' : 'Diagnostics'}
+          </button>
+        )
+      })}
     </div>
   )
 }

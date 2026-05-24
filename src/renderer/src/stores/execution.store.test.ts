@@ -61,4 +61,22 @@ describe('execution store terminal logs', () => {
     expect(state.nodeOutputPaths['node-a']).toBeUndefined()
     expect(state.terminalLogs['node-a']).toEqual(['old output'])
   })
+
+  it('stores runtime log metadata alongside terminal text', () => {
+    useExecutionStore.getState().appendLogs('node-a', ['progress line'], {
+      sourceType: 'stdout',
+      category: 'progress',
+      severity: 'info',
+      rawType: 'status'
+    })
+
+    const entry = useExecutionStore.getState().runtimeLogs['node-a']?.[0]
+    expect(entry).toMatchObject({
+      nodeId: 'node-a',
+      sourceType: 'stdout',
+      category: 'progress',
+      severity: 'info',
+      rawType: 'status'
+    })
+  })
 })

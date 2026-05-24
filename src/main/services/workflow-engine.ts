@@ -285,6 +285,21 @@ function createWorkflowCompletedPayload(
   }
 }
 
+function extractAgentVerdict(output?: string): 'APPROVED' | 'NEEDS_REVISION' | undefined {
+  if (!output) {
+    return undefined
+  }
+
+  const upper = output.toUpperCase()
+  if (upper.includes('NEEDS_REVISION')) {
+    return 'NEEDS_REVISION'
+  }
+  if (upper.includes('APPROVED')) {
+    return 'APPROVED'
+  }
+  return undefined
+}
+
 export class WorkflowEngine {
   private static instance: WorkflowEngine
 
@@ -677,9 +692,20 @@ export class WorkflowEngine {
     nodeId: NodeId,
     status: NodeStatus,
     error?: string,
-    exitCode?: number
+    exitCode?: number,
+    startedAt?: string,
+    completedAt?: string,
+    durationMs?: number
   ): void {
-    sender.send(IpcChannels.WORKFLOW_NODE_STATUS, { nodeId, status, error, exitCode })
+    sender.send(IpcChannels.WORKFLOW_NODE_STATUS, {
+      nodeId,
+      status,
+      error,
+      exitCode,
+      startedAt,
+      completedAt,
+      durationMs
+    })
   }
 
   private markWorkflowFailed(error: string): void {
@@ -1227,7 +1253,7 @@ export class WorkflowEngine {
       const attempt = this.requireAttempt(node.id, runningState.nodes[node.id]?.attempts)
 
       this.activeNodes.add(node.id)
-      this.sendNodeStatus(runtime.sender, node.id, 'running')
+      this.sendNodeStatus(runtime.sender, node.id, 'running', undefined, undefined, startedAt)
       await this.trace(runtime, 'node.running', node.id, {
         attempt,
         startedAt
@@ -1292,7 +1318,16 @@ export class WorkflowEngine {
 
       if (result.abortReason) {
         const errorMessage = result.error ?? 'Workflow aborted.'
-        this.sendNodeStatus(runtime.sender, node.id, 'stopping', errorMessage, result.exitCode)
+        this.sendNodeStatus(
+          runtime.sender,
+          node.id,
+          'stopping',
+          errorMessage,
+          result.exitCode,
+          startedAt,
+          result.processTelemetry?.completedAt,
+          result.processTelemetry?.durationMs
+        )
         await this.runStateStore.markNodeAborted(
           runtime.workspacePath,
           runtime.runId,
@@ -1317,7 +1352,16 @@ export class WorkflowEngine {
         const errorMessage =
           result.error ?? `Agent exited with code ${result.exitCode ?? 'unknown'}.`
         runtime.sender.send(IpcChannels.TERMINAL_ERROR, { nodeId: node.id, error: errorMessage })
-        this.sendNodeStatus(runtime.sender, node.id, 'error', errorMessage, result.exitCode)
+        this.sendNodeStatus(
+          runtime.sender,
+          node.id,
+          'error',
+          errorMessage,
+          result.exitCode,
+          startedAt,
+          result.processTelemetry?.completedAt,
+          result.processTelemetry?.durationMs
+        )
         await this.runStateStore.markNodeFailed(runtime.workspacePath, runtime.runId, node.id, {
           error: errorMessage,
           exitCode: result.exitCode
@@ -1333,7 +1377,16 @@ export class WorkflowEngine {
 
       if (this.isHalted) {
         const errorMessage = this.haltError ?? 'Workflow halted before node completion.'
-        this.sendNodeStatus(runtime.sender, node.id, 'stopping', errorMessage, result.exitCode)
+        this.sendNodeStatus(
+          runtime.sender,
+          node.id,
+          'stopping',
+          errorMessage,
+          result.exitCode,
+          startedAt,
+          result.processTelemetry?.completedAt,
+          result.processTelemetry?.durationMs
+        )
         await this.runStateStore.markNodeAborted(
           runtime.workspacePath,
           runtime.runId,
@@ -1416,13 +1469,29 @@ export class WorkflowEngine {
           status: 'paused',
           outputFilePath
         })
-        this.sendNodeStatus(runtime.sender, node.id, 'paused', undefined, result.exitCode)
+        this.sendNodeStatus(
+          runtime.sender,
+          node.id,
+          'paused',
+          undefined,
+          result.exitCode,
+          startedAt,
+          completedAt,
+          result.processTelemetry?.durationMs
+        )
         runtime.sender.send(IpcChannels.WORKFLOW_REVIEW_REQUIRED, {
           workflowId: runtime.workflow.id,
           runId: runtime.runId,
           nodeId: node.id,
           outputFilePath,
-          status: 'awaiting_review'
+          status: 'awaiting_review',
+          reviewReason: reviewSource === 'manual' ? 'manual' : 'node',
+          reviewPrompt:
+            typeof node.data.prompt === 'string' && node.data.prompt.trim().length > 0
+              ? node.data.prompt.trim()
+              : `Review output from ${node.label || node.id} before continuing.`,
+          requestedAt: completedAt,
+          agentVerdict: extractAgentVerdict(result.output)
         })
         await this.trace(runtime, 'node.review_requested', node.id, {
           reviewSource,
@@ -1457,7 +1526,16 @@ export class WorkflowEngine {
       )
       await this.commitContextDelta(runtime, node.id, finalDelta, 'completed')
 
-      this.sendNodeStatus(runtime.sender, node.id, 'completed', undefined, result.exitCode)
+      this.sendNodeStatus(
+        runtime.sender,
+        node.id,
+        'completed',
+        undefined,
+        result.exitCode,
+        startedAt,
+        completedAt,
+        result.processTelemetry?.durationMs
+      )
       runtime.sender.send(IpcChannels.WORKFLOW_NODE_OUTPUT, {
         nodeId: node.id,
         status: 'completed',
@@ -1520,7 +1598,9 @@ export class WorkflowEngine {
         runtime.sender.send(IpcChannels.TERMINAL_DATA_BATCH, {
           nodeId: node.id,
           batch: [...batches[sourceType]],
-          sourceType
+          sourceType,
+          category: sourceType === 'stderr' ? 'diagnostics' : 'output',
+          severity: sourceType === 'stderr' ? 'warning' : 'info'
         })
         batches[sourceType] = []
       }

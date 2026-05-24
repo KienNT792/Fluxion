@@ -14,15 +14,15 @@ export const PrerequisiteBlock: React.FC<PrerequisiteBlockProps> = ({ code, acti
   const title = isAliasBlocked
     ? 'Codex WindowsApps alias is blocking Fluxion'
     : isCliMissing
-      ? 'Codex CLI is not installed'
+      ? 'Codex CLI is not available to Fluxion'
       : 'Codex CLI is not logged in'
   const description = isAliasBlocked
-    ? 'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn. Install or update the npm CLI, then put it ahead of WindowsApps in PATH or disable the alias.'
+    ? 'Windows resolved codex to an App Execution Alias that Fluxion cannot spawn. Install or update the Codex CLI in Windows, then put that command ahead of WindowsApps in PATH or disable the alias.'
     : isCliMissing
-      ? 'Fluxion requires Codex CLI to run workflows. Install it with npm, then log in.'
+      ? 'Fluxion requires a Windows-visible Codex CLI to run workflows. Install it in the Windows environment or expose the existing codex command in PATH, then log in.'
       : 'Codex CLI is installed but you are not authenticated. Run the command below, then refresh.'
 
-  const installCommand = 'npm install -g @openai/codex'
+  const installCommand = actionCommand && actionCommand !== 'codex login' ? actionCommand : 'pnpm add -g @openai/codex'
   const loginCommand = actionCommand ?? 'codex login'
 
   return (

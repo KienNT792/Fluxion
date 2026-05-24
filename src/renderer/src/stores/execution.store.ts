@@ -14,12 +14,51 @@ export type WorkflowRuntimeStatus =
   | 'error'
 
 export type ReviewActionKind = 'approve' | 'reject' | 'rerun'
+export type RuntimeLogCategory = 'progress' | 'output' | 'diagnostics'
+export type RuntimeLogSeverity = 'info' | 'warning' | 'error'
+
+export interface RuntimeLogEntry {
+  id: string
+  nodeId: NodeId
+  content: string
+  sourceType: 'stdout' | 'stderr'
+  category: RuntimeLogCategory
+  severity: RuntimeLogSeverity
+  rawType?: string
+}
+
+export interface NodeRunMetrics {
+  queuedAt?: string
+  startedAt?: string
+  completedAt?: string
+  durationMs?: number
+}
+
+export interface PendingReviewContext {
+  nodeId: NodeId
+  nodeLabel?: string
+  reviewReason: 'manual' | 'node'
+  reviewPrompt: string
+  agentVerdict?: 'APPROVED' | 'NEEDS_REVISION'
+  outputPreview?: string
+  requestedAt?: string
+}
 
 interface LogSlice {
   terminalLogs: Record<NodeId, string[]>
+  runtimeLogs: Record<NodeId, RuntimeLogEntry[]>
   terminalLogCursors: Record<NodeId, number>
   nodeAttemptCounts: Record<NodeId, number>
-  appendLogs: (nodeId: NodeId, newBatch: string[]) => void
+  appendLogs: (
+    nodeId: NodeId,
+    newBatch: string[],
+    metadata?: {
+      sourceType?: 'stdout' | 'stderr'
+      category?: RuntimeLogCategory
+      severity?: RuntimeLogSeverity
+      rawType?: string
+    }
+  ) => void
   appendAttemptSeparator: (nodeId: NodeId, message: string) => number
   clearLogs: (nodeId: NodeId) => void
 }
@@ -34,6 +73,8 @@ interface StatusSlice {
   nodeErrors: Record<NodeId, string | undefined>
   nodeExitCodes: Record<NodeId, number | null | undefined>
   nodeOutputPaths: Record<NodeId, string | undefined>
+  nodeRunMetrics: Record<NodeId, NodeRunMetrics>
+  pendingReviewByNodeId: Record<NodeId, PendingReviewContext | undefined>
   compiledContexts: Record<NodeId, string>
 
   setWorkflowStatus: (status: WorkflowRuntimeStatus) => void
@@ -47,10 +88,13 @@ interface StatusSlice {
   setNodeError: (nodeId: NodeId, error?: string) => void
   setNodeExitCode: (nodeId: NodeId, exitCode?: number | null) => void
   setNodeOutputPath: (nodeId: NodeId, outputFilePath?: string) => void
+  setNodeRunMetrics: (nodeId: NodeId, metrics: Partial<NodeRunMetrics>) => void
   setNodeAttemptCount: (nodeId: NodeId, attemptCount: number) => void
+  setPendingReviewContext: (nodeId: NodeId, context?: PendingReviewContext) => void
   setCompiledContext: (nodeId: NodeId, context: string) => void
   resetNodeExecution: (nodeIds: NodeId[]) => void
   resetExecution: (nodeIds: NodeId[]) => void
+  clearReviewActionInFlight: () => void
 }
 
 type ExecutionState = LogSlice & StatusSlice
@@ -60,10 +104,11 @@ const MAX_LOG_LINES = 1000
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   // --- Log Slice ---
   terminalLogs: {},
+  runtimeLogs: {},
   terminalLogCursors: {},
   nodeAttemptCounts: {},
 
-  appendLogs: (nodeId, newBatch) => {
+  appendLogs: (nodeId, newBatch, metadata) => {
     if (newBatch.length === 0) {
       return
     }
@@ -79,6 +124,27 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       }
 
       return {
+        runtimeLogs: {
+          ...state.runtimeLogs,
+          [nodeId]: [
+            ...(state.runtimeLogs[nodeId] || []),
+            ...newBatch.map(
+              (content, index): RuntimeLogEntry => ({
+                id: `${nodeId}:${existingCursor + index + 1}`,
+                nodeId,
+                content,
+                sourceType: metadata?.sourceType ?? 'stdout',
+                category:
+                  metadata?.category ??
+                  (metadata?.sourceType === 'stderr' ? 'diagnostics' : 'output'),
+                severity:
+                  metadata?.severity ??
+                  (metadata?.sourceType === 'stderr' ? 'warning' : 'info'),
+                rawType: metadata?.rawType
+              })
+            )
+          ].slice(-MAX_LOG_LINES)
+        },
         terminalLogCursors: {
           ...state.terminalLogCursors,
           [nodeId]: existingCursor + newBatch.length
@@ -110,6 +176,21 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           ...currentState.nodeAttemptCounts,
           [nodeId]: nextAttempt
         },
+        runtimeLogs: {
+          ...currentState.runtimeLogs,
+          [nodeId]: [
+            ...(currentState.runtimeLogs[nodeId] || []),
+            {
+              id: `${nodeId}:${existingCursor + 1}`,
+              nodeId,
+              content: `${separator}\n`,
+              sourceType: 'stdout',
+              category: 'progress',
+              severity: 'info',
+              rawType: 'attempt-separator'
+            } as RuntimeLogEntry
+          ].slice(-MAX_LOG_LINES)
+        },
         terminalLogCursors: {
           ...currentState.terminalLogCursors,
           [nodeId]: existingCursor + 1
@@ -130,6 +211,10 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...state.terminalLogCursors,
         [nodeId]: 0
       },
+      runtimeLogs: {
+        ...state.runtimeLogs,
+        [nodeId]: []
+      },
       terminalLogs: {
         ...state.terminalLogs,
         [nodeId]: []
@@ -147,6 +232,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   nodeErrors: {},
   nodeExitCodes: {},
   nodeOutputPaths: {},
+  nodeRunMetrics: {},
+  pendingReviewByNodeId: {},
   compiledContexts: {},
 
   setWorkflowStatus: (status) => set({ workflowStatus: status }),
@@ -224,11 +311,32 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }))
   },
 
+  setNodeRunMetrics: (nodeId, metrics) => {
+    set((state) => ({
+      nodeRunMetrics: {
+        ...state.nodeRunMetrics,
+        [nodeId]: {
+          ...state.nodeRunMetrics[nodeId],
+          ...metrics
+        }
+      }
+    }))
+  },
+
   setNodeAttemptCount: (nodeId, attemptCount) => {
     set((state) => ({
       nodeAttemptCounts: {
         ...state.nodeAttemptCounts,
         [nodeId]: Math.max(1, Math.floor(attemptCount))
+      }
+    }))
+  },
+
+  setPendingReviewContext: (nodeId, context) => {
+    set((state) => ({
+      pendingReviewByNodeId: {
+        ...state.pendingReviewByNodeId,
+        [nodeId]: context
       }
     }))
   },
@@ -249,6 +357,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const nextNodeErrors = { ...state.nodeErrors }
       const nextNodeExitCodes = { ...state.nodeExitCodes }
       const nextNodeOutputPaths = { ...state.nodeOutputPaths }
+      const nextNodeRunMetrics = { ...state.nodeRunMetrics }
+      const nextPendingReviewByNodeId = { ...state.pendingReviewByNodeId }
+      const nextReviewActions = { ...state.reviewActionInFlightByNodeId }
 
       nodeIds.forEach((id) => {
         nextNodeStatuses[id] = 'idle'
@@ -256,14 +367,20 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nextNodeErrors[id] = undefined
         nextNodeExitCodes[id] = undefined
         nextNodeOutputPaths[id] = undefined
+        nextNodeRunMetrics[id] = {}
+        nextPendingReviewByNodeId[id] = undefined
+        nextReviewActions[id] = undefined
       })
 
       return {
         reviewNodeIds: state.reviewNodeIds.filter((id) => !nodeIds.includes(id)),
+        reviewActionInFlightByNodeId: nextReviewActions,
         nodeStatuses: nextNodeStatuses,
         nodeErrors: nextNodeErrors,
         nodeExitCodes: nextNodeExitCodes,
         nodeOutputPaths: nextNodeOutputPaths,
+        nodeRunMetrics: nextNodeRunMetrics,
+        pendingReviewByNodeId: nextPendingReviewByNodeId,
         compiledContexts: nextContexts
       }
     })
@@ -278,16 +395,22 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     const newNodeErrors: Record<NodeId, string | undefined> = {}
     const newNodeExitCodes: Record<NodeId, number | null | undefined> = {}
     const newNodeOutputPaths: Record<NodeId, string | undefined> = {}
+    const newNodeRunMetrics: Record<NodeId, NodeRunMetrics> = {}
+    const newPendingReviewByNodeId: Record<NodeId, PendingReviewContext | undefined> = {}
+    const newRuntimeLogs: Record<NodeId, RuntimeLogEntry[]> = {}
 
     nodeIds.forEach((id) => {
       newNodeStatuses[id] = 'idle'
       newLogs[id] = []
+      newRuntimeLogs[id] = []
       newLogCursors[id] = 0
       newAttemptCounts[id] = 1
       newContexts[id] = ''
       newNodeErrors[id] = undefined
       newNodeExitCodes[id] = undefined
       newNodeOutputPaths[id] = undefined
+      newNodeRunMetrics[id] = {}
+      newPendingReviewByNodeId[id] = undefined
     })
 
     set({
@@ -300,10 +423,20 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       nodeErrors: newNodeErrors,
       nodeExitCodes: newNodeExitCodes,
       nodeOutputPaths: newNodeOutputPaths,
+      nodeRunMetrics: newNodeRunMetrics,
+      pendingReviewByNodeId: newPendingReviewByNodeId,
       terminalLogs: newLogs,
+      runtimeLogs: newRuntimeLogs,
       terminalLogCursors: newLogCursors,
       nodeAttemptCounts: newAttemptCounts,
       compiledContexts: newContexts
     })
-  }
+  },
+
+  clearReviewActionInFlight: () =>
+    set((state) => ({
+      reviewActionInFlightByNodeId: Object.fromEntries(
+        Object.keys(state.reviewActionInFlightByNodeId).map((nodeId) => [nodeId, undefined])
+      )
+    }))
 }))

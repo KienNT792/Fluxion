@@ -84,7 +84,7 @@ export const CodexReadinessPopover: React.FC<CodexReadinessPopoverProps> = ({
         </div>
 
         <div className="mt-3 grid gap-2 text-[11px]" style={{ color: 'var(--color-body)' }}>
-          <div style={{ fontFamily: 'var(--font-mono)' }}>Install: npm i -g @openai/codex</div>
+          <div style={{ fontFamily: 'var(--font-mono)' }}>Install: pnpm add -g @openai/codex</div>
           <div style={{ fontFamily: 'var(--font-mono)' }}>Login: codex login</div>
           <div style={{ fontFamily: 'var(--font-mono)' }}>Check: codex login status</div>
           {codexReadiness.catalogSource && (

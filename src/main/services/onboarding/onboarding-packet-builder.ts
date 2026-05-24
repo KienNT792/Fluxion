@@ -178,6 +178,21 @@ function buildCommands(draft: ProjectContextDraft): OnboardingCommandItem[] {
   }))
 }
 
+function preferredScriptCommand(draft: ProjectContextDraft, scriptName: string): string {
+  const managers = new Set(draft.packageManagers.map((value) => value.trim().toLowerCase()))
+
+  if (managers.has('pnpm')) {
+    return `pnpm ${scriptName}`
+  }
+  if (managers.has('yarn')) {
+    return `yarn ${scriptName}`
+  }
+  if (managers.has('bun')) {
+    return `bun run ${scriptName}`
+  }
+  return `npm run ${scriptName}`
+}
+
 function buildArtifactRecommendations(): OnboardingArtifactRecommendation[] {
   return [
     {
@@ -320,6 +335,7 @@ export function buildCodexOnboardingPrompt(options: {
   evidencePack: OnboardingEvidencePack
   deterministicPacket: OnboardingPacket
 }): string {
+  const exampleTypecheckCommand = preferredScriptCommand(options.draft, 'typecheck')
   const payload = {
     currentDraft: pickDraftForPrompt(options.draft),
     scanSummary: {
@@ -377,7 +393,7 @@ export function buildCodexOnboardingPrompt(options: {
           {
             id: 'command-1',
             label: 'Typecheck',
-            command: 'npm run typecheck',
+            command: exampleTypecheckCommand,
             cwd: '.',
             category: 'typecheck',
             risk: 'safe',

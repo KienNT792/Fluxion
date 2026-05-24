@@ -227,6 +227,9 @@ export interface WorkflowNodeStatusPayload {
   status: NodeStatus
   error?: string
   exitCode?: number
+  startedAt?: string
+  completedAt?: string
+  durationMs?: number
 }
 
 export interface WorkflowNodeOutputPayload {
@@ -242,6 +245,10 @@ export interface WorkflowReviewRequiredPayload {
   nodeId: NodeId
   outputFilePath: string
   status: 'awaiting_review'
+  reviewReason?: 'manual' | 'node'
+  reviewPrompt?: string
+  requestedAt?: string
+  agentVerdict?: 'APPROVED' | 'NEEDS_REVISION'
 }
 
 export interface WorkflowCompletedPayload {
@@ -259,6 +266,9 @@ export interface TerminalDataBatchPayload {
   batch: string[]
   /** Distinguishes standard output from error logs. */
   sourceType: 'stdout' | 'stderr'
+  category?: 'progress' | 'output' | 'diagnostics'
+  severity?: 'info' | 'warning' | 'error'
+  rawType?: string
 }
 
 export interface TerminalErrorPayload {

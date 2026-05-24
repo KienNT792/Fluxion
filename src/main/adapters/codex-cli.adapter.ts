@@ -136,8 +136,11 @@ export function translateRunnerEventToChunk(
     return {
       type: 'stdout',
       content: `\x1b[2m[codex]\x1b[0m ${trimmed}\n`,
+      category: 'progress',
+      severity: 'info',
+      rawType: 'status',
       timestamp: now()
-    }
+    } as AgentChunk & { category?: string; severity?: string; rawType?: string }
   }
 
   // json-event: extract a meaningful summary or suppress
@@ -151,15 +154,21 @@ export function translateRunnerEventToChunk(
       return {
         type: 'stderr',
         content: `\x1b[31m[error]\x1b[0m ${message}\n`,
+        category: 'diagnostics',
+        severity: 'error',
+        rawType: 'json-event',
         timestamp: now()
-      }
+      } as AgentChunk & { category?: string; severity?: string; rawType?: string }
     }
 
     return {
       type: 'stdout',
       content: `\x1b[2m[codex]\x1b[0m ${summary}\n`,
+      category: 'progress',
+      severity: 'info',
+      rawType: 'json-event',
       timestamp: now()
-    }
+    } as AgentChunk & { category?: string; severity?: string; rawType?: string }
   }
 
   return null
