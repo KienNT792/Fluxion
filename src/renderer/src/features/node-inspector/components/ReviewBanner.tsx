@@ -7,22 +7,30 @@ import {
 } from '@renderer/lib/workflow-session'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
 import { useExecutionStore, type ReviewActionKind } from '@renderer/stores/execution.store'
+import { buildAttemptLineageSummary } from '@renderer/features/runtime/lib/attempt-lineage'
 
 interface ReviewBannerProps {
   nodeAttemptCount?: number
   reviewActionInFlight?: ReviewActionKind
   reviewSectionRef: React.RefObject<HTMLDivElement | null>
   selectedNodeId: NodeId
+  upstreamNodeId?: NodeId
+  upstreamReviewOptions?: NodeId[]
+  onUpstreamNodeIdChange?: (nodeId?: NodeId) => void
 }
 
 export const ReviewBanner: React.FC<ReviewBannerProps> = ({
   nodeAttemptCount,
   reviewActionInFlight,
   reviewSectionRef,
-  selectedNodeId
+  selectedNodeId,
+  upstreamNodeId,
+  upstreamReviewOptions = [],
+  onUpstreamNodeIdChange
 }) => {
   const pendingReviewContext = useExecutionStore((state) => state.pendingReviewByNodeId[selectedNodeId])
   const isReviewActionPending = Boolean(reviewActionInFlight)
+  const attemptLineage = buildAttemptLineageSummary(nodeAttemptCount)
   const reviewActionLabel = {
     approve: reviewActionInFlight === 'approve' ? 'Approving...' : 'Approve',
     rerun: reviewActionInFlight === 'rerun' ? 'Rerunning...' : 'Rerun',
@@ -49,9 +57,15 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
           className="text-[10px]"
           style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
         >
-          attempt {nodeAttemptCount ?? 1}
+          {attemptLineage.label}
         </span>
       </div>
+      {attemptLineage.previousAttempts > 0 ? (
+        <div className="mt-1 text-[10px]" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>
+          {attemptLineage.previousAttempts} prior attempt
+          {attemptLineage.previousAttempts === 1 ? '' : 's'}
+        </div>
+      ) : null}
 
       <div
         className="mt-3 rounded-md px-3 py-2"
@@ -113,11 +127,44 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
         />
         <ReviewActionButton
           disabled={isReviewActionPending}
-          label={reviewActionLabel.reject}
+          label={upstreamNodeId ? `${reviewActionLabel.reject} upstream` : reviewActionLabel.reject}
           tone="reject"
-          onClick={() => void rejectReviewNode(selectedNodeId)}
+          onClick={() => void rejectReviewNode(selectedNodeId, upstreamNodeId)}
+          title={upstreamNodeId ? `Send back to upstream node ${upstreamNodeId}` : undefined}
         />
       </div>
+      {onUpstreamNodeIdChange && upstreamReviewOptions.length > 0 ? (
+        <label
+          className="mt-2 block rounded-md px-3 py-2 text-[10px]"
+          style={{
+            background: 'var(--color-canvas-soft)',
+            border: '1px solid var(--color-hairline-soft)',
+            color: 'var(--color-muted)',
+            fontFamily: 'var(--font-mono)'
+          }}
+        >
+          Upstream target
+          <select
+            className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
+            style={{
+              background: 'var(--color-surface-card)',
+              borderColor: 'var(--color-hairline)',
+              color: 'var(--color-body)'
+            }}
+            value={upstreamNodeId ?? ''}
+            onChange={(event) =>
+              onUpstreamNodeIdChange(event.target.value ? (event.target.value as NodeId) : undefined)
+            }
+          >
+            <option value="">Current node only</option>
+            {upstreamReviewOptions.map((nodeId) => (
+              <option key={nodeId} value={nodeId}>
+                {nodeId}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
     </div>
   )
 }
@@ -126,11 +173,13 @@ function ReviewActionButton({
   disabled,
   label,
   onClick,
+  title,
   tone
 }: {
   disabled: boolean
   label: string
   onClick: () => void
+  title?: string
   tone: 'approve' | 'rerun' | 'reject'
 }): React.JSX.Element {
   const styleByTone = {
@@ -159,6 +208,7 @@ function ReviewActionButton({
         border: '1px solid var(--color-hairline)',
         opacity: disabled ? 0.65 : 1
       }}
+      title={title ?? label}
     >
       {label}
     </button>

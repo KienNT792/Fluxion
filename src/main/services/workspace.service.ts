@@ -29,6 +29,7 @@ import {
   WorkflowMetadata,
   FluxionSchemaVersion
 } from '@shared'
+import { parseWorkflowTextExport, renderWorkflowTextExport } from '@core'
 import { scanWorkspaceContext } from './context-scout.service'
 import { memoryManager } from './memory-manager'
 import { runStateStore } from './run-state-store'
@@ -667,6 +668,41 @@ export class WorkspaceService {
     }
   }
 
+  public async exportWorkflowText(
+    workspacePath: string,
+    workflowFilePath: string
+  ): Promise<{ textFilePath: string; content: string }> {
+    const resolvedWorkspacePath = path.resolve(workspacePath)
+    const workflow = await this.readWorkflowFromDisk(workflowFilePath)
+    const exportDir = path.join(resolvedWorkspacePath, '.fluxion', 'exports')
+    await fs.mkdir(exportDir, { recursive: true })
+
+    const textFilePath = path.join(
+      exportDir,
+      `${slugify(workflow.name || 'workflow')}.workflow.md`
+    )
+    const content = this.renderWorkflowTextExport(workflow)
+    await fs.writeFile(textFilePath, content, 'utf-8')
+
+    return { textFilePath, content }
+  }
+
+  public async importWorkflowText(
+    workspacePath: string,
+    textFilePath: string
+  ): Promise<{ workflow: Workflow; workflowFilePath: string }> {
+    const resolvedWorkspacePath = path.resolve(workspacePath)
+    const raw = await fs.readFile(textFilePath, 'utf-8')
+    const workflow = this.parseWorkflowTextExport(raw)
+    const workflowFilePath = await this.createImportedWorkflowFilePath(
+      resolvedWorkspacePath,
+      workflow.name
+    )
+
+    await this.writeWorkflowToDisk(workflowFilePath, workflow)
+    return { workflow, workflowFilePath }
+  }
+
   /**
    * Creates a new workflow file in the workflows directory
    */
@@ -906,6 +942,72 @@ export class WorkspaceService {
     }
   }
 
+  public async readWorkspaceMemoryFiles(workspacePath: string): Promise<{
+    globalContext: string
+    longTermIndex: string
+  }> {
+    const resolvedWorkspacePath = path.resolve(workspacePath)
+    const memoryDir = path.join(resolvedWorkspacePath, '.fluxion', 'memory')
+    const globalContextPath = path.join(memoryDir, 'global-context.md')
+    const longTermIndexPath = path.join(memoryDir, 'long-term', 'index.md')
+
+    const [globalContext, longTermIndex] = await Promise.all([
+      fs.readFile(globalContextPath, 'utf-8').catch(() => ''),
+      fs.readFile(longTermIndexPath, 'utf-8').catch(() => '')
+    ])
+
+    return { globalContext, longTermIndex }
+  }
+
+  public async saveWorkspaceMemoryFiles(
+    workspacePath: string,
+    globalContext: string,
+    longTermIndex: string
+  ): Promise<void> {
+    const resolvedWorkspacePath = path.resolve(workspacePath)
+    await memoryManager.initWorkspace(resolvedWorkspacePath)
+
+    const memoryDir = path.join(resolvedWorkspacePath, '.fluxion', 'memory')
+    const globalContextPath = path.join(memoryDir, 'global-context.md')
+    const longTermIndexPath = path.join(memoryDir, 'long-term', 'index.md')
+
+    await fs.writeFile(globalContextPath, globalContext.trimEnd() ? `${globalContext.trimEnd()}\n` : '', 'utf-8')
+    await fs.mkdir(path.dirname(longTermIndexPath), { recursive: true })
+    await fs.writeFile(
+      longTermIndexPath,
+      longTermIndex.trimEnd() ? `${longTermIndex.trimEnd()}\n` : '',
+      'utf-8'
+    )
+  }
+
+  private renderWorkflowTextExport(workflow: Workflow): string {
+    return renderWorkflowTextExport(workflow as Parameters<typeof renderWorkflowTextExport>[0])
+  }
+
+  private parseWorkflowTextExport(raw: string): Workflow {
+    return parseWorkflowTextExport(raw) as Workflow
+  }
+
+  private async createImportedWorkflowFilePath(
+    workspacePath: string,
+    workflowName: string
+  ): Promise<string> {
+    const workflowsDir = this.getWorkflowsDirectory(workspacePath)
+    await fs.mkdir(workflowsDir, { recursive: true })
+
+    let filePath = path.join(workflowsDir, `${slugify(workflowName)}.fluxion.json`)
+    let counter = 1
+    while (true) {
+      try {
+        await fs.access(filePath)
+        filePath = path.join(workflowsDir, `${slugify(workflowName)}-${counter}.fluxion.json`)
+        counter += 1
+      } catch {
+        return filePath
+      }
+    }
+  }
+
   private createDefaultWorkflow(workspacePath: string): Workflow {
     const workspaceName = path.basename(workspacePath) || 'Fluxion'
     const now = new Date().toISOString()
@@ -982,7 +1084,7 @@ export class WorkspaceService {
       fluxionVersion: (workflowFile.fluxionVersion as FluxionSchemaVersion) || '1.0',
       createdAt: workflowFile.createdAt,
       updatedAt: workflowFile.updatedAt,
-      nodes: workflowFile.nodes.map((node) => {
+      nodes: workflowFile.nodes.map((node): Workflow['nodes'][number] => {
         const normalizedData = sanitizeWorkflowNodeData(node.data)
 
         return {

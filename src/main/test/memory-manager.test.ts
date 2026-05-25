@@ -144,6 +144,40 @@ describe('MemoryManager', () => {
     )
   })
 
+  it('removes latest output evidence from the memory index while preserving attempt history', async () => {
+    const latestPath = await memoryManager.saveNodeOutput(workspacePath, 'workflow-1', {
+      runId: 'run-1',
+      nodeId: 'node-a',
+      attempt: 1,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'First attempt'
+    })
+    const attemptOnePath = join(
+      workspacePath,
+      '.fluxion',
+      'memory',
+      'short-term',
+      'workflow-1',
+      '.history',
+      'run-1',
+      'node-a',
+      'attempt-1.md'
+    )
+
+    await memoryManager.deleteNodeOutput(workspacePath, 'workflow-1', 'node-a')
+
+    await expect(readFile(latestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(attemptOnePath, 'utf8')).toContain('First attempt')
+
+    const indexPath = join(workspacePath, '.fluxion', 'memory', 'index.json')
+    const index = MemoryIndexSchema.parse(JSON.parse(await readFile(indexPath, 'utf8')) as unknown)
+    expect(index.entries).toEqual([])
+  })
+
   it('compiles context from both V1 and V2 short-term memory files', async () => {
     const shortTermDir = join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-2')
     await mkdir(shortTermDir, { recursive: true })
@@ -231,6 +265,77 @@ describe('MemoryManager', () => {
         })
       ])
     )
+  })
+
+  it('excludes global context when frontmatter is invalid', async () => {
+    const globalPath = join(workspacePath, '.fluxion', 'memory', 'global-context.md')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await writeFile(globalPath, 'No frontmatter\n', 'utf8')
+
+    try {
+      const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-4', [])
+
+      expect(report.compiledContext).not.toContain('No frontmatter')
+      expect(report.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'global',
+            path: '.fluxion/memory/global-context.md',
+            included: false,
+            warning: expect.stringContaining('Invalid global context frontmatter')
+          })
+        ])
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid global context frontmatter')
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('excludes short-term context when node output frontmatter is invalid', async () => {
+    const shortTermDir = join(workspacePath, '.fluxion', 'memory', 'short-term', 'workflow-4')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await mkdir(shortTermDir, { recursive: true })
+    await writeFile(
+      join(shortTermDir, 'node-a.md'),
+      matter.stringify('Partial output must not be injected', {
+        schemaVersion: '2.0',
+        nodeId: 'node-a',
+        runId: 'run-4',
+        runner: 'codex',
+        model: 'gpt-5.5',
+        status: 'aborted',
+        startedAt: '2026-05-06T00:00:00.000Z',
+        completedAt: '2026-05-06T00:00:01.000Z'
+      }),
+      'utf8'
+    )
+
+    try {
+      const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-4', [
+        'node-a'
+      ])
+
+      expect(report.compiledContext).not.toContain('Partial output must not be injected')
+      expect(report.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'short-term',
+            path: '.fluxion/memory/short-term/workflow-4/node-a.md',
+            included: false,
+            nodeId: 'node-a',
+            warning: expect.stringContaining('Invalid short-term context frontmatter')
+          })
+        ])
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid short-term context frontmatter for node node-a')
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('rebuilds an invalid memory index with a warning when saving node output', async () => {

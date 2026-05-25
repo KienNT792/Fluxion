@@ -4,6 +4,7 @@ import type { NodeId } from '@shared'
 import { Button } from '@renderer/components/ui/Button'
 import { retryWorkflowFromNode } from '@renderer/lib/workflow-session'
 import type { WorkflowRuntimeStatus } from '@renderer/stores/execution.store'
+import { buildAttemptLineageSummary } from '@renderer/features/runtime/lib/attempt-lineage'
 
 interface RuntimeErrorBannerProps {
   nodeError?: string
@@ -16,6 +17,7 @@ export const RuntimeErrorBanner: React.FC<RuntimeErrorBannerProps> = ({
   selectedNodeId,
   workflowStatus
 }) => {
+  const attemptLineage = buildAttemptLineageSummary(1)
   const canRetry =
     workflowStatus !== 'running' && workflowStatus !== 'stopping' && workflowStatus !== 'paused'
 
@@ -38,6 +40,12 @@ export const RuntimeErrorBanner: React.FC<RuntimeErrorBannerProps> = ({
             title={nodeError || 'No error detail available'}
           >
             {nodeError || 'No error detail available'}
+          </p>
+          <p
+            className="mt-1 text-[10px]"
+            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            {attemptLineage.label}
           </p>
         </div>
 

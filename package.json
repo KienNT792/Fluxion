@@ -9,6 +9,7 @@
     "lint": "eslint --cache .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "cli": "node scripts/cli/fluxion-cli.mjs",
     "eval:workflow": "node scripts/eval/workflow-trace-eval.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

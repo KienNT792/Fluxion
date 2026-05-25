@@ -3,6 +3,7 @@ import { FileOutput } from 'lucide-react'
 import { OutputPreview } from '@renderer/components/ui/OutputPreview'
 import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { buildAttemptLineageSummary } from '../lib/attempt-lineage'
 
 function OutputEmptyState(): React.JSX.Element {
   return (
@@ -41,6 +42,7 @@ export function RuntimeOutputPreview(): React.JSX.Element {
           if (!outputPath) return null
           const attemptCount = nodeAttemptCounts[nodeId]
           const nodeStatus = nodeStatuses[nodeId]
+          const attemptLineage = buildAttemptLineageSummary(attemptCount)
           return (
             <section
               key={nodeId}
@@ -72,8 +74,8 @@ export function RuntimeOutputPreview(): React.JSX.Element {
                 >
                   {nodeStatus === 'paused'
                     ? 'Review'
-                    : attemptCount && attemptCount > 1
-                      ? `Attempt ${attemptCount}`
+                    : attemptLineage.currentAttempt > 1
+                      ? attemptLineage.label
                       : 'Latest'}
                 </span>
               </div>

@@ -118,6 +118,9 @@ function normalizeOnboardingCommandCategory(value: unknown): NormalizedCommandEn
     return { value: COMMAND_CATEGORY_ALIASES[normalized], normalized: true }
   }
   if (normalized) {
+    if (normalized.includes('lint') || normalized.includes('format') || normalized.includes('style')) {
+      return { value: 'lint', normalized: true }
+    }
     if (
       normalized.includes('test') ||
       normalized.includes('verify') ||
@@ -126,9 +129,6 @@ function normalizeOnboardingCommandCategory(value: unknown): NormalizedCommandEn
       normalized.includes('spec')
     ) {
       return { value: 'test', normalized: true }
-    }
-    if (normalized.includes('lint') || normalized.includes('format') || normalized.includes('style')) {
-      return { value: 'lint', normalized: true }
     }
     if (
       normalized.includes('type') ||

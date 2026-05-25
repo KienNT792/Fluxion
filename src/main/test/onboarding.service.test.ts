@@ -61,6 +61,7 @@ function createCodexPacket(): OnboardingPacket {
         rationale: 'Keep details out of compact context.'
       }
     ],
+    skillAssets: [],
     sourceEvidence: [
       {
         id: 'evidence-1',

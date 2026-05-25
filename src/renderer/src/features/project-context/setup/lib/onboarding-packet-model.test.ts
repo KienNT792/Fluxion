@@ -45,7 +45,8 @@ function createPacket(): OnboardingPacket {
       filesRead: 1,
       truncatedFiles: [],
       warnings: []
-    }
+    },
+    skillAssets: []
   }
 }
 

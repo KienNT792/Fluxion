@@ -46,8 +46,24 @@ export const ContextSetupDetectStep: React.FC<ContextSetupDetectStepProps> = ({
   statusState,
   updateDraft,
   workspaceName
-}) => (
-  <div className="space-y-5">
+}) => {
+  const stackAndToolingSignals = [
+    ...draft.primaryStack.map((item, index) => ({ key: `primaryStack-${index}-${item}`, value: item })),
+    ...draft.languages.map((item, index) => ({ key: `languages-${index}-${item}`, value: item })),
+    ...draft.frameworks.map((item, index) => ({ key: `frameworks-${index}-${item}`, value: item })),
+    ...draft.packageManagers.map((item, index) => ({
+      key: `packageManagers-${index}-${item}`,
+      value: item
+    })),
+    ...draft.buildSystems.map((item, index) => ({ key: `buildSystems-${index}-${item}`, value: item })),
+    ...draft.testFrameworks.map((item, index) => ({
+      key: `testFrameworks-${index}-${item}`,
+      value: item
+    }))
+  ].slice(0, 16)
+
+  return (
+    <div className="space-y-5">
     <div
       className="rounded-lg px-4 py-4"
       style={{
@@ -82,18 +98,9 @@ export const ContextSetupDetectStep: React.FC<ContextSetupDetectStepProps> = ({
           Stack and tooling
         </span>
         <div className="mt-3 flex flex-wrap gap-2">
-          {[
-            ...draft.primaryStack,
-            ...draft.languages,
-            ...draft.frameworks,
-            ...draft.packageManagers,
-            ...draft.buildSystems,
-            ...draft.testFrameworks
-          ]
-            .slice(0, 16)
-            .map((item) => (
-              <SignalPill key={item} value={item} />
-            ))}
+          {stackAndToolingSignals.map((item) => (
+            <SignalPill key={item.key} value={item.value} />
+          ))}
         </div>
       </div>
 
@@ -350,5 +357,6 @@ export const ContextSetupDetectStep: React.FC<ContextSetupDetectStepProps> = ({
         </div>
       </div>
     ) : null}
-  </div>
-)
+    </div>
+  )
+}

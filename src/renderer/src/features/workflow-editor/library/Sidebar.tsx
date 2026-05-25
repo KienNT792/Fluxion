@@ -249,32 +249,78 @@ export const Sidebar: React.FC = () => {
             const metadataLabel = metadataPieces.join(' · ')
 
             return (
-              <button
+              <div
                 key={workflow.id}
-                type="button"
-                onClick={() => switchWorkflow(workflow.id)}
-                className="group relative overflow-hidden rounded-lg px-3 py-2 text-left transition-colors"
+                className="group relative overflow-hidden rounded-lg"
                 style={{
                   background: isActive ? 'var(--color-surface-card)' : 'transparent',
                   border: isActive ? '1px solid var(--color-hairline)' : '1px solid transparent'
                 }}
-                onMouseEnter={(event) => {
-                  if (!isActive) {
-                    event.currentTarget.style.background = 'var(--color-surface-strong)'
-                  }
-                }}
-                onMouseLeave={(event) => {
-                  if (!isActive) {
-                    event.currentTarget.style.background = 'transparent'
-                  }
-                }}
               >
+                <button
+                  type="button"
+                  onClick={() => switchWorkflow(workflow.id)}
+                  className="block w-full px-3 py-2 text-left transition-colors"
+                  onMouseEnter={(event) => {
+                    if (!isActive) {
+                      event.currentTarget.style.background = 'var(--color-surface-strong)'
+                    }
+                  }}
+                  onMouseLeave={(event) => {
+                    if (!isActive) {
+                      event.currentTarget.style.background = 'transparent'
+                    }
+                  }}
+                >
+                  <div className="flex min-w-0 items-start gap-2.5 pr-6">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="truncate text-xs font-medium"
+                          style={{
+                            color: isActive ? 'var(--color-ink)' : 'var(--color-body)',
+                            letterSpacing: '-0.1px'
+                          }}
+                        >
+                          {displayWorkflowName}
+                        </span>
+
+                        {workflow.isLegacy && (
+                          <span
+                            className="shrink-0 text-[9px] uppercase"
+                            style={{
+                              color: 'var(--color-timeline-done)',
+                              fontFamily: 'var(--font-mono)',
+                              letterSpacing: '0.1em'
+                            }}
+                          >
+                            Legacy
+                          </span>
+                        )}
+                      </div>
+
+                      {metadataLabel && (
+                        <p
+                          className={`mt-1 truncate text-[10px] transition-opacity ${
+                            isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                          style={{
+                            color: isActive ? 'var(--color-muted)' : 'var(--color-muted-soft)',
+                            fontFamily: 'var(--font-sans)'
+                          }}
+                        >
+                          {metadataLabel}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
                 {isActive && !workflow.isLegacy && (
                   <button
                     type="button"
                     aria-label={`Delete ${displayWorkflowName}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
+                    onClick={() => {
                       setPendingDeleteWorkflowName(workflow.name)
                     }}
                     className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-md opacity-0 transition-all group-hover:opacity-100"
@@ -292,50 +338,7 @@ export const Sidebar: React.FC = () => {
                     <Trash2 size={13} />
                   </button>
                 )}
-
-                <div className="flex min-w-0 items-start gap-2.5 pr-6">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="truncate text-xs font-medium"
-                        style={{
-                          color: isActive ? 'var(--color-ink)' : 'var(--color-body)',
-                          letterSpacing: '-0.1px'
-                        }}
-                      >
-                        {displayWorkflowName}
-                      </span>
-
-                      {workflow.isLegacy && (
-                        <span
-                          className="shrink-0 text-[9px] uppercase"
-                          style={{
-                            color: 'var(--color-timeline-done)',
-                            fontFamily: 'var(--font-mono)',
-                            letterSpacing: '0.1em'
-                          }}
-                        >
-                          Legacy
-                        </span>
-                      )}
-                    </div>
-
-                    {metadataLabel && (
-                      <p
-                        className={`mt-1 truncate text-[10px] transition-opacity ${
-                          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        }`}
-                        style={{
-                          color: isActive ? 'var(--color-muted)' : 'var(--color-muted-soft)',
-                          fontFamily: 'var(--font-sans)'
-                        }}
-                      >
-                        {metadataLabel}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </button>
+              </div>
             )
           })}
 

@@ -7,11 +7,10 @@ import {
   useReactFlow,
   Panel
 } from '@xyflow/react'
-import type { Edge, Node } from '@xyflow/react'
-import { CODEX_DEFAULT_MODEL, type WorkflowNode } from '@shared'
+import { CODEX_DEFAULT_MODEL } from '@shared'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { useThemeStore } from '@renderer/stores/theme.store'
-import { Plus, Workflow } from 'lucide-react'
+import { GitBranch, Plus, Workflow } from 'lucide-react'
 import { getDefaultCodexModel } from '@renderer/lib/provider-capabilities'
 import { Button } from '@renderer/components/ui/Button'
 import { switchWorkflow } from '@renderer/lib/workflow-session'
@@ -19,6 +18,11 @@ import { switchWorkflow } from '@renderer/lib/workflow-session'
 import { AgentNode } from './AgentNode'
 import { AnimatedEdge } from './AnimatedEdge'
 import { AgentPalette } from './AgentPalette'
+import {
+  buildWorkflowTemplate,
+  WORKFLOW_TEMPLATES,
+  WorkflowTemplateId
+} from './lib/workflow-templates'
 
 const nodeTypes = { agentNode: AgentNode }
 const edgeTypes = { animatedEdge: AnimatedEdge }
@@ -29,7 +33,7 @@ interface CanvasEmptyStateProps {
   onCreateOnboardingWorkflow: () => void
   isCreatingOnboardingWorkflow: boolean
   onReviewContext: () => void
-  onTrySimpleChain: () => void
+  onApplyTemplate: (templateId: WorkflowTemplateId) => void
 }
 
 const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
@@ -38,7 +42,7 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
   onCreateOnboardingWorkflow,
   isCreatingOnboardingWorkflow,
   onReviewContext,
-  onTrySimpleChain
+  onApplyTemplate
 }) => {
   const shouldReviewContext = contextStatus !== 'ready'
 
@@ -89,9 +93,6 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
             <Plus size={14} />
             Add Agent
           </Button>
-          <Button variant="ghost" size="lg" onClick={onTrySimpleChain}>
-            Try Simple Chain
-          </Button>
           <Button
             variant="ghost"
             size="lg"
@@ -100,6 +101,19 @@ const CanvasEmptyState: React.FC<CanvasEmptyStateProps> = ({
           >
             {isCreatingOnboardingWorkflow ? 'Creating...' : 'Create onboarding workflow'}
           </Button>
+        </div>
+        <div className="grid w-full grid-cols-2 gap-1.5 pt-1">
+          {WORKFLOW_TEMPLATES.map((template) => (
+            <Button
+              key={template.id}
+              variant="ghost"
+              size="sm"
+              onClick={() => onApplyTemplate(template.id)}
+            >
+              <GitBranch size={13} />
+              {template.name}
+            </Button>
+          ))}
         </div>
       </div>
     </div>
@@ -179,51 +193,18 @@ export const FlowCanvas: React.FC = () => {
     addNode({}, { x: -90, y: -45 })
   }, [addNode])
 
-  const handleTrySimpleChain = useCallback((): void => {
+  const handleApplyTemplate = useCallback(
+    (templateId: WorkflowTemplateId): void => {
     const model = getDefaultCodexModel(providerCapabilities) || CODEX_DEFAULT_MODEL
-    const suffix = Date.now()
-    const firstNodeId = `node-${suffix}-a`
-    const secondNodeId = `node-${suffix}-b`
-    const simpleChainNodes: Node<WorkflowNode['data']>[] = [
-      {
-        id: firstNodeId,
-        type: 'agentNode',
-        position: { x: -260, y: -60 },
-        data: {
-          provider: 'codex',
-          model,
-          label: 'A - Analyze',
-          prompt: 'Inspect the workspace context and summarize the next implementation step.',
-          systemInstruction: ''
-        }
-      },
-      {
-        id: secondNodeId,
-        type: 'agentNode',
-        position: { x: 80, y: -60 },
-        data: {
-          provider: 'codex',
-          model,
-          label: 'B - Report',
-          prompt: 'Use the upstream output to write a concise execution report.',
-          systemInstruction: ''
-        }
-      }
-    ]
-    const simpleChainEdges: Edge[] = [
-      {
-        id: `edge-${firstNodeId}-${secondNodeId}`,
-        source: firstNodeId,
-        target: secondNodeId,
-        type: 'animatedEdge'
-      }
-    ]
+      const template = buildWorkflowTemplate(templateId, model)
 
-    setNodes(simpleChainNodes)
-    setEdges(simpleChainEdges)
-    setSelectedNode(firstNodeId)
-    window.requestAnimationFrame(() => fitView({ padding: 0.35, duration: 200 }))
-  }, [fitView, providerCapabilities, setEdges, setNodes, setSelectedNode])
+      setNodes(template.nodes)
+      setEdges(template.edges)
+      setSelectedNode(template.nodes[0]?.id ?? null)
+      window.requestAnimationFrame(() => fitView({ padding: 0.35, duration: 200 }))
+    },
+    [fitView, providerCapabilities, setEdges, setNodes, setSelectedNode]
+  )
 
   const handleCreateOnboardingWorkflow = useCallback(async (): Promise<void> => {
     if (!workspacePath || isCreatingOnboardingWorkflow) {
@@ -257,7 +238,7 @@ export const FlowCanvas: React.FC = () => {
           onAddAgent={handleAddAgentFromEmptyState}
           onCreateOnboardingWorkflow={() => void handleCreateOnboardingWorkflow()}
           onReviewContext={() => setContextSetupOpen(true, 'onboarding')}
-          onTrySimpleChain={handleTrySimpleChain}
+          onApplyTemplate={handleApplyTemplate}
         />
       )}
       <ReactFlow

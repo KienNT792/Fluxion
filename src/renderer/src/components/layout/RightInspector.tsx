@@ -2,6 +2,7 @@ import React from 'react'
 import { BookOpen } from 'lucide-react'
 import { useWorkflowStore } from '../../stores/workflow.store'
 import { ProjectContextInspector } from '@renderer/features/project-context/inspector/ProjectContextInspector'
+import { FlowContextInspector } from '@renderer/features/project-context/inspector/FlowContextInspector'
 import { PropertiesPanel } from '@renderer/features/node-inspector/PropertiesPanel'
 import { ErrorBoundary } from '../ui/ErrorBoundary'
 
@@ -9,7 +10,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary'
  * Persistent right inspector panel.
  *
  * - Always rendered (never conditionally removed from DOM).
- * - Shows `ProjectContextInspector` when no node is selected.
+ * - Shows `ProjectContextInspector` and `FlowContextInspector` when no node is selected.
  * - Shows `PropertiesPanel` when a node is selected.
  * - Width: clamp(340px, 28vw, 420px).
  * - Independent vertical scrolling.
@@ -61,7 +62,36 @@ export const RightInspector: React.FC = () => {
           </div>
 
           {/* Context inspector content (scrollable) */}
-          <ProjectContextInspector />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <ProjectContextInspector />
+            <div style={{ borderTop: '1px solid var(--color-hairline)' }}>
+              <div
+                className="flex items-center gap-2.5 px-5 py-4"
+                style={{
+                  background: 'var(--color-surface-card)',
+                  borderBottom: '1px solid var(--color-hairline)'
+                }}
+              >
+                <div
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"
+                  style={{
+                    background: 'var(--color-canvas)',
+                    border: '1px solid var(--color-hairline)',
+                    color: 'var(--color-muted)'
+                  }}
+                >
+                  <BookOpen size={14} />
+                </div>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: 'var(--color-ink)', letterSpacing: '-0.1px' }}
+                >
+                  Flow Context
+                </span>
+              </div>
+              <FlowContextInspector />
+            </div>
+          </div>
         </>
       )}
     </aside>

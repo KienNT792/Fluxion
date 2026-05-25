@@ -38,6 +38,7 @@ interface ContextSetupStepContentProps {
   createdOnboardingWorkflowPath: string | null
   currentStep: ContextStepId
   draft: ProjectContextDraft
+  globalContext: string
   handleApplyOnboardingSuggestions: () => void
   handleApplyRepoSkillPreview: () => Promise<void>
   handleAcceptContextEnrichment: (fields?: ContextEnrichmentField[]) => void
@@ -51,6 +52,7 @@ interface ContextSetupStepContentProps {
   handleGenerateOnboardingPacket: (mode: OnboardingGenerationMode) => Promise<void>
   handleRunContextEnrichment: () => Promise<void>
   handleSaveOnboardingPacket: () => Promise<void>
+  handleSaveWorkspaceMemory: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
   isApplyingRepoSkillPreview: boolean
   isCodexReady: boolean
@@ -61,10 +63,12 @@ interface ContextSetupStepContentProps {
   isEnrichingContext: boolean
   isGeneratingOnboardingPacket: boolean
   isSavingOnboardingPacket: boolean
+  isSavingWorkspaceMemory: boolean
   missingRequirements: string[]
   onboardingPacket: OnboardingPacket | null
   onboardingPacketError: string | null
   onboardingProgressStage: 'idle' | 'reading' | 'mapping' | 'reviewing' | 'done'
+  longTermIndex: string
   repoSkillPreview: RepoOnboardingSkillPreview | null
   savedOnboardingPacketPath: string | null
   scanResult: ContextScanResult | null
@@ -73,6 +77,8 @@ interface ContextSetupStepContentProps {
     label: string
     tone: StatusChipTone
   }
+  setGlobalContext: (value: string) => void
+  setLongTermIndex: (value: string) => void
   updateDraft: (patch: Partial<ProjectContextDraft>) => void
   workspaceName: string
 }
@@ -95,6 +101,7 @@ export function ContextSetupStepContent({
   createdOnboardingWorkflowPath,
   currentStep,
   draft,
+  globalContext,
   handleApplyOnboardingSuggestions,
   handleApplyRepoSkillPreview,
   handleAcceptContextEnrichment,
@@ -105,6 +112,7 @@ export function ContextSetupStepContent({
   handleGenerateOnboardingPacket,
   handleRunContextEnrichment,
   handleSaveOnboardingPacket,
+  handleSaveWorkspaceMemory,
   isApplyingAgentConfigPreview,
   isApplyingRepoSkillPreview,
   isCodexReady,
@@ -115,14 +123,18 @@ export function ContextSetupStepContent({
   isEnrichingContext,
   isGeneratingOnboardingPacket,
   isSavingOnboardingPacket,
+  isSavingWorkspaceMemory,
   missingRequirements,
   onboardingPacket,
   onboardingPacketError,
   onboardingProgressStage,
+  longTermIndex,
   repoSkillPreview,
   savedOnboardingPacketPath,
   scanResult,
   statusState,
+  setGlobalContext,
+  setLongTermIndex,
   updateDraft,
   workspaceName
 }: ContextSetupStepContentProps): React.JSX.Element {
@@ -177,6 +189,7 @@ export function ContextSetupStepContent({
           canSaveFinal={canSaveFinal}
           clearAgentConfigPreview={clearAgentConfigPreview}
           clearContextEnrichment={clearContextEnrichment}
+          globalContext={globalContext}
           contextEnrichmentError={contextEnrichmentError}
           contextEnrichmentResult={contextEnrichmentResult}
           draft={draft}
@@ -184,12 +197,17 @@ export function ContextSetupStepContent({
           handleApplyAgentConfigPreview={handleApplyAgentConfigPreview}
           handleCreateAgentConfigPreview={handleCreateAgentConfigPreview}
           handleRunContextEnrichment={handleRunContextEnrichment}
+          handleSaveWorkspaceMemory={handleSaveWorkspaceMemory}
           isApplyingAgentConfigPreview={isApplyingAgentConfigPreview}
           isContextEnrichmentAvailable={isContextEnrichmentAvailable}
           isCreatingAgentConfigPreview={isCreatingAgentConfigPreview}
           isEnrichingContext={isEnrichingContext}
+          isSavingWorkspaceMemory={isSavingWorkspaceMemory}
           missingRequirements={missingRequirements}
+          longTermIndex={longTermIndex}
           statusState={statusState}
+          setGlobalContext={setGlobalContext}
+          setLongTermIndex={setLongTermIndex}
         />
       )
     default:

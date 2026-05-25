@@ -296,26 +296,92 @@ export class RunStateStore {
     })
   }
 
+  public async reopenUpstreamSubgraph(
+    workspacePath: string,
+    runId: string,
+    nodeId: NodeId,
+    upstreamNodeId: NodeId,
+    graph: Map<NodeId, NodeId[]>
+  ): Promise<WorkflowRunState> {
+    return this.updateRun(workspacePath, runId, (state) => {
+      const upstreamNode = this.requireNode(state, upstreamNodeId)
+      const rejectedNode = this.requireNode(state, nodeId)
+      const descendants = this.collectDownstreamNodeIds(upstreamNodeId, graph)
+
+      upstreamNode.status = 'pending'
+      upstreamNode.completedAt = undefined
+      upstreamNode.exitCode = undefined
+      upstreamNode.error = undefined
+      upstreamNode.runnerSessionId = undefined
+      upstreamNode.outputArtifactPaths = []
+      upstreamNode.reviewStatus = undefined
+      upstreamNode.reviewSource = undefined
+      upstreamNode.reviewRequestedAt = undefined
+      upstreamNode.reviewResolvedAt = undefined
+      upstreamNode.reviewComment = undefined
+
+      rejectedNode.status = 'rejected'
+      rejectedNode.reviewStatus = 'rejected'
+      rejectedNode.reviewResolvedAt = nowIso()
+
+      for (const descendantId of descendants) {
+        if (descendantId === upstreamNodeId) {
+          continue
+        }
+        const descendant = state.nodes[descendantId]
+        if (!descendant) {
+          continue
+        }
+        descendant.status = 'pending'
+        descendant.completedAt = undefined
+        descendant.exitCode = undefined
+        descendant.error = undefined
+        descendant.runnerSessionId = undefined
+        descendant.outputArtifactPaths = []
+        descendant.reviewStatus = undefined
+        descendant.reviewSource = undefined
+        descendant.reviewRequestedAt = undefined
+        descendant.reviewResolvedAt = undefined
+        descendant.reviewComment = undefined
+      }
+
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
+      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, upstreamNodeId)
+      state.currentNodeIds = sortNodeIds([
+        ...state.currentNodeIds.filter((currentId) => !descendants.includes(currentId)),
+        upstreamNodeId
+      ])
+      state.status = 'running'
+      return state
+    })
+  }
+
   public async resetNodeForRerun(
     workspacePath: string,
     runId: string,
-    nodeId: NodeId
+    nodeId: NodeId,
+    graph: Map<NodeId, NodeId[]>
   ): Promise<WorkflowRunState> {
     return this.updateRun(workspacePath, runId, (state) => {
-      const node = this.requireNode(state, nodeId)
-      node.status = 'pending'
-      node.completedAt = undefined
-      node.exitCode = undefined
-      node.error = undefined
-      node.runnerSessionId = undefined
-      node.outputArtifactPaths = []
-      node.reviewStatus = undefined
-      node.reviewSource = undefined
-      node.reviewRequestedAt = undefined
-      node.reviewResolvedAt = undefined
-      node.reviewComment = undefined
-      state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, nodeId)
-      state.currentNodeIds = removeNodeId(state.currentNodeIds, nodeId)
+      const descendants = this.collectDownstreamNodeIds(nodeId, graph)
+
+      for (const descendantId of descendants) {
+        const node = this.requireNode(state, descendantId)
+        node.status = 'pending'
+        node.completedAt = undefined
+        node.exitCode = undefined
+        node.error = undefined
+        node.runnerSessionId = undefined
+        node.outputArtifactPaths = []
+        node.reviewStatus = undefined
+        node.reviewSource = undefined
+        node.reviewRequestedAt = undefined
+        node.reviewResolvedAt = undefined
+        node.reviewComment = undefined
+        state.awaitingReviewNodeIds = removeNodeId(state.awaitingReviewNodeIds, descendantId)
+        state.currentNodeIds = removeNodeId(state.currentNodeIds, descendantId)
+      }
+
       state.status = isWorkflowPendingReview(state) ? 'awaiting_review' : 'running'
       return state
     })
@@ -430,6 +496,26 @@ export class RunStateStore {
       throw new Error(`Node ${nodeId} is not part of run ${state.runId}.`)
     }
     return node
+  }
+
+  private collectDownstreamNodeIds(startNodeId: NodeId, graph: Map<NodeId, NodeId[]>): NodeId[] {
+    const visited = new Set<NodeId>()
+    const stack = [startNodeId]
+
+    while (stack.length > 0) {
+      const current = stack.pop()
+      if (!current || visited.has(current)) {
+        continue
+      }
+      visited.add(current)
+      for (const next of graph.get(current) ?? []) {
+        if (!visited.has(next)) {
+          stack.push(next)
+        }
+      }
+    }
+
+    return [...visited]
   }
 
   private key(workspacePath: string, runId: string): string {

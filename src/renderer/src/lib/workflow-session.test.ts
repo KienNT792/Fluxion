@@ -180,6 +180,93 @@ describe('runCurrentWorkflow approval guardrail', () => {
     expect(useWorkflowStore.getState().terminalNodeId).toBeNull()
   })
 
+  it('focuses the retried subtree root in the terminal when resuming from a node', async () => {
+    useWorkflowStore.setState({
+      terminalNodeId: 'node-other',
+      terminalFollowMode: 'manual',
+      nodes: [
+        {
+          id: 'node-a',
+          type: 'agentNode',
+          position: { x: 0, y: 0 },
+          data: {
+            provider: 'codex',
+            model: 'gpt-5.5',
+            prompt: 'Start',
+            codex: {
+              approvalPolicy: 'never'
+            }
+          }
+        },
+        {
+          id: 'node-b',
+          type: 'agentNode',
+          position: { x: 200, y: 0 },
+          data: {
+            provider: 'codex',
+            model: 'gpt-5.5',
+            prompt: 'Continue',
+            codex: {
+              approvalPolicy: 'never'
+            }
+          }
+        }
+      ],
+      edges: [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }],
+      providerCapabilities: {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          approvalProtocol: {
+            status: 'supported',
+            message: 'Probe supported.'
+          }
+        }
+      }
+    })
+
+    useExecutionStore.getState().resetExecution(['node-a', 'node-b'])
+    useExecutionStore.getState().appendLogs('node-a', ['attempt one'])
+    useExecutionStore.getState().appendLogs('node-b', ['downstream attempt one'])
+
+    await runCurrentWorkflow('node-a')
+
+    expect(window.api.runWorkflow).toHaveBeenCalledWith(
+      'workflow-a',
+      expect.any(Array),
+      expect.any(Array),
+      'C:\\workspace',
+      'auto',
+      'node-a'
+    )
+    expect(useWorkflowStore.getState().terminalNodeId).toBe('node-a')
+    expect(useWorkflowStore.getState().terminalFollowMode).toBe('auto')
+    expect(useExecutionStore.getState().nodeAttemptCounts['node-a']).toBe(2)
+    expect(useExecutionStore.getState().nodeAttemptCounts['node-b']).toBe(2)
+  })
+
   it('prompts for trust before opening an untrusted workspace', async () => {
     const requestWorkspaceTrust = vi.fn(async () => true)
     window.api.openWorkspaceDialog = vi.fn().mockResolvedValue('C:\\Workspace')

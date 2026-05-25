@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -55,6 +55,10 @@ describe('agent config export', () => {
         expect.objectContaining({
           action: 'create',
           relativePath: 'AGENTS.md'
+        }),
+        expect.objectContaining({
+          action: 'create',
+          relativePath: expect.stringContaining('.fluxion')
         })
       ])
     )
@@ -65,6 +69,12 @@ describe('agent config export', () => {
     expect(agents).toContain('<!-- BEGIN FLUXION CONTEXT -->')
     expect(agents).toContain('Build a local workflow orchestration app')
     expect(agents).toContain('npm run typecheck')
+
+    const instruction = await readFile(join(workspacePath, '.fluxion', 'instructions', 'codex.md'), 'utf8')
+    expect(instruction).toContain('---')
+    expect(instruction).toContain('type: instruction')
+    expect(instruction).toContain('source: fluxion-export')
+    expect(instruction).toContain('Project Instructions')
   })
 
   it('updates an existing Fluxion-marked AGENTS.md section', async () => {
@@ -97,6 +107,43 @@ describe('agent config export', () => {
     expect(agents).not.toContain('old generated content')
     expect(agents).toContain('Keep this manual note.')
     expect(agents).toContain('Prefer Windows-safe commands.')
+  })
+
+  it('updates an existing Fluxion instruction file with frontmatter', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-agent-config-instruction-'))
+    await mkdir(join(workspacePath, '.fluxion', 'instructions'), { recursive: true })
+    await writeFile(
+      join(workspacePath, '.fluxion', 'instructions', 'codex.md'),
+      [
+        '---',
+        'type: instruction',
+        'source: old-export',
+        '---',
+        '',
+        'Old content',
+        ''
+      ].join('\n'),
+      'utf8'
+    )
+
+    const preview = await agentConfigPreviewService.createPreview(
+      workspacePath,
+      'codex',
+      createReadyContext()
+    )
+
+    const instructionOperation = preview.operations.find(
+      (operation) => operation.relativePath.replaceAll('\\', '/') === '.fluxion/instructions/codex.md'
+    )
+    expect(instructionOperation?.action).toBe('appendSection')
+
+    await agentConfigPreviewService.applyPreview(preview)
+
+    const instruction = await readFile(join(workspacePath, '.fluxion', 'instructions', 'codex.md'), 'utf8')
+    expect(instruction).toContain('Old content')
+    expect(instruction).toContain('type: instruction')
+    expect(instruction).toContain('source: fluxion-export')
+    expect(instruction).toContain('Project Instructions')
   })
 
   it('keeps Codex AGENTS.md export compact and focused on stable context', async () => {

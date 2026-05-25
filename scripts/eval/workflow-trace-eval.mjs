@@ -323,6 +323,76 @@ function addContextDeltaCommitSafeOrderCheck(events, checks) {
   )
 }
 
+function addContextCommittedDeltaShapeAndUniquenessCheck(events, checks) {
+  const issues = []
+  const seenCommitKeys = new Map()
+  const commits = indexedEvents(events, (event) => event.type === 'node.context_delta_committed')
+
+  for (const { event, index, data } of commits) {
+    const missingFields = []
+    if (!isNonEmptyString(data.deltaIdempotencyKey)) {
+      missingFields.push('deltaIdempotencyKey')
+    }
+    if (!isFiniteNumber(data.baseSnapshotVersion)) {
+      missingFields.push('baseSnapshotVersion')
+    }
+    if (!isNonEmptyString(data.baseSnapshotHash)) {
+      missingFields.push('baseSnapshotHash')
+    }
+    if (!isFiniteNumber(data.contextVersion)) {
+      missingFields.push('contextVersion')
+    }
+    if (!isFiniteNumber(data.memoryRefCount)) {
+      missingFields.push('memoryRefCount')
+    }
+    if (!isFiniteNumber(data.artifactRefCount)) {
+      missingFields.push('artifactRefCount')
+    }
+    if (!Array.isArray(data.providerStateKeys)) {
+      missingFields.push('providerStateKeys')
+    }
+
+    const versionDidNotAdvance =
+      isFiniteNumber(data.contextVersion) &&
+      isFiniteNumber(data.baseSnapshotVersion) &&
+      data.contextVersion <= data.baseSnapshotVersion
+
+    let duplicateCommit = false
+    if (isNonEmptyString(data.deltaIdempotencyKey)) {
+      const previous = seenCommitKeys.get(data.deltaIdempotencyKey)
+      if (previous) {
+        duplicateCommit =
+          data.idempotentReplay !== true || previous.contextVersion !== data.contextVersion
+      } else {
+        seenCommitKeys.set(data.deltaIdempotencyKey, {
+          index,
+          contextVersion: data.contextVersion
+        })
+      }
+    }
+
+    if (missingFields.length > 0 || versionDidNotAdvance || duplicateCommit) {
+      issues.push(
+        eventDetails(event, index, {
+          issue: 'invalidCommittedDeltaShape',
+          missingFields,
+          versionDidNotAdvance,
+          duplicateCommit
+        })
+      )
+    }
+  }
+
+  checks.push(
+    check(
+      'context-committed-delta-shape-and-uniqueness',
+      issues.length === 0,
+      'Committed context deltas must include replay-safe metadata, advance context version, and avoid duplicate non-replay idempotency keys.',
+      { issues }
+    )
+  )
+}
+
 function addContextNoSuccessCommitAfterTerminalNodeFailureCheck(events, checks) {
   const issues = []
   const terminalFailures = indexedEvents(
@@ -553,6 +623,7 @@ function addContextLifecycleChecks(events, checks, workflowStartIndexes) {
   addContextFlowContextConsistencyCheck(events, checks)
   addContextSnapshotOrderAndShapeCheck(events, checks)
   addContextDeltaCommitSafeOrderCheck(events, checks)
+  addContextCommittedDeltaShapeAndUniquenessCheck(events, checks)
   addContextNoSuccessCommitAfterTerminalNodeFailureCheck(events, checks)
   addContextDownstreamSnapshotFreshnessCheck(events, checks)
   addContextConflictHandledDeterministicallyCheck(events, checks)

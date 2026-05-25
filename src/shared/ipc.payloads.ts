@@ -120,6 +120,12 @@ export interface WorkspaceReadTextFileResult {
   truncated: boolean
 }
 
+export interface WorkspaceMemoryFilesPayload {
+  workspacePath: string
+  globalContext: string
+  longTermIndex: string
+}
+
 export interface WorkflowSavePayload {
   workspacePath: string
   workflow: Workflow
@@ -219,7 +225,25 @@ export interface WorkflowReviewActionPayload {
   workflowId: string
   runId: string
   nodeId: NodeId
+  upstreamNodeId?: NodeId
   comment?: string
+}
+
+export interface WorkflowExplainFailurePayload {
+  workflowId: string
+  runId?: string
+  nodeId: NodeId
+  nodeLabel?: string
+  provider?: string
+  model?: string
+  error: string
+  logs?: string
+}
+
+export interface WorkflowExplainFailureResult {
+  summary: string
+  likelyCause: string
+  recommendedNextSteps: string[]
 }
 
 export interface WorkflowNodeStatusPayload {

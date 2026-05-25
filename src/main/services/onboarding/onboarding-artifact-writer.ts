@@ -22,6 +22,10 @@ import { memoryManager } from '../memory-manager'
 import type { OnboardingLogger } from './onboarding-logger'
 import { ONBOARDING_CONFIG } from './onboarding-config'
 import { assertWorkspaceBound, normalizeWorkspacePath } from './onboarding-paths'
+import {
+  discoverWorkspaceSkillLibrary,
+  formatWorkspaceSkillLibrary
+} from './onboarding-skill-library'
 
 function renderBulletLines(items: string[], fallback = '- Unknown'): string {
   return items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : fallback
@@ -306,6 +310,15 @@ function renderContextReference(context: ProjectContextDraft | null | undefined)
   ].join('\n')
 }
 
+async function renderSkillLibraryReference(workspacePath: string): Promise<string> {
+  const library = await discoverWorkspaceSkillLibrary(workspacePath)
+  if (library.assets.length === 0) {
+    return '# Workspace Skill Library\n\nNo workspace skill assets were detected.\n'
+  }
+
+  return ['# Workspace Skill Library', '', formatWorkspaceSkillLibrary(library), ''].join('\n')
+}
+
 export async function saveOnboardingPacket(
   request: SaveOnboardingPacketRequest,
   logger?: OnboardingLogger
@@ -356,6 +369,7 @@ export async function createRepoOnboardingSkillPreview(
   const skillPath = '.agents/skills/fluxion-onboarding/SKILL.md'
   const packetPath = '.agents/skills/fluxion-onboarding/references/onboarding-packet.md'
   const contextPath = '.agents/skills/fluxion-onboarding/references/fluxion-context.md'
+  const libraryPath = '.agents/skills/fluxion-onboarding/references/workspace-skill-library.md'
   const operations = await Promise.all([
     readExistingFile(path.join(workspacePath, ...skillPath.split('/'))).then((existing) =>
       createPreviewOperation(
@@ -382,6 +396,17 @@ export async function createRepoOnboardingSkillPreview(
         'Compact Fluxion context reference for the onboarding skill.',
         renderContextReference(request.context),
         existing
+      )
+    ),
+    readExistingFile(path.join(workspacePath, ...libraryPath.split('/'))).then((existing) =>
+      renderSkillLibraryReference(workspacePath).then((content) =>
+        createPreviewOperation(
+          workspacePath,
+          libraryPath,
+          'Workspace skill library reference for the onboarding skill.',
+          content,
+          existing
+        )
       )
     )
   ])

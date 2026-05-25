@@ -283,6 +283,28 @@ describe('ContextDeltaSchema', () => {
     ).toThrow()
   })
 
+  it('rejects raw secret-like values under neutral keys in guarded payloads', () => {
+    expect(() =>
+      ContextDeltaSchema.parse({
+        ...createValidContextDelta(),
+        providerStateUpdates: {
+          openai: {
+            headerValue: 'Bearer rawsecretvalue123456789'
+          }
+        }
+      })
+    ).toThrow()
+
+    expect(() =>
+      ContextDeltaSchema.parse({
+        ...createValidContextDelta(),
+        runStateUpdates: {
+          setupCommand: 'OPENAI_API_KEY=sk-1234567890abcdef run-task'
+        }
+      })
+    ).toThrow()
+  })
+
   it('rejects non-string safe reference fields in guarded payloads', () => {
     expect(() =>
       ContextDeltaSchema.parse({
@@ -330,6 +352,40 @@ describe('ContextDeltaSchema', () => {
       envVar: 'OPENAI_API_KEY'
     })
     expect(parsed.redaction.redactedFields[0]?.secretRef).toBe('secret://openai/api-key')
+  })
+
+  it('requires redaction entries to name a replacement reference and timestamp', () => {
+    expect(() =>
+      ContextDeltaSchema.parse({
+        ...createValidContextDelta(),
+        redaction: {
+          policy: 'secret-reference',
+          redactedAt: '2026-05-15T00:01:01.000Z',
+          redactedFields: [
+            {
+              path: 'providerState.openai.apiKey',
+              reason: 'secret-like field replaced with a reference'
+            }
+          ]
+        }
+      })
+    ).toThrow()
+
+    expect(() =>
+      ContextDeltaSchema.parse({
+        ...createValidContextDelta(),
+        redaction: {
+          policy: 'secret-reference',
+          redactedFields: [
+            {
+              path: 'providerState.openai.apiKey',
+              reason: 'secret-like field replaced with a reference',
+              envVar: 'OPENAI_API_KEY'
+            }
+          ]
+        }
+      })
+    ).toThrow()
   })
 
   it('accepts conflict marker metadata', () => {

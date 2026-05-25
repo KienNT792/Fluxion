@@ -1,6 +1,6 @@
 # Fluxion Project Assessment
 
-Status updated: 2026-05-17
+Status updated: 2026-05-24
 Workspace baseline: `D:\codex-workflow\Fluxion`
 
 ## Current Snapshot
@@ -13,12 +13,22 @@ Current repo state:
 - Run-state persistence, artifact gates, retry/review flows, trace JSONL, and flow-owned context baseline are in place.
 - `FX-WO-018`, `FX-WO-019`, `FX-WO-020`, and `FX-WO-021` are implemented, so prompt layout, per-node context snapshots, commit-safe downstream context publishing, and deterministic parallel context merge/conflict policy now exist.
 - Windows CI baseline exists for `typecheck`, `test`, and `build`.
-- Local Windows packaging smoke exists through `npm run smoke:win`.
+- Local Windows packaging smoke exists through `npm run smoke:win` and passed on 2026-05-24.
 - Interactive Codex approval hosting remains blocked because current probe evidence is `unsupported`.
 
 ## Latest Verification Baseline
 
-Most recent baseline still worth retaining:
+Most recent baseline:
+
+- Windows smoke rerun on `2026-05-24`:
+  - Regression fixed: Codex onboarding command category `Style Check` now normalizes to `lint`.
+  - Targeted Vitest: `src/main/test/onboarding-codex-parser.test.ts` pass, 12/12.
+  - `npm run smoke:win`: pass.
+  - Full Vitest inside smoke: 52 files pass, 335/335 tests pass.
+  - Production build: pass.
+  - Windows unpacked packaging: pass, including `dist/win-unpacked/fluxion.exe` and `resources/app.asar`.
+
+Retained historical baseline:
 
 - Automated alpha-hardening baseline on `2026-05-15`:
   - `npm run lint`: pass
@@ -27,11 +37,11 @@ Most recent baseline still worth retaining:
   - `npm run build`: pass
   - `npm run smoke:win`: pass
   - `npm run eval:workflow -- --workspace <temp-workspace> --run alpha-hardening`: pass
-- Desktop interactive smoke is still not recorded as fully complete end to end.
+- Automated Windows smoke is green. Desktop interactive smoke still needs a repeatable recorded run if the release gate requires manual UX evidence.
 
 ## Major Open Risks
 
-- Manual desktop smoke for real runtime UX is still the highest-confidence gap.
+- Manual desktop UX evidence is still lighter than automated smoke evidence.
 - Provider configuration validation outside the Codex-first path still needs hardening.
 - Frontmatter and downstream metadata validation still need deeper coverage.
 - A second real adapter on the main execution path is still missing.
@@ -41,9 +51,9 @@ Most recent baseline still worth retaining:
 
 Priority should remain:
 
-1. Finish manual desktop smoke for runtime and review flows.
-2. Continue provider/config and metadata hardening.
-3. Keep `FX-WO-022` as the next flow-context backend step.
+1. Continue provider/config and metadata hardening.
+2. Keep `FX-WO-022` as the next flow-context backend step.
+3. Add context redaction and secret reference policy before richer provider/context state.
 4. Do not start interactive Codex approval host work from the current CLI evidence.
 
 ## Canonical Companion Docs

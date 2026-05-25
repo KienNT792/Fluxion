@@ -52,15 +52,21 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
   const {
     currentStep,
     draft,
+    globalContext,
     handleSave,
+    handleSaveWorkspaceMemory,
     isLoading,
     isSaving,
+    isSavingWorkspaceMemory,
     loadError,
+    longTermIndex,
     previewTab,
     saveError,
     scanResult,
     setCurrentStep,
     setPreviewTab,
+    setGlobalContext,
+    setLongTermIndex,
     updateDraft
   } = useContextSetup({
     initialContext,
@@ -350,7 +356,11 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                   isEnrichingContext={isEnrichingContext}
                   isGeneratingOnboardingPacket={isGeneratingOnboardingPacket}
                   isSavingOnboardingPacket={isSavingOnboardingPacket}
+                  globalContext={globalContext}
+                  handleSaveWorkspaceMemory={handleSaveWorkspaceMemory}
+                  isSavingWorkspaceMemory={isSavingWorkspaceMemory}
                   missingRequirements={missingRequirements}
+                  longTermIndex={longTermIndex}
                   onboardingPacket={onboardingPacket}
                   onboardingPacketError={onboardingPacketError}
                   onboardingProgressStage={onboardingProgressStage}
@@ -358,6 +368,8 @@ export const ContextInitModal: React.FC<ContextInitModalProps> = ({
                   savedOnboardingPacketPath={savedOnboardingPacketPath}
                   scanResult={scanResult}
                   statusState={statusState}
+                  setGlobalContext={setGlobalContext}
+                  setLongTermIndex={setLongTermIndex}
                   updateDraft={updateDraft}
                   workspaceName={workspaceName}
                 />

@@ -11,6 +11,7 @@ import type {
 import { StatusChip, StatusChipTone } from '@renderer/components/ui/StatusChip'
 import { AgentConfigExportPanel } from './AgentConfigExportPanel'
 import { ContextEnrichmentPanel } from './ContextEnrichmentPanel'
+import { WorkspaceMemoryEditor } from './WorkspaceMemoryEditor'
 import { getWorkspaceTypeLabel } from '../lib/context-setup-model'
 
 interface ContextSetupReviewStepProps {
@@ -21,6 +22,7 @@ interface ContextSetupReviewStepProps {
   canSaveFinal: boolean
   clearAgentConfigPreview: () => void
   clearContextEnrichment: () => void
+  globalContext: string
   contextEnrichmentError: string | null
   contextEnrichmentResult: ContextEnrichmentResult | null
   draft: ProjectContextDraft
@@ -31,16 +33,21 @@ interface ContextSetupReviewStepProps {
     includeAdvancedConfig?: boolean
   ) => Promise<void>
   handleRunContextEnrichment: () => Promise<void>
+  handleSaveWorkspaceMemory: () => Promise<void>
   isApplyingAgentConfigPreview: boolean
   isContextEnrichmentAvailable: boolean
   isCreatingAgentConfigPreview: boolean
   isEnrichingContext: boolean
+  isSavingWorkspaceMemory: boolean
   missingRequirements: string[]
+  longTermIndex: string
   statusState: {
     detail: string
     label: string
     tone: StatusChipTone
   }
+  setGlobalContext: (value: string) => void
+  setLongTermIndex: (value: string) => void
 }
 
 export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
@@ -51,6 +58,7 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
   canSaveFinal,
   clearAgentConfigPreview,
   clearContextEnrichment,
+  globalContext,
   contextEnrichmentError,
   contextEnrichmentResult,
   draft,
@@ -58,12 +66,17 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
   handleApplyAgentConfigPreview,
   handleCreateAgentConfigPreview,
   handleRunContextEnrichment,
+  handleSaveWorkspaceMemory,
   isApplyingAgentConfigPreview,
   isContextEnrichmentAvailable,
   isCreatingAgentConfigPreview,
   isEnrichingContext,
+  isSavingWorkspaceMemory,
   missingRequirements,
-  statusState
+  longTermIndex,
+  statusState,
+  setGlobalContext,
+  setLongTermIndex
 }) => (
   <div className="space-y-5">
     <div
@@ -142,6 +155,15 @@ export const ContextSetupReviewStep: React.FC<ContextSetupReviewStepProps> = ({
       onAccept={handleAcceptContextEnrichment}
       onClear={clearContextEnrichment}
       onEnrich={handleRunContextEnrichment}
+    />
+
+    <WorkspaceMemoryEditor
+      globalContext={globalContext}
+      isSaving={isSavingWorkspaceMemory}
+      longTermIndex={longTermIndex}
+      onGlobalContextChange={setGlobalContext}
+      onLongTermIndexChange={setLongTermIndex}
+      onSave={handleSaveWorkspaceMemory}
     />
 
     <AgentConfigExportPanel

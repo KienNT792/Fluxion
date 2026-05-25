@@ -293,6 +293,7 @@ export function buildDeterministicPacket(options: {
     suggestedContextPatch: buildSuggestedContextPatch(draft),
     suggestedStableRules,
     artifactRecommendations: buildArtifactRecommendations(),
+    skillAssets: [],
     sourceEvidence: evidenceFromScanAndPack(scanResult, evidencePack),
     diagnostics: {
       generatedAt: now.toISOString(),

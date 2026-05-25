@@ -81,6 +81,13 @@ export interface OnboardingArtifactRecommendation {
   rationale: string
 }
 
+export interface OnboardingSkillAsset {
+  id: string
+  relativePath: string
+  title: string
+  description: string
+}
+
 export interface OnboardingDiagnostics {
   generatedAt: string
   mode: OnboardingGenerationMode
@@ -105,6 +112,7 @@ export interface OnboardingPacket {
   suggestedContextPatch: OnboardingSuggestedContextPatch
   suggestedStableRules: string[]
   artifactRecommendations: OnboardingArtifactRecommendation[]
+  skillAssets: OnboardingSkillAsset[]
   sourceEvidence: OnboardingEvidenceSource[]
   diagnostics: OnboardingDiagnostics
 }
@@ -249,6 +257,13 @@ export const OnboardingArtifactRecommendationSchema = z.object({
   rationale: z.string()
 })
 
+export const OnboardingSkillAssetSchema = z.object({
+  id: z.string().min(1),
+  relativePath: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1)
+})
+
 export const OnboardingDiagnosticsSchema = z.object({
   generatedAt: z.string().min(1),
   mode: z.enum(['deterministic', 'codex-assisted']),
@@ -273,6 +288,7 @@ export const OnboardingPacketSchema = z.object({
   suggestedContextPatch: OnboardingSuggestedContextPatchSchema,
   suggestedStableRules: z.array(z.string()),
   artifactRecommendations: z.array(OnboardingArtifactRecommendationSchema),
+  skillAssets: z.array(OnboardingSkillAssetSchema).default([]),
   sourceEvidence: z.array(OnboardingEvidenceSourceSchema),
   diagnostics: OnboardingDiagnosticsSchema
 }) satisfies z.ZodType<OnboardingPacket>

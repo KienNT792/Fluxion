@@ -28,6 +28,7 @@ function createPacket(overrides: Partial<OnboardingPacket> = {}): OnboardingPack
         rationale: 'Keep details out of compact context.'
       }
     ],
+    skillAssets: [],
     sourceEvidence: [
       {
         id: 'evidence-1',

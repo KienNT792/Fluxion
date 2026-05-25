@@ -42,6 +42,7 @@ export interface PendingReviewContext {
   agentVerdict?: 'APPROVED' | 'NEEDS_REVISION'
   outputPreview?: string
   requestedAt?: string
+  upstreamNodeId?: NodeId
 }
 
 interface LogSlice {

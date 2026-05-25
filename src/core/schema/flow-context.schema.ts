@@ -12,6 +12,11 @@ const RAW_SECRET_KEY_NAMES = new Set([
   'credentials'
 ])
 const SAFE_REFERENCE_KEY_NAMES = new Set(['secretref', 'redactedref', 'envvar'])
+const RAW_SECRET_VALUE_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b/i,
+  /\bsk-[A-Za-z0-9_-]{16,}\b/,
+  /\bOPENAI_API_KEY\s*=\s*\S+/i
+]
 
 const IsoUtcTimestampSchema = z
   .string()
@@ -31,6 +36,10 @@ function isSafeReferenceKey(key: string): boolean {
   return SAFE_REFERENCE_KEY_NAMES.has(normalizeSecretKey(key))
 }
 
+function looksLikeRawSecretValue(value: string): boolean {
+  return RAW_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(value))
+}
+
 function addRawSecretKeyIssues(
   value: unknown,
   context: z.RefinementCtx,
@@ -47,6 +56,7 @@ function addRawSecretKeyIssues(
 
   for (const [key, childValue] of Object.entries(value)) {
     const childPath = [...path, key]
+    const isSafeReference = isSafeReferenceKey(key)
     if (isRawSecretKey(key)) {
       context.addIssue({
         code: 'custom',
@@ -56,13 +66,25 @@ function addRawSecretKeyIssues(
       })
     }
     if (
-      isSafeReferenceKey(key) &&
+      isSafeReference &&
       (typeof childValue !== 'string' || childValue.trim().length === 0)
     ) {
       context.addIssue({
         code: 'custom',
         path: childPath,
         message: 'Safe secret reference fields must be non-empty strings.'
+      })
+    }
+    if (
+      !isSafeReference &&
+      typeof childValue === 'string' &&
+      looksLikeRawSecretValue(childValue)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: childPath,
+        message:
+          'Raw secret-like values are not allowed in flow context payloads. Store secretRef, redactedRef, or envVar references instead.'
       })
     }
     addRawSecretKeyIssues(childValue, context, childPath)
@@ -126,6 +148,16 @@ export const ContextRedactionEntrySchema = z
     envVar: z.string().min(1).optional()
   })
   .strict()
+  .superRefine((value, context) => {
+    if (!value.redactedRef && !value.secretRef && !value.envVar) {
+      context.addIssue({
+        code: 'custom',
+        path: ['redactedRef'],
+        message:
+          'Redaction entries must include a redactedRef, secretRef, or envVar replacement reference.'
+      })
+    }
+  })
 
 export const ContextRedactionMetadataSchema = z
   .object({
@@ -134,6 +166,15 @@ export const ContextRedactionMetadataSchema = z
     redactedFields: z.array(ContextRedactionEntrySchema).default([])
   })
   .strict()
+  .superRefine((value, context) => {
+    if (value.redactedFields.length > 0 && !value.redactedAt) {
+      context.addIssue({
+        code: 'custom',
+        path: ['redactedAt'],
+        message: 'Redaction metadata with redacted fields must include redactedAt.'
+      })
+    }
+  })
 
 export const ContextConflictMarkerSchema = z
   .object({

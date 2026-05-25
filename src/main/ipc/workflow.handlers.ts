@@ -8,6 +8,7 @@ import {
   ContextEnrichmentRequest,
   GenerateOnboardingPacketRequest,
   getProviderCodexApprovalProtocolStatus,
+  getWorkflowProviderRuntimePreflight,
   getWorkflowCodexApprovalGuardrail,
   IpcChannels,
   RepoOnboardingSkillPreview,
@@ -18,6 +19,8 @@ import {
   ApplyRepoOnboardingSkillPreviewRequest,
   GetProviderCapabilitiesPayload,
   ProjectContextDraft,
+  WorkflowExplainFailurePayload,
+  WorkflowExplainFailureResult,
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowAbortPayload,
@@ -222,6 +225,23 @@ async function readWorkspaceTextFile(
   }
 }
 
+function summarizeWorkflowFailure(
+  payload: WorkflowExplainFailurePayload
+): WorkflowExplainFailureResult {
+  const nodeDescriptor = payload.nodeLabel?.trim() || payload.nodeId
+  const providerModel = [payload.provider, payload.model].filter(Boolean).join(' / ')
+
+  return {
+    summary: `Node ${nodeDescriptor} failed${providerModel ? ` under ${providerModel}` : ''}.`,
+    likelyCause: payload.error.trim().length > 0 ? payload.error.trim() : 'Unknown execution failure.',
+    recommendedNextSteps: [
+      'Inspect the terminal logs for the last stderr chunk.',
+      'Check provider readiness and node configuration.',
+      'Retry with a narrower prompt or smaller input if the failure was transient.'
+    ]
+  }
+}
+
 export function registerWorkflowHandlers(): void {
   ipcMain.handle(IpcChannels.WORKSPACE_OPEN_DIALOG, async () => {
     const result = await dialog.showOpenDialog({
@@ -381,6 +401,11 @@ export function registerWorkflowHandlers(): void {
   })
 
   ipcMain.handle(
+    'workspace:read-memory-files',
+    async (_event, workspacePath: string) => workspaceService.readWorkspaceMemoryFiles(workspacePath)
+  )
+
+  ipcMain.handle(
     IpcChannels.WORKSPACE_SAVE_PROJECT_CONTEXT,
     async (
       _event,
@@ -388,6 +413,14 @@ export function registerWorkflowHandlers(): void {
     ) => {
       return workspaceService.saveProjectContext(payload.workspacePath, payload.draft, payload.mode)
     }
+  )
+
+  ipcMain.handle(
+    'workspace:save-memory-files',
+    async (
+      _event,
+      payload: { workspacePath: string; globalContext: string; longTermIndex: string }
+    ) => workspaceService.saveWorkspaceMemoryFiles(payload.workspacePath, payload.globalContext, payload.longTermIndex)
   )
 
   ipcMain.handle(
@@ -492,9 +525,26 @@ export function registerWorkflowHandlers(): void {
         return
       }
 
+      const providerCapabilities = await providerRegistryService.fetchCapabilities()
+      const providerPreflight = getWorkflowProviderRuntimePreflight(
+        payload.nodes,
+        providerCapabilities
+      )
+      if (!providerPreflight.ok) {
+        event.sender.send(IpcChannels.TERMINAL_ERROR, {
+          nodeId: providerPreflight.nodeId ?? 'system',
+          error: providerPreflight.message
+        })
+        event.sender.send(
+          IpcChannels.WORKFLOW_COMPLETED,
+          createWorkflowFailurePayload(payload.workflowId, providerPreflight.message)
+        )
+        return
+      }
+
       const approvalGuardrail = getWorkflowCodexApprovalGuardrail(payload.nodes, {
         approvalProtocolStatus: getProviderCodexApprovalProtocolStatus(
-          providerRegistryService.getCachedCapabilities()
+          providerCapabilities
         )
       })
       if (approvalGuardrail.severity === 'blocked') {
@@ -562,6 +612,13 @@ export function registerWorkflowHandlers(): void {
     IpcChannels.WORKFLOW_REVIEW_RERUN,
     async (_event, payload: WorkflowReviewActionPayload) => {
       await workflowEngine.rerunReviewNode(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IpcChannels.WORKFLOW_EXPLAIN_FAILURE,
+    async (_event, payload: WorkflowExplainFailurePayload): Promise<WorkflowExplainFailureResult> => {
+      return summarizeWorkflowFailure(payload)
     }
   )
 

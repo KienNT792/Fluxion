@@ -1,4 +1,5 @@
 import * as path from 'path'
+import matter from 'gray-matter'
 import {
   AgentConfigExportOptions,
   AgentConfigExportPreview,
@@ -59,6 +60,16 @@ function renderCodexConfig(options: AgentConfigExportOptions | undefined): strin
   ].join('\n')
 }
 
+function renderCodexInstructionFile(context: ProjectContextDraft): string {
+  const body = renderCodexInstructions(context)
+  return matter.stringify(body, {
+    type: 'instruction',
+    source: 'fluxion-export',
+    project: context.projectName || 'Workspace',
+    generatedAt: new Date().toISOString()
+  })
+}
+
 export class CodexConfigExporter implements AgentConfigExporter {
   public readonly id = 'codex' as const
   public readonly label = 'Codex'
@@ -75,8 +86,16 @@ export class CodexConfigExporter implements AgentConfigExporter {
     const operations: AgentConfigFileOperation[] = []
     const warnings: string[] = []
     const agentInstructions = wrapMarkdownFluxionSection(renderCodexInstructions(context))
+    const instructionFile = renderCodexInstructionFile(context)
     const agentsPath = path.join(resolvedWorkspacePath, 'AGENTS.md')
     const existingAgents = await readExistingFile(agentsPath)
+    const instructionPath = path.join(
+      resolvedWorkspacePath,
+      '.fluxion',
+      'instructions',
+      'codex.md'
+    )
+    const existingInstruction = await readExistingFile(instructionPath)
 
     operations.push(
       createOperation(
@@ -85,6 +104,16 @@ export class CodexConfigExporter implements AgentConfigExporter {
         'Codex project instructions generated from Fluxion context.',
         agentInstructions,
         existingAgents,
+        'markdown'
+      )
+    )
+    operations.push(
+      createOperation(
+        resolvedWorkspacePath,
+        path.join('.fluxion', 'instructions', 'codex.md'),
+        'Repo-governed Codex instruction file with frontmatter.',
+        instructionFile,
+        existingInstruction,
         'markdown'
       )
     )

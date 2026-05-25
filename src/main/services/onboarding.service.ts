@@ -23,6 +23,7 @@ import {
   formatOnboardingPacketMarkdown,
   saveOnboardingPacket
 } from './onboarding/onboarding-artifact-writer'
+import { discoverWorkspaceSkillLibrary } from './onboarding/onboarding-skill-library'
 import { ONBOARDING_CONFIG } from './onboarding/onboarding-config'
 import { parseCodexOnboardingOutput } from './onboarding/onboarding-codex-parser'
 import { buildEvidencePack } from './onboarding/onboarding-evidence-collector'
@@ -108,6 +109,7 @@ export class OnboardingService {
         this.createSnapshot,
         this.logger
       )
+      const skillLibrary = await discoverWorkspaceSkillLibrary(workspacePath)
       const model = cleanString(request.model) || CODEX_DEFAULT_MODEL
       const deterministicPacket = buildDeterministicPacket({
         draft,
@@ -116,6 +118,15 @@ export class OnboardingService {
         now: this.now(),
         mode: mode === 'codex-assisted' ? 'deterministic' : mode
       })
+      const deterministicPacketWithSkills: OnboardingPacket = {
+        ...deterministicPacket,
+        skillAssets: skillLibrary.assets.map((asset) => ({
+          id: asset.id,
+          relativePath: asset.relativePath,
+          title: asset.title,
+          description: asset.description
+        }))
+      }
 
       if (mode !== 'codex-assisted') {
         this.logger.info('generate.completed', {
@@ -123,7 +134,7 @@ export class OnboardingService {
           filesRead: evidencePack.files.length,
           truncatedFiles: evidencePack.truncatedFiles.length
         })
-        return deterministicPacket
+        return deterministicPacketWithSkills
       }
       if (evidencePack.files.length === 0) {
         throw new Error('No readable project evidence was found for Codex onboarding.')
@@ -134,7 +145,7 @@ export class OnboardingService {
         draft,
         scanResult,
         evidencePack,
-        deterministicPacket
+        deterministicPacket: deterministicPacketWithSkills
       })
       const node = WorkflowNodeSchema.parse({
         id: 'onboarding-packet',
@@ -179,7 +190,7 @@ export class OnboardingService {
 
       const packet = parseCodexOnboardingOutput(
         result.output,
-        deterministicPacket,
+        deterministicPacketWithSkills,
         {
           generatedAt,
           mode: 'codex-assisted',

@@ -55,6 +55,7 @@ interface WorkflowEngineDependencies {
     | 'markNodeAwaitingReview'
     | 'markReviewApproved'
     | 'markReviewRejected'
+    | 'reopenUpstreamSubgraph'
     | 'resetNodeForRerun'
     | 'markNodeFailed'
     | 'markNodeAborted'
@@ -98,7 +99,6 @@ type NodeExecutionResult =
 
 type ContextCommitState = 'awaiting_review' | 'completed' | 'review_approved'
 type ContextSnapshotBase = Pick<ContextSnapshot, 'version' | 'hash'>
-
 class ContextCommitFailure extends Error {
   public constructor(
     public readonly nodeId: NodeId,
@@ -228,6 +228,22 @@ function buildReviewApprovalSnapshotBase(
   }
 }
 
+function buildProviderStateUpdates(
+  nodeState: NodeRunState,
+  nodeId: NodeId,
+  nodeData: WorkflowNode['data']
+): Record<string, Record<string, unknown>> {
+  if (!nodeState.runnerSessionId) {
+    return {}
+  }
+
+  if (nodeData.provider === 'openai') {
+    return { openai: { responseIdsByNode: { [nodeId]: nodeState.runnerSessionId } } }
+  }
+
+  return { codex: { runnerSessionsByNode: { [nodeId]: nodeState.runnerSessionId } } }
+}
+
 export function buildExecutionPrompt(node: WorkflowNode, context: string): ExecutionPrompt {
   const trimmedContext = context.trim()
   const systemInstruction =
@@ -317,6 +333,7 @@ export class WorkflowEngine {
     | 'markNodeAwaitingReview'
     | 'markReviewApproved'
     | 'markReviewRejected'
+    | 'reopenUpstreamSubgraph'
     | 'resetNodeForRerun'
     | 'markNodeFailed'
     | 'markNodeAborted'
@@ -562,6 +579,7 @@ export class WorkflowEngine {
       ? `Review rejected for node ${payload.nodeId}: ${payload.comment.trim()}`
       : `Review rejected for node ${payload.nodeId}.`
 
+    const upstreamNodeId = payload.upstreamNodeId ?? payload.nodeId
     await this.runStateStore.markReviewRejected(
       runtime.workspacePath,
       runtime.runId,
@@ -570,9 +588,19 @@ export class WorkflowEngine {
         comment: payload.comment
       }
     )
+    if (upstreamNodeId !== payload.nodeId) {
+      await this.runStateStore.reopenUpstreamSubgraph(
+        runtime.workspacePath,
+        runtime.runId,
+        payload.nodeId,
+        upstreamNodeId,
+        runtime.graph
+      )
+    }
     await this.trace(runtime, 'node.review_rejected', payload.nodeId, {
       error: errorMessage,
       hasComment: Boolean(payload.comment?.trim()),
+      upstreamNodeId,
       ...this.getRecoveredReviewTraceData(runtime)
     })
     runtime.awaitingReviewNodeIds.delete(payload.nodeId)
@@ -599,7 +627,12 @@ export class WorkflowEngine {
       hasComment: Boolean(payload.comment?.trim()),
       ...this.getRecoveredReviewTraceData(runtime)
     })
-    await this.runStateStore.resetNodeForRerun(runtime.workspacePath, runtime.runId, payload.nodeId)
+    await this.runStateStore.resetNodeForRerun(
+      runtime.workspacePath,
+      runtime.runId,
+      payload.nodeId,
+      runtime.graph
+    )
     await this.memoryManager.deleteNodeOutput(
       runtime.workspacePath,
       runtime.workflow.id,
@@ -888,9 +921,11 @@ export class WorkflowEngine {
         status: 'completed',
         outputArtifactPaths: nodeState.outputArtifactPaths
       },
-      providerStateUpdates: nodeState.runnerSessionId
-        ? { codex: { runnerSessionsByNode: { [nodeId]: nodeState.runnerSessionId } } }
-        : {},
+      providerStateUpdates: buildProviderStateUpdates(
+        nodeState,
+        nodeId,
+        runtime.nodes.get(nodeId)?.data ?? ({} as WorkflowNode['data'])
+      ),
       semanticSummaryUpdate: '',
       redaction: {
         policy: 'flow-context-v1',

@@ -27,28 +27,36 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           return {
             background: isActive ? 'var(--color-primary-active)' : 'var(--color-primary)',
             color: 'var(--color-on-primary)',
-            border: '1px solid transparent',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'transparent',
             fontWeight: 500
           }
         case 'danger':
           return {
             background: 'var(--color-surface-card)',
             color: 'var(--color-semantic-error)',
-            border: '1px solid var(--color-semantic-error)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'var(--color-semantic-error)',
             fontWeight: 500
           }
         case 'ghost':
           return {
             background: isActive ? 'var(--color-surface-strong)' : 'transparent',
             color: isActive ? 'var(--color-ink)' : 'var(--color-muted)',
-            border: '1px solid transparent'
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'transparent'
           }
         case 'secondary':
         default:
           return {
             background: isActive ? 'var(--color-surface-strong)' : 'var(--color-surface-card)',
             color: 'var(--color-ink)',
-            border: '1px solid var(--color-hairline)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'var(--color-hairline)',
             fontWeight: 500
           }
       }

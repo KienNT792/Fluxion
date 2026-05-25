@@ -124,7 +124,10 @@ function completedNodeTrace(
       deltaIdempotencyKey: `run-1:${nodeId}:1:completed`,
       contextVersion,
       baseSnapshotVersion: snapshotVersion,
-      baseSnapshotHash: `hash-${nodeId}-${snapshotVersion}`
+      baseSnapshotHash: `hash-${nodeId}-${snapshotVersion}`,
+      memoryRefCount: 1,
+      artifactRefCount: 0,
+      providerStateKeys: []
     })
   ]
 }
@@ -406,13 +409,23 @@ describe('workflow-trace-eval', () => {
         contextEvent('node.context_delta_committed', 'node-a', {
           commitState: 'awaiting_review',
           deltaIdempotencyKey: 'run-1:node-a:1:awaiting_review',
-          contextVersion: 2
+          contextVersion: 2,
+          baseSnapshotVersion: 1,
+          baseSnapshotHash: 'hash-node-a-1',
+          memoryRefCount: 1,
+          artifactRefCount: 0,
+          providerStateKeys: []
         }),
         contextEvent('node.review_requested', 'node-a', { reviewSource: 'node' }),
         contextEvent('node.context_delta_committed', 'node-a', {
           commitState: 'review_approved',
           deltaIdempotencyKey: 'run-1:node-a:1:review_approved',
-          contextVersion: 3
+          contextVersion: 3,
+          baseSnapshotVersion: 2,
+          baseSnapshotHash: 'hash-node-a-2',
+          memoryRefCount: 1,
+          artifactRefCount: 0,
+          providerStateKeys: []
         }),
         contextEvent('node.review_approved', 'node-a'),
         event('workflow.completed', undefined, undefined, { flowContextId: FLOW_CONTEXT_ID })
@@ -447,6 +460,79 @@ describe('workflow-trace-eval', () => {
       upstreamNodeId: 'node-a',
       requiredContextVersion: 2,
       snapshotVersion: 1
+    })
+  })
+
+  it('fails when a committed context delta is missing replay metadata', async () => {
+    const trace = contextHappyTrace()
+    const commit = trace.find(
+      (traceEvent) =>
+        traceEvent.type === 'node.context_delta_committed' && traceEvent.nodeId === 'node-a'
+    )
+    delete (commit?.data as Record<string, unknown>).baseSnapshotHash
+    await writeTrace(workspacePath, 'run-1', trace)
+
+    const result = await runEval(workspacePath, 'run-1')
+    const summary = parsedStdout(result)
+    const failedCheck = expectFailedCheck(
+      summary,
+      'context-committed-delta-shape-and-uniqueness'
+    )
+
+    expect(result.code).toBe(1)
+    expect(expectFirstIssue(failedCheck).missingFields).toContain('baseSnapshotHash')
+  })
+
+  it('fails when a committed context delta does not advance from its base snapshot', async () => {
+    const trace = contextHappyTrace()
+    const commit = trace.find(
+      (traceEvent) =>
+        traceEvent.type === 'node.context_delta_committed' && traceEvent.nodeId === 'node-a'
+    )
+    ;(commit?.data as Record<string, unknown>).contextVersion = 1
+    await writeTrace(workspacePath, 'run-1', trace)
+
+    const result = await runEval(workspacePath, 'run-1')
+    const summary = parsedStdout(result)
+
+    expect(result.code).toBe(1)
+    expect(
+      expectFirstIssue(
+        expectFailedCheck(summary, 'context-committed-delta-shape-and-uniqueness')
+      )
+    ).toMatchObject({
+      versionDidNotAdvance: true
+    })
+  })
+
+  it('fails when a committed context delta key is duplicated without idempotent replay', async () => {
+    const trace = contextHappyTrace()
+    const workflowCompleted = trace.pop()
+    trace.push(
+      contextEvent('node.context_delta_committed', 'node-a', {
+        commitState: 'completed',
+        deltaIdempotencyKey: 'run-1:node-a:1:completed',
+        contextVersion: 4,
+        baseSnapshotVersion: 3,
+        baseSnapshotHash: 'hash-node-a-3',
+        memoryRefCount: 1,
+        artifactRefCount: 0,
+        providerStateKeys: []
+      }),
+      workflowCompleted!
+    )
+    await writeTrace(workspacePath, 'run-1', trace)
+
+    const result = await runEval(workspacePath, 'run-1')
+    const summary = parsedStdout(result)
+
+    expect(result.code).toBe(1)
+    expect(
+      expectFirstIssue(
+        expectFailedCheck(summary, 'context-committed-delta-shape-and-uniqueness')
+      )
+    ).toMatchObject({
+      duplicateCommit: true
     })
   })
 

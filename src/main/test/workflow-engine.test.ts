@@ -193,6 +193,7 @@ async function readSingleRunState(workspacePath: string): Promise<{
       humanReview?: boolean
       reviewStatus?: string
       reviewSource?: string
+      completedAt?: string
     }
   >
 }> {
@@ -261,11 +262,12 @@ function expectNoTraceType(
   ).toBe(false)
 }
 
-function reviewAction(runId: string, nodeId: string): WorkflowReviewActionPayload {
+function reviewAction(runId: string, nodeId: string, upstreamNodeId?: string): WorkflowReviewActionPayload {
   return {
     workflowId: 'workflow-1',
     runId,
-    nodeId
+    nodeId,
+    upstreamNodeId
   }
 }
 
@@ -802,6 +804,93 @@ describe('WorkflowEngine', () => {
     const runStateAfter = await readSingleRunState(workspacePath)
     expect(runStateAfter.currentNodeIds).toEqual([])
     expect(runStateAfter.status).toBe('completed')
+  })
+
+  it('records provider-aware state for OpenAI nodes in flow context', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': {
+        runnerSessionId: 'openai-response-1',
+        output: 'OpenAI output'
+      }
+    })
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    const sender = new FakeSender()
+    const workflow = createWorkflow([
+      createNode('node-a', {
+        provider: 'openai'
+      })
+    ])
+
+    await engine.start(workflow, workspacePath, sender)
+
+    const runState = await readSingleRunState(workspacePath)
+    const runContext = await readSingleRunContext(workspacePath)
+    expect(runState.status).toBe('completed')
+    expect(runContext.latestSnapshot.providerState).toMatchObject({
+      openai: {
+        responseIdsByNode: {
+          'node-a': 'openai-response-1'
+        }
+      }
+    })
+
+    const trace = await readTrace(workspacePath, runState.runId)
+    expect(
+      trace.find((event) => event.nodeId === 'node-a' && event.type === 'node.context_delta_committed')
+    ).toMatchObject({
+      data: {
+        providerStateKeys: ['openai']
+      }
+    })
+  })
+
+  it('keeps OpenAI provider state available after flow context reload', async () => {
+    const flowContext: FlowContextDocument = {
+      schemaVersion: 1,
+      flowContextId: 'run-1',
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      version: 2,
+      createdAt: '2026-05-15T00:00:00.000Z',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      latestSnapshot: {
+        memorySourceRefs: [],
+        artifactRefs: [],
+        runStateRef: '.fluxion/runs/run-1.json',
+        providerState: {
+          openai: {
+            responseIdsByNode: {
+              'node-a': 'openai-response-1'
+            }
+          }
+        },
+        semanticSummary: ''
+      },
+      deltas: []
+    }
+    const snapshot = buildContextSnapshot(
+      flowContext,
+      {
+        compiledContext: 'context',
+        sources: [],
+        contextHash: 'context-hash',
+        contextBytes: 7,
+        contextChars: 7
+      }
+    )
+
+    expect(snapshot.providerState).toEqual({
+      openai: {
+        responseIdsByNode: {
+          'node-a': 'openai-response-1'
+        }
+      }
+    })
   })
 
   it('fails before adapter execution when a required artifact is missing', async () => {
@@ -1729,9 +1818,12 @@ describe('WorkflowEngine', () => {
     expect(rerunState.nodes['node-a']?.attempts).toBe(2)
   })
 
-  it('rejects a manual review checkpoint and finalizes the workflow as rejected', async () => {
+  it('rejects a manual review checkpoint and can reopen an upstream node', async () => {
     const adapter = new FakeAdapter({
       'node-a': {
+        output: 'Upstream output'
+      },
+      'node-b': {
         output: 'Manual review output'
       }
     })
@@ -1742,15 +1834,28 @@ describe('WorkflowEngine', () => {
       artifactGateService: new ArtifactGateService()
     })
     const sender = new FakeSender()
-    const workflow = createWorkflow([createNode('node-a')], [], 'manual')
+    const workflow = createWorkflow(
+      [createNode('node-a'), createNode('node-b')],
+      [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }],
+      'manual'
+    )
 
     await engine.start(workflow, workspacePath, sender)
     const runState = await readSingleRunState(workspacePath)
 
-    await engine.rejectReview(reviewAction(runState.runId, 'node-a'))
+    await engine.rejectReview(reviewAction(runState.runId, 'node-a', 'node-b'))
 
     const finalState = await readSingleRunState(workspacePath)
     expect(finalState.status).toBe('rejected')
-    expect(finalState.nodes['node-a']?.reviewSource).toBe('manual')
+    expect(finalState.nodes['node-b']?.status).toBe('pending')
+    expect(finalState.nodes['node-a']?.status).toBe('rejected')
+    expect(finalState.nodes['node-b']?.completedAt).toBeUndefined()
+    expect(finalState.nodes['node-b']?.reviewStatus).toBeUndefined()
+    const trace = await readTrace(workspacePath, runState.runId)
+    expect(trace.find((event) => event.type === 'node.review_rejected')).toMatchObject({
+      data: {
+        upstreamNodeId: 'node-b'
+      }
+    })
   })
 })

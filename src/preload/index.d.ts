@@ -33,6 +33,8 @@ import {
   TerminalExitPayload,
   Workflow,
   WorkflowReviewActionPayload,
+  WorkflowExplainFailurePayload,
+  WorkflowExplainFailureResult,
   WorkflowReviewRequiredPayload,
   WorkflowCompletedPayload,
   WorkflowEdge,
@@ -41,6 +43,7 @@ import {
   WorkflowNodeStatusPayload,
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
+  WorkspaceMemoryFilesPayload,
   WorkflowSavedPayload,
   WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
@@ -69,6 +72,8 @@ export interface FluxionAPI {
   readWorkspaceTextFile: (
     payload: WorkspaceReadTextFilePayload
   ) => Promise<WorkspaceReadTextFileResult>
+  readWorkspaceMemoryFiles: (workspacePath: string) => Promise<WorkspaceMemoryFilesPayload>
+  saveWorkspaceMemoryFiles: (payload: WorkspaceMemoryFilesPayload) => Promise<void>
   scanWorkspaceContext: (workspacePath: string) => Promise<ContextScanResult>
   enrichProjectContext: (payload: ContextEnrichmentRequest) => Promise<ContextEnrichmentResult>
   generateOnboardingPacket: (payload: GenerateOnboardingPacketRequest) => Promise<OnboardingPacket>
@@ -126,6 +131,9 @@ export interface FluxionAPI {
   approveWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>
   rejectWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>
   rerunWorkflowNode: (payload: WorkflowReviewActionPayload) => Promise<void>
+  explainWorkflowFailure: (
+    payload: WorkflowExplainFailurePayload
+  ) => Promise<WorkflowExplainFailureResult>
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) => () => void
   onWorkspaceLoading: (callback: (payload: WorkspaceLoadingEvent) => void) => () => void

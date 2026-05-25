@@ -1,6 +1,6 @@
 import React from 'react'
 import { Handle, Node, NodeProps, Position } from '@xyflow/react'
-import { Eye, RotateCcw, Settings, Terminal } from 'lucide-react'
+import { Eye, MessageSquareMore, RotateCcw, Settings, Terminal } from 'lucide-react'
 import { AgentNodeData } from '@shared'
 import { ModelIconBadge } from '@renderer/components/ui/ModelIconBadge'
 import { retryWorkflowFromNode } from '@renderer/lib/workflow-session'
@@ -21,6 +21,7 @@ import {
   formatDurationMs,
   useRuntimeNow
 } from '@renderer/features/runtime/lib/runtime-metrics'
+import { buildAttemptLineageSummary } from '@renderer/features/runtime/lib/attempt-lineage'
 
 type AgentFlowNode = Node<AgentNodeData, 'agentNode'>
 
@@ -51,10 +52,12 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
   const nodeError = useExecutionStore((state) => state.nodeErrors[id])
   const workflowStatus = useExecutionStore((state) => state.workflowStatus)
   const nodeRunMetrics = useExecutionStore((state) => state.nodeRunMetrics[id])
+  const nodeAttemptCount = useExecutionStore((state) => state.nodeAttemptCounts[id])
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
   const isSelected = useWorkflowStore((state) => state.selectedNodeId === id)
   const requestReviewFocus = useWorkflowStore((state) => state.requestReviewFocus)
   const setSelectedNode = useWorkflowStore((state) => state.setSelectedNode)
+  const explainWorkflowFailure = useWorkflowStore((state) => state.explainWorkflowFailure)
 
   const modelDisplayName = getCodexModelDisplayName(providerCapabilities, data.model)
   const title = getAgentNodeTitle(data, modelDisplayName)
@@ -80,6 +83,7 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
       now
     })
   )
+  const attemptLineage = buildAttemptLineageSummary(nodeAttemptCount)
 
   return (
     <div
@@ -146,6 +150,17 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
               title="Run duration"
             >
               {durationLabel}
+            </span>
+          ) : null}
+          {attemptLineage.currentAttempt > 1 ? (
+            <span
+              className="text-[9px]"
+              style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+              title={`${attemptLineage.previousAttempts} prior attempt${
+                attemptLineage.previousAttempts === 1 ? '' : 's'
+              }`}
+            >
+              {attemptLineage.label}
             </span>
           ) : null}
           {status !== 'idle' && (
@@ -238,6 +253,22 @@ export const AgentNode: React.FC<NodeProps<AgentFlowNode>> = ({ id, data }) => {
 
         {status === 'error' && (
           <>
+            <ActionButton
+              icon={<MessageSquareMore size={11} />}
+              label="Explain"
+              color={canRetry ? 'var(--color-primary)' : 'var(--color-muted-soft)'}
+              disabled={!canRetry}
+              title={nodeError || 'Explain this failure'}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (!canRetry) {
+                  return
+                }
+
+                void explainWorkflowFailure(id)
+              }}
+            />
+            <ActionDivider />
             <ActionButton
               icon={<RotateCcw size={11} />}
               label="Retry"

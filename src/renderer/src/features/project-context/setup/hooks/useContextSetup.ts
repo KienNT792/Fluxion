@@ -27,15 +27,21 @@ export function useContextSetup({
 }: UseContextSetupOptions): {
   currentStep: ContextStepId
   draft: ProjectContextDraft
+  globalContext: string
   handleSave: (mode: ContextSaveMode) => Promise<void>
+  handleSaveWorkspaceMemory: () => Promise<void>
   isLoading: boolean
   isSaving: boolean
+  isSavingWorkspaceMemory: boolean
   loadError: string | null
+  longTermIndex: string
   previewTab: PreviewTab
   saveError: string | null
   scanResult: ContextScanResult | null
   setCurrentStep: Dispatch<SetStateAction<ContextStepId>>
   setPreviewTab: Dispatch<SetStateAction<PreviewTab>>
+  setGlobalContext: Dispatch<SetStateAction<string>>
+  setLongTermIndex: Dispatch<SetStateAction<string>>
   updateDraft: (patch: Partial<ProjectContextDraft>) => void
 } {
   const [currentStep, setCurrentStep] = useState<ContextStepId>(initialStep)
@@ -48,6 +54,9 @@ export function useContextSetup({
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [globalContext, setGlobalContext] = useState('')
+  const [longTermIndex, setLongTermIndex] = useState('')
+  const [isSavingWorkspaceMemory, setIsSavingWorkspaceMemory] = useState(false)
 
   useEffect(() => {
     let isCancelled = false
@@ -60,9 +69,10 @@ export function useContextSetup({
       setSaveError(null)
 
       try {
-        const [nextScanResult, existingContext] = await Promise.all([
+        const [nextScanResult, existingContext, memoryFiles] = await Promise.all([
           window.api.scanWorkspaceContext(workspacePath),
-          window.api.getContext(workspacePath)
+          window.api.getContext(workspacePath),
+          window.api.readWorkspaceMemoryFiles(workspacePath)
         ])
 
         if (isCancelled) {
@@ -78,6 +88,8 @@ export function useContextSetup({
             existingContext?.contextStatus ?? initialStatus
           )
         )
+        setGlobalContext(memoryFiles.globalContext)
+        setLongTermIndex(memoryFiles.longTermIndex)
       } catch (error) {
         if (isCancelled) {
           return
@@ -90,6 +102,8 @@ export function useContextSetup({
         )
         setScanResult(null)
         setDraft(mergeScanIntoDraft(workspacePath, null, initialContext, initialStatus))
+        setGlobalContext('')
+        setLongTermIndex('')
       } finally {
         if (!isCancelled) {
           setIsLoading(false)
@@ -137,6 +151,23 @@ export function useContextSetup({
     [draft, onSaved, workspacePath]
   )
 
+  const handleSaveWorkspaceMemory = useCallback(async () => {
+    setIsSavingWorkspaceMemory(true)
+    setSaveError(null)
+
+    try {
+      await window.api.saveWorkspaceMemoryFiles({
+        workspacePath,
+        globalContext,
+        longTermIndex
+      })
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save workspace memory.')
+    } finally {
+      setIsSavingWorkspaceMemory(false)
+    }
+  }, [globalContext, longTermIndex, workspacePath])
+
   return {
     currentStep,
     draft,
@@ -144,11 +175,17 @@ export function useContextSetup({
     isLoading,
     isSaving,
     loadError,
+    globalContext,
+    longTermIndex,
     previewTab,
     saveError,
     scanResult,
     setCurrentStep,
     setPreviewTab,
+    handleSaveWorkspaceMemory,
+    isSavingWorkspaceMemory,
+    setGlobalContext,
+    setLongTermIndex,
     updateDraft
   }
 }

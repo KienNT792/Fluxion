@@ -36,6 +36,8 @@ import {
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowReviewActionPayload,
+  WorkflowExplainFailurePayload,
+  WorkflowExplainFailureResult,
   WorkflowReviewRequiredPayload,
   WorkflowCompletedPayload,
   WorkflowEdge,
@@ -44,6 +46,7 @@ import {
   WorkflowNodeStatusPayload,
   WorkspaceReadTextFilePayload,
   WorkspaceReadTextFileResult,
+  WorkspaceMemoryFilesPayload,
   WorkflowSavedPayload,
   WorkspaceContextOnboardingUpdatePayload,
   WorkspaceContextSavedPayload,
@@ -113,6 +116,10 @@ const api = {
       IpcChannels.WORKSPACE_READ_TEXT_FILE,
       payload
     ) as Promise<WorkspaceReadTextFileResult>,
+  readWorkspaceMemoryFiles: (workspacePath: string): Promise<WorkspaceMemoryFilesPayload> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_READ_MEMORY_FILES, workspacePath) as Promise<WorkspaceMemoryFilesPayload>,
+  saveWorkspaceMemoryFiles: (payload: WorkspaceMemoryFilesPayload): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.WORKSPACE_SAVE_MEMORY_FILES, payload) as Promise<void>,
 
   createWorkflow: (workspacePath: string, name: string): Promise<WorkflowCreateResult> =>
     ipcRenderer.invoke(IpcChannels.WORKSPACE_WORKFLOW_CREATE, {
@@ -264,6 +271,13 @@ const api = {
     ipcRenderer.invoke(IpcChannels.WORKFLOW_REVIEW_REJECT, payload) as Promise<void>,
   rerunWorkflowNode: (payload: WorkflowReviewActionPayload): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.WORKFLOW_REVIEW_RERUN, payload) as Promise<void>,
+  explainWorkflowFailure: (
+    payload: WorkflowExplainFailurePayload
+  ): Promise<WorkflowExplainFailureResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.WORKFLOW_EXPLAIN_FAILURE,
+      payload
+    ) as Promise<WorkflowExplainFailureResult>,
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) =>
     bindListener(IpcChannels.WORKSPACE_FILE_CHANGED, callback),

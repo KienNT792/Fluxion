@@ -2,7 +2,13 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import { createHash } from 'crypto'
 import matter from 'gray-matter'
-import { MemoryIndexSchema } from '@core'
+import {
+  formatZodError,
+  GlobalMemoryFrontmatterSchema,
+  MemoryIndexSchema,
+  NodeMemoryFrontmatterSchema
+} from '@core'
+import type { NodeMemoryFrontmatter } from '@core'
 import { NodeId } from '../../shared/workflow.types'
 import {
   CompiledMemoryContext,
@@ -84,11 +90,23 @@ export class MemoryManager {
     try {
       const globalContent = await fs.readFile(globalPath, 'utf-8')
       const parsedGlobal = matter(globalContent)
-      const section = `[GLOBAL CONTEXT]\n${parsedGlobal.content}\n\n`
-      context += section
-      sources.push(
-        this.createIncludedSource(workspacePath, 'global', globalPath, parsedGlobal.content)
-      )
+      const frontmatter = GlobalMemoryFrontmatterSchema.safeParse(parsedGlobal.data)
+      if (!frontmatter.success) {
+        const warning = `Invalid global context frontmatter: ${formatZodError(frontmatter.error)}`
+        console.warn(warning)
+        sources.push({
+          type: 'global',
+          path: this.toWorkspaceRelative(workspacePath, globalPath),
+          included: false,
+          warning
+        })
+      } else {
+        const section = `[GLOBAL CONTEXT]\n${parsedGlobal.content}\n\n`
+        context += section
+        sources.push(
+          this.createIncludedSource(workspacePath, 'global', globalPath, parsedGlobal.content)
+        )
+      }
     } catch (e) {
       console.warn('Could not read global context', e)
       sources.push({
@@ -107,9 +125,23 @@ export class MemoryManager {
         try {
           const nodeContent = await fs.readFile(nodePath, 'utf-8')
           const parsedNode = matter(nodeContent)
-          const source = this.getNodeSourceLabel(parsedNode.data)
+          const frontmatter = NodeMemoryFrontmatterSchema.safeParse(parsedNode.data)
+          if (!frontmatter.success) {
+            const warning = `Invalid short-term context frontmatter for node ${nodeId}: ${formatZodError(frontmatter.error)}`
+            console.warn(warning)
+            sources.push({
+              type: 'short-term',
+              path: this.toWorkspaceRelative(workspacePath, nodePath),
+              included: false,
+              nodeId,
+              warning
+            })
+            continue
+          }
+
+          const source = this.getNodeSourceLabel(frontmatter.data)
           const runId =
-            typeof parsedNode.data.runId === 'string' ? parsedNode.data.runId : undefined
+            frontmatter.data.schemaVersion === '2.0' ? frontmatter.data.runId : undefined
 
           context += `--- Output from Node ${nodeId} (${source}) ---\n`
           context += `${parsedNode.content}\n\n`
@@ -239,13 +271,35 @@ export class MemoryManager {
     workflowId: string,
     nodeId: NodeId
   ): Promise<void> {
-    await fs.rm(this.getNodeOutputPath(workspacePath, workflowId, nodeId), { force: true })
+    const outputPath = this.getNodeOutputPath(workspacePath, workflowId, nodeId)
+    await fs.rm(outputPath, { force: true })
+
+    const outputRelativePath = this.toWorkspaceRelative(workspacePath, outputPath)
+    const index = await this.readMemoryIndex(workspacePath)
+    const nextEntries = index.entries.filter((entry) => {
+      if (entry.type !== 'raw_output') {
+        return true
+      }
+
+      if (entry.workflowId !== workflowId || entry.nodeId !== nodeId) {
+        return true
+      }
+
+      return entry.sourcePath !== outputRelativePath && entry.latestSourcePath !== outputRelativePath
+    })
+
+    if (nextEntries.length !== index.entries.length) {
+      await this.writeMemoryIndex(workspacePath, {
+        ...index,
+        entries: nextEntries
+      })
+    }
   }
 
-  private getNodeSourceLabel(frontmatter: Record<string, unknown>): string {
-    const runner = typeof frontmatter.runner === 'string' ? frontmatter.runner : ''
-    const provider = typeof frontmatter.provider === 'string' ? frontmatter.provider : ''
-    const model = typeof frontmatter.model === 'string' ? frontmatter.model : ''
+  private getNodeSourceLabel(frontmatter: NodeMemoryFrontmatter): string {
+    const runner = frontmatter.schemaVersion === '2.0' ? frontmatter.runner : ''
+    const provider = frontmatter.provider ?? ''
+    const model = frontmatter.model
     const owner = runner || provider || 'Unknown'
 
     return model ? `${owner} / ${model}` : owner

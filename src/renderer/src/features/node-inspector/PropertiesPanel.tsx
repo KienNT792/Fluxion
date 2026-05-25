@@ -85,6 +85,15 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
   const reviewActionInFlight = useExecutionStore((state) =>
     selectedNodeId ? state.reviewActionInFlightByNodeId[selectedNodeId] : undefined
   )
+  const reviewNodeIds = useExecutionStore((state) => state.reviewNodeIds)
+  const upstreamNodeId = useExecutionStore((state) =>
+    selectedNodeId ? state.pendingReviewByNodeId[selectedNodeId]?.upstreamNodeId : undefined
+  )
+  const upstreamReviewOptions = useMemo(
+    () => reviewNodeIds.filter((nodeId) => nodeId !== selectedNodeId),
+    [reviewNodeIds, selectedNodeId]
+  )
+  const setPendingReviewContext = useExecutionStore((state) => state.setPendingReviewContext)
   const setWorkflowError = useExecutionStore((state) => state.setWorkflowError)
   const workflowStatus = useExecutionStore((state) => state.workflowStatus)
   const { localData, setLocalData } = useEditableNodeData({
@@ -181,6 +190,19 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
             nodeAttemptCount={nodeAttemptCount}
             reviewActionInFlight={reviewActionInFlight}
             reviewSectionRef={reviewSectionRef}
+            onUpstreamNodeIdChange={(nodeId) =>
+              setPendingReviewContext(
+                selectedNodeId,
+                useExecutionStore.getState().pendingReviewByNodeId[selectedNodeId]
+                  ? {
+                      ...useExecutionStore.getState().pendingReviewByNodeId[selectedNodeId]!,
+                      upstreamNodeId: nodeId
+                    }
+                  : undefined
+              )
+            }
+            upstreamNodeId={upstreamNodeId}
+            upstreamReviewOptions={upstreamReviewOptions}
             selectedNodeId={selectedNodeId}
           />
         )}

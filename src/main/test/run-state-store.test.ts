@@ -219,7 +219,7 @@ describe('RunStateStore', () => {
     })
 
     await store.markNodeAwaitingReview(workspacePath, 'run-4', 'node-a')
-    state = await store.resetNodeForRerun(workspacePath, 'run-4', 'node-a')
+    state = await store.resetNodeForRerun(workspacePath, 'run-4', 'node-a', new Map())
     expect(state.nodes['node-a']).toMatchObject({
       status: 'pending',
       reviewStatus: undefined,
@@ -238,6 +238,55 @@ describe('RunStateStore', () => {
       reviewSource: 'node',
       reviewComment: 'needs changes'
     })
+  })
+
+  it('resets the downstream subtree when rerunning a review node', async () => {
+    const store = new RunStateStore()
+    const workflow = createWorkflow()
+    workflow.edges.push({ id: 'edge-a-b', source: 'node-a', target: 'node-b' })
+    workflow.nodes[0]!.data.humanReview = true
+
+    await store.initializeRun({
+      workspacePath,
+      workflow,
+      executionNodeIds: new Set(['node-a', 'node-b']),
+      runId: 'run-4b'
+    })
+
+    await store.markNodeRunning(workspacePath, 'run-4b', 'node-a')
+    await store.markNodeAwaitingReview(workspacePath, 'run-4b', 'node-a', {
+      reviewSource: 'node'
+    })
+    await store.markNodeRunning(workspacePath, 'run-4b', 'node-b')
+    let state = await store.markNodeCompleted(workspacePath, 'run-4b', 'node-b', {
+      outputArtifactPaths: ['docs/node-b.md']
+    })
+
+    expect(state.nodes['node-b']).toMatchObject({
+      status: 'completed',
+      attempts: 1,
+      outputArtifactPaths: ['docs/node-b.md']
+    })
+
+    state = await store.resetNodeForRerun(
+      workspacePath,
+      'run-4b',
+      'node-a',
+      new Map([['node-a', ['node-b']]])
+    )
+
+    expect(state.nodes['node-a']).toMatchObject({
+      status: 'pending',
+      reviewStatus: undefined,
+      reviewSource: undefined,
+      outputArtifactPaths: []
+    })
+    expect(state.nodes['node-b']).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      outputArtifactPaths: []
+    })
+    expect(state.nodes['node-b']?.completedAt).toBeUndefined()
   })
 
   it('records manual execution mode review checkpoints without mutating node-level humanReview', async () => {

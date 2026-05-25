@@ -390,6 +390,8 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
   if (resumeFromNodeId) {
     const retryNodeIds = collectRetryNodeIds(resumeFromNodeId, workflow.edges)
     executionStore.resetNodeExecution(retryNodeIds)
+    workflowStore.followTerminalNode(resumeFromNodeId)
+    workflowStore.setTerminalFollowMode('auto')
     retryNodeIds.forEach((nodeId) => {
       executionStore.appendAttemptSeparator(
         nodeId,
@@ -464,7 +466,7 @@ export async function approveReviewNode(nodeId: NodeId): Promise<void> {
   }
 }
 
-export async function rejectReviewNode(nodeId: NodeId): Promise<void> {
+export async function rejectReviewNode(nodeId: NodeId, upstreamNodeId?: NodeId): Promise<void> {
   const workflowStore = useWorkflowStore.getState()
   const executionStore = useExecutionStore.getState()
   if (!executionStore.activeRunId) {
@@ -477,7 +479,8 @@ export async function rejectReviewNode(nodeId: NodeId): Promise<void> {
     await window.api.rejectWorkflowNode({
       workflowId: workflowStore.workflowId,
       runId: executionStore.activeRunId,
-      nodeId
+      nodeId,
+      upstreamNodeId
     })
   } catch (error) {
     useExecutionStore.getState().setReviewActionInFlight(nodeId, undefined)
@@ -496,6 +499,8 @@ export async function rerunReviewNode(nodeId: NodeId): Promise<void> {
 
   executionStore.setReviewActionInFlight(nodeId, 'rerun')
   executionStore.appendAttemptSeparator(nodeId, 'Review rerun started.')
+  workflowStore.followTerminalNode(nodeId)
+  workflowStore.setTerminalFollowMode('auto')
 
   try {
     await window.api.rerunWorkflowNode({

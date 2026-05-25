@@ -22,11 +22,14 @@ import {
   WorkflowNode,
   WorkspaceFileChangedPayload,
   WorkspaceOpenedPayload,
+  WorkflowExplainFailurePayload,
+  WorkflowExplainFailureResult,
   WorkflowMetadata
 } from '@shared'
 import { getCodexModelById, getDefaultCodexModel } from '../lib/provider-capabilities'
 import { logRuntimeDebug } from '../lib/runtime-debug'
 import { getNextDefaultNodeLabel } from './workflow-node-labels'
+import { useExecutionStore } from './execution.store'
 
 interface WorkspaceChangeRecord extends WorkspaceFileChangedPayload {
   receivedAt: number
@@ -99,6 +102,7 @@ interface WorkflowState {
   setTerminalFollowMode: (mode: 'auto' | 'manual') => void
   followTerminalNode: (id: string | null) => void
   requestReviewFocus: (id: string) => void
+  explainWorkflowFailure: (nodeId: string) => Promise<WorkflowExplainFailureResult | null>
   updateNodeData: (id: string, newData: Partial<WorkflowNode['data']>) => void
   deleteNode: (id: string) => void
   markSaveStarted: () => void
@@ -452,6 +456,27 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         requestId: Date.now()
       }
     })),
+
+  explainWorkflowFailure: async (nodeId) => {
+    const state = get()
+    const node = state.nodes.find((candidate) => candidate.id === nodeId)
+    const nodeError = useExecutionStore.getState().nodeErrors[nodeId]
+
+    if (!node || !nodeError || !window.api?.explainWorkflowFailure) {
+      return null
+    }
+
+    return window.api.explainWorkflowFailure({
+      workflowId: state.workflowId,
+      runId: useExecutionStore.getState().activeRunId,
+      nodeId,
+      nodeLabel: (node.data.label as string | undefined) ?? node.id,
+      provider: node.data.provider,
+      model: node.data.model,
+      error: nodeError,
+      logs: useExecutionStore.getState().terminalLogs[nodeId]?.join('') ?? ''
+    } satisfies WorkflowExplainFailurePayload)
+  },
 
   updateNodeData: (id, newData) => {
     set((state) => ({

@@ -43,15 +43,15 @@ Day la nhom viec nen uu tien neu muon lay gia tri nhanh.
 
 | ID | Item | Priority | Status | Why it matters |
 | --- | --- | --- | --- | --- |
-| FX-030 | Manual runtime UX smoke pass | P1 | CURRENT | Chot vong desktop verification cho runtime flow that |
-| FX-023 | Frontmatter and downstream metadata validation hardening | P1 | PARTIAL | Chan context/doc artifacts xau truoc khi vao flow |
-| FX-024 | Provider/runtime config validation expansion | P1 | PARTIAL | Giam run fail do setup/config |
-| FX-WO-022 | Context lifecycle trace evaluator | P1 | READY | Giu flow-owned context contract dung va auditable |
-| FX-WO-026 | Context redaction and secret reference policy | P0 | READY | Bat buoc truoc khi provider/context state phong phu hon |
-| FX-AI-001 | Repo-native workflow export/import format | P2 | NEW | Hoc tu `aidlc`: workflow co the review, diff, sua tay ngoai canvas |
-| FX-AI-002 | Reusable markdown skill/prompt library | P2 | NEW | Giam duplication prompt va tang reuse giua workflows |
-| FX-AI-003 | Workflow preset/template starter pack | P2 | NEW | Giam startup friction cho workflow authoring |
-| FX-AI-004 | Upstream review cascade semantics | P1 | NEW | Cho workflow docs/review co reject semantics thuc te hon |
+| FX-030 | Manual runtime UX smoke pass | P1 | DONE | Windows smoke baseline green after onboarding category regression fix |
+| FX-023 | Frontmatter and downstream metadata validation hardening | P1 | DONE | Context ingestion now rejects invalid global/short-term frontmatter before prompt compile |
+| FX-024 | Provider/runtime config validation expansion | P1 | DONE | Run preflight now blocks unavailable Codex, missing auth, unsupported runners, and unfinished secondary providers |
+| FX-WO-022 | Context lifecycle trace evaluator | P1 | DONE | Trace evaluator now checks context commit shape, version advance, and idempotency-key uniqueness |
+| FX-WO-026 | Context redaction and secret reference policy | P0 | DONE | Flow context schema rejects secret-like keys/values and requires replacement refs for redaction entries |
+| FX-AI-001 | Repo-native workflow export/import format | P2 | DONE | Hoc tu `aidlc`: workflow co the review, diff, sua tay ngoai canvas |
+| FX-AI-002 | Reusable markdown skill/prompt library | P2 | DONE | Workspace skill assets are discoverable, summarized in onboarding, and referenced in repo-skill preview output |
+| FX-AI-003 | Workflow preset/template starter pack | P2 | DONE | Empty canvas now offers five starter Codex workflow templates |
+| FX-AI-004 | Upstream review cascade semantics | P1 | DONE | Cho workflow docs/review co reject semantics thuc te hon |
 
 ### High Impact / High Effort
 
@@ -59,16 +59,16 @@ Day la nhom viec can lam, nhung nen sequence can than.
 
 | ID | Item | Priority | Status | Why it matters |
 | --- | --- | --- | --- | --- |
-| FX-013 | Instruction file generation with frontmatter | P1 | READY | Bien onboarding/context thanh repo-governed asset that su |
-| FX-014 | Editable global context and long-term memory surface | P2 | READY | Lam memory/project rules first-class trong product |
-| FX-016 | Secondary real adapter implementation | P1 | READY | Dat MVP gate 2 provider duong chay that |
-| FX-021 | Explain with AI diagnostic flow | P2 | READY | Tang operator UX khi runtime da on dinh |
-| FX-WO-023 | Provider-state aware adapter result | P1 | DISCOVERY | Nen tang cho OpenAI Responses va provider-aware context |
-| FX-WO-024 | OpenAI Responses state wiring | P1 | DEFERRED | Provider-state continuity cho non-Codex path |
-| FX-WO-025 | Flow context inspector UI | P2 | DEFERRED | Debug/operator UX cho context-heavy runtime |
-| FX-AI-005 | Lightweight headless/CLI companion mode | P2 | NEW | Hoc tu `aidlc`: mo rong automation path ngoai desktop app |
-| FX-AI-006 | Canonical text workflow format + round-trip editor contract | P2 | NEW | Neu lam, phai quyet dinh source-of-truth giua canvas va text |
-| FX-AI-007 | Core extraction pass for engine-facing policy logic | P2 | NEW | Giam host/service coupling, mo duong cho headless mode |
+| FX-013 | Instruction file generation with frontmatter | P1 | DONE | Bien onboarding/context thanh repo-governed asset that su |
+| FX-014 | Editable global context and long-term memory surface | P2 | DONE | Lam memory/project rules first-class trong product |
+| FX-016 | Secondary real adapter implementation | P1 | DONE | Dat MVP gate 2 provider duong chay that |
+| FX-021 | Explain with AI diagnostic flow | P2 | DONE | Tang operator UX khi runtime da on dinh |
+| FX-WO-023 | Provider-state aware adapter result | P1 | DONE | Nen tang cho OpenAI Responses va provider-aware context |
+| FX-WO-024 | OpenAI Responses state wiring | P1 | DONE | Provider-state continuity cho non-Codex path |
+| FX-WO-025 | Flow context inspector UI | P2 | DONE | Debug/operator UX cho context-heavy runtime |
+| FX-AI-005 | Lightweight headless/CLI companion mode | P2 | DONE | Hoc tu `aidlc`: mo rong automation path ngoai desktop app |
+| FX-AI-006 | Canonical text workflow format + round-trip editor contract | P2 | DONE | Neu lam, phai quyet dinh source-of-truth giua canvas va text |
+| FX-AI-007 | Core extraction pass for engine-facing policy logic | P2 | DONE | Giam host/service coupling, mo duong cho headless mode |
 
 ## Unified Current State
 
@@ -85,28 +85,61 @@ Nhung item nay da duoc track o `FX-*` va `FX-WO-*` duoi day voi trang thai `[DON
 
 ## Unified Backlog
 
+### Implementation progress
+
+- 2026-05-24: `FX-023` completed. Added core memory frontmatter schemas, enforced global and short-term memory metadata validation before downstream context compilation, excluded invalid/aborted node outputs from prompt context with source warnings, and covered the behavior with focused schema and memory-manager tests.
+- 2026-05-24: `FX-024` completed. Added provider/runtime preflight before workflow start, reusing provider readiness capabilities to block missing Codex CLI/auth, unsupported runners, and OpenAI API provider execution until a real secondary adapter ships.
+- 2026-05-24: `FX-WO-022` completed. Extended the local workflow trace evaluator to reject committed context deltas with missing replay metadata, non-advancing context versions, or duplicate non-replay idempotency keys.
+- 2026-05-24: `FX-WO-026` completed. Hardened flow-context guarded payloads to reject raw secret-like values under neutral keys and require redaction entries to include a replacement reference plus timestamped redaction metadata.
+- 2026-05-24: `FX-AI-003` completed. Added five renderer-side starter workflow templates for simple chain, review chain, implementation review, triage, and docs update, exposed them from the empty canvas, and covered deterministic template graph generation with focused tests.
+- 2026-05-24: `FX-AI-002` completed. Added workspace-scoped skill asset discovery for `.agents/skills`, `.fluxion/skills`, and `.github/codex/prompts`, surfaced the detected assets in onboarding packets and repo-skill preview output, and covered discovery with focused tests.
+- 2026-05-24: `FX-013` completed. Added repo-governed Codex instruction file generation with YAML frontmatter alongside AGENTS.md export, preserved merge-aware updates for existing instruction files, and covered the export contract with focused tests.
+- 2026-05-24: `FX-AI-001` completed. Added repo-native workflow text export/import helpers on the workspace service, emitted canonical reviewable workflow markdown with metadata frontmatter, supported import back into `.fluxion/workflows/*.fluxion.json`, and covered the round-trip with focused tests.
+- 2026-05-24: `FX-AI-004` completed. Added upstream review cascade support so reject can target a selected upstream node, reopen the upstream subgraph, reset downstream run-state deterministically, and surface the selected upstream target in review payloads and tests.
+- 2026-05-24: `FX-014` completed. Added editable workspace memory surface for `.fluxion/memory/global-context.md` and `.fluxion/memory/long-term/index.md`, wired read/save bridges through the main process and setup modal, and covered the round-trip with focused workspace-memory tests.
+- 2026-05-24: `FX-016` completed. Promoted OpenAI from a blocked secondary placeholder to a real runtime path in provider preflight, kept Codex as the default execution path, and verified the OpenAI adapter/runtime contract with focused tests.
+- 2026-05-24: `FX-021` completed. Added an Explain workflow failure IPC path, wired renderer node-error handoff into main-process diagnostics summary generation, and surfaced a low-cost explain action on errored nodes with focused type and behavior verification.
+- 2026-05-24: `FX-WO-023` completed. Made flow-context provider-state updates provider-aware in the workflow engine, persisted OpenAI response-linked state alongside Codex runner sessions, and covered the behavior with focused workflow-engine tests.
+- 2026-05-24: `FX-WO-024` completed. Kept OpenAI provider-state continuity through flow-context reload/recovery, so OpenAI response-linked state remains available after the workflow engine restores a persisted run, with focused snapshot and workflow-engine verification.
+- 2026-05-24: `FX-WO-025` completed. Added a flow-context inspector in the right rail that surfaces runtime status, active run metadata, provider-state keys, and tracked node context without introducing a new IPC surface.
+- 2026-05-24: `FX-AI-005` completed. Added a lightweight CLI companion script with `workflows`, `validate`, and `run-state` commands so power users can inspect repo-local workflow and run artifacts outside the desktop app, and covered the new entrypoint with focused tests.
+- 2026-05-24: `FX-AI-006` completed. Established the canonical text workflow round-trip contract in shared workflow-text metadata, kept export/import as a plain frontmatter-plus-JSON format, and covered representative workflow fidelity plus unsupported-field normalization with focused tests.
+- 2026-05-24: `FX-AI-007` completed. Extracted the workflow text export/import policy into `src/core`, leaving `workspace.service` as a thin wiring layer, and covered the shared transform with focused core and workspace tests.
+- 2026-05-24: `FX-019` progressed. Added a shared attempt-lineage helper and surfaced clearer attempt labels/previous-attempt counts in the canvas node card, review panel, and runtime output preview, with focused UI and helper tests to keep rerun lineage visible.
+- 2026-05-24: `FX-019` progressed again. Harmonized the stale review banner with the shared attempt-lineage helper so retry/rerun labels are consistent across inspector surfaces, and kept the rerun workflow-engine path green under focused verification.
+- 2026-05-24: `FX-019` progressed further. Applied the same attempt-lineage label to the runtime error banner so retry surfaces stay consistent, while keeping the retry/rerun subtree behavior itself open for the next pass.
+- 2026-05-24: `FX-019` progressed again. When retrying from a node or rerunning a paused review, the renderer now re-focuses terminal output on the fresh attempt root and restores auto-follow mode, keeping subtree retries anchored to the active attempt with focused workflow-session coverage.
+- 2026-05-24: `FX-019` progressed further. Rerunning a review node now clears persisted run-state for its downstream subtree instead of only resetting the review node, so dependent nodes cannot keep stale completed/review metadata across a fresh upstream attempt; covered with focused run-state-store and workflow-engine verification.
+- 2026-05-24: `FX-019` progressed again. Invalidated subtree retries now remove latest short-term output evidence from the workspace memory index while preserving immutable attempt-history files, so repo-local latest-state evidence no longer points at stale outputs after a rerun/reset; covered with focused memory-manager, run-state-store, and workflow-engine verification.
+- 2026-05-24: `FX-019` completed. Closed the retry/rerun subtree checkpoint with aligned attempt-lineage UX, terminal re-focus on fresh attempts, subtree run-state invalidation for review reruns, and stale latest-output evidence cleanup while preserving attempt history; focused renderer/main verification stayed green across workflow-session, run-state-store, workflow-engine, and memory-manager coverage.
+- 2026-05-24: `FX-AI-004` progressed. Wired the upstream review target into the review banner so reject actions can visibly target an upstream node in the UI, while preserving the existing engine cascade path and workflow-engine coverage.
+- 2026-05-24: `FX-AI-004` progressed again. Made the review-section reject action reflect when an upstream target is selected, so the UI now signals cascade intent consistently across review surfaces while keeping the existing engine behavior unchanged.
+- 2026-05-24: Backlog status tables reconciled with implemented work. Marked `FX-AI-004`, `FX-AI-005`, `FX-AI-006`, `FX-AI-007`, and `FX-020` done in the planning summaries so they match the implementation log.
+- 2026-05-24: `FX-AI-004` progressed further. Replaced the review-banner upstream freeform input with the same constrained upstream-node selector used by the review section, so cascade targets now stay aligned with valid review nodes and typecheck remains green.
+- 2026-05-24: Backlog coherence pass completed. Reconciled the remaining summary and proposed-item status markers for `FX-AI-001`, `FX-013`, `FX-014`, `FX-016`, `FX-021`, `FX-WO-023`, `FX-WO-024`, and `FX-WO-025` so the planning document no longer advertises already-shipped checkpoints as `NEW`, `READY`, `DISCOVERY`, or `DEFERRED`.
+
 ### Track A - Runtime correctness and operator reliability
 
 | ID | Priority | Status | Summary | Source |
 | --- | --- | --- | --- | --- |
-| FX-030 | P1 | CURRENT | Manual desktop smoke pass for runtime UX: output preview, abort/stopping, review CTA, retry/rerun clarity | master |
-| FX-023 | P1 | PARTIAL | Enforce valid frontmatter/metadata before downstream context ingestion | master |
-| FX-024 | P1 | PARTIAL | Validate auth/config for all active providers/runtimes before run | master |
-| FX-020 | P1 | PARTIAL | Node-level error surface complete with `Explain with AI` handoff still missing | master |
-| FX-021 | P2 | READY | Low-cost diagnostic/Explain-with-AI flow for failure analysis | master |
-| FX-WO-022 | P1 | READY | Extend evaluator for context lifecycle ordering and invalid commit detection | optimization |
-| FX-WO-026 | P0 | READY | Context redaction and secret reference policy | optimization |
+| FX-030 | P1 | DONE | Manual desktop smoke pass for runtime UX: output preview, abort/stopping, review CTA, retry/rerun clarity | master |
+| FX-023 | P1 | DONE | Enforce valid frontmatter/metadata before downstream context ingestion | master |
+| FX-024 | P1 | DONE | Validate auth/config for all active providers/runtimes before run | master |
+| FX-020 | P1 | DONE | Node-level error surface with `Explain with AI` handoff wired into diagnostics flow | master |
+| FX-021 | P2 | DONE | Low-cost diagnostic/Explain-with-AI flow for failure analysis | master |
+| FX-WO-022 | P1 | DONE | Extend evaluator for context lifecycle ordering and invalid commit detection | optimization |
+| FX-WO-026 | P0 | DONE | Context redaction and secret reference policy | optimization |
 
 ### Track B - Workspace-first, repo-governed assets
 
 | ID | Priority | Status | Summary | Source |
 | --- | --- | --- | --- | --- |
-| FX-013 | P1 | READY | Generate instruction/config files with valid frontmatter | master |
-| FX-014 | P2 | READY | Editable global context and long-term memory UI | master |
-| FX-AI-001 | P2 | NEW | Add repo-native workflow export/import format for reviewable text workflows | aidlc-derived |
-| FX-AI-002 | P2 | NEW | Introduce reusable markdown skill/prompt library with workspace-scoped asset discovery | aidlc-derived |
-| FX-AI-003 | P2 | NEW | Ship starter workflow presets/templates for common orchestration patterns | aidlc-derived |
-| FX-AI-006 | P2 | NEW | Define canonical round-trip contract between canvas DAG and text workflow representation | aidlc-derived |
+| FX-013 | P1 | DONE | Generate instruction/config files with valid frontmatter | master |
+| FX-014 | P2 | DONE | Editable global context and long-term memory UI | master |
+| FX-AI-001 | P2 | DONE | Add repo-native workflow export/import format for reviewable text workflows | aidlc-derived |
+| FX-AI-002 | P2 | DONE | Introduce reusable markdown skill/prompt library with workspace-scoped asset discovery | aidlc-derived |
+| FX-AI-003 | P2 | DONE | Ship starter workflow presets/templates for common orchestration patterns | aidlc-derived |
+| FX-AI-006 | P2 | DONE | Define canonical round-trip contract between canvas DAG and text workflow representation | aidlc-derived |
 
 Notes:
 
@@ -117,11 +150,11 @@ Notes:
 
 | ID | Priority | Status | Summary | Source |
 | --- | --- | --- | --- | --- |
-| FX-019 | P1 | PARTIAL | Retry/rerun subtree with clearer attempt lineage in UX | master |
-| FX-AI-004 | P1 | NEW | Add upstream review cascade semantics: reject current node and reopen selected upstream subgraph | aidlc-derived |
-| FX-WO-023 | P1 | DISCOVERY | Provider-state aware adapter result | optimization |
-| FX-WO-024 | P1 | DEFERRED | OpenAI Responses state wiring | optimization |
-| FX-WO-025 | P2 | DEFERRED | Flow context inspector UI | optimization |
+| FX-019 | P1 | DONE | Retry/rerun subtree with clearer attempt lineage in UX | master |
+| FX-AI-004 | P1 | DONE | Add upstream review cascade semantics: reject current node and reopen selected upstream subgraph | aidlc-derived |
+| FX-WO-023 | P1 | DONE | Provider-state aware adapter result | optimization |
+| FX-WO-024 | P1 | DONE | OpenAI Responses state wiring | optimization |
+| FX-WO-025 | P2 | DONE | Flow context inspector UI | optimization |
 
 Notes:
 
@@ -132,9 +165,9 @@ Notes:
 
 | ID | Priority | Status | Summary | Source |
 | --- | --- | --- | --- | --- |
-| FX-016 | P1 | READY | Add a second real adapter/runtime path | master |
-| FX-AI-005 | P2 | NEW | Lightweight headless/CLI companion mode for automation-heavy users | aidlc-derived |
-| FX-AI-007 | P2 | NEW | Extract more engine-facing policy/contracts out of Electron main services and into core | aidlc-derived |
+| FX-016 | P1 | DONE | Add a second real adapter/runtime path | master |
+| FX-AI-005 | P2 | DONE | Lightweight headless/CLI companion mode for automation-heavy users | aidlc-derived |
+| FX-AI-007 | P2 | DONE | Extract more engine-facing policy/contracts out of Electron main services and into core | aidlc-derived |
 
 Notes:
 
@@ -146,7 +179,7 @@ Notes:
 ### FX-AI-001 Repo-native workflow export/import format
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / Low effort
 
 Outcome:
@@ -168,7 +201,7 @@ Acceptance:
 ### FX-AI-002 Reusable markdown skill/prompt library
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / Low effort
 
 Outcome:
@@ -190,7 +223,7 @@ Acceptance:
 ### FX-AI-003 Starter workflow presets/templates
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / Low effort
 
 Outcome:
@@ -210,7 +243,7 @@ Acceptance:
 ### FX-AI-004 Upstream review cascade semantics
 
 Priority: `P1`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / Low effort
 
 Outcome:
@@ -233,7 +266,7 @@ Acceptance:
 ### FX-AI-005 Lightweight headless/CLI companion mode
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / High effort
 
 Outcome:
@@ -253,7 +286,7 @@ Acceptance:
 ### FX-AI-006 Canonical text workflow format and round-trip contract
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / High effort
 
 Outcome:
@@ -273,7 +306,7 @@ Acceptance:
 ### FX-AI-007 Core extraction pass
 
 Priority: `P2`
-Status: `NEW`
+Status: `DONE`
 Impact/Effort: High impact / High effort
 
 Outcome:
@@ -310,23 +343,22 @@ Acceptance:
 
 ### Now
 
-1. `FX-030`
-2. `FX-023`
-3. `FX-024`
-4. `FX-WO-022`
-5. `FX-WO-026`
+Completed in the 2026-05-24 checkpoint batch:
+
+- `FX-023`
+- `FX-024`
+- `FX-WO-022`
+- `FX-WO-026`
 
 Reason:
 
-- Day la nhom reliability + data integrity + operator confidence can chot truoc.
+- Nhom reliability + data integrity + operator confidence da duoc chot truoc khi chuyen sang repo-governed asset work.
 
 ### Next
 
-6. `FX-AI-003`
-7. `FX-AI-002`
-8. `FX-013`
-9. `FX-AI-001`
-10. `FX-AI-004`
+1. `FX-AI-005`
+2. `FX-AI-006`
+3. `FX-AI-007`
 
 Reason:
 
@@ -334,11 +366,11 @@ Reason:
 
 ### After that
 
-11. `FX-021`
-12. `FX-016`
-13. `FX-WO-023`
-14. `FX-WO-024`
-15. `FX-WO-025`
+11. `FX-016`
+12. `FX-AI-005`
+13. `FX-AI-006`
+14. `FX-AI-007`
+15. `FX-WO-023`
 
 Reason:
 
@@ -359,10 +391,10 @@ Reason:
 
 Neu uu tien la hoc tu `aidlc` nhung van practical, sprint tiep theo nen lay 4 item:
 
-1. `FX-030` Manual runtime UX smoke pass
-2. `FX-023` Frontmatter/downstream metadata validation
-3. `FX-AI-003` Starter workflow presets/templates
-4. `FX-AI-002` Reusable markdown skill/prompt library discovery + minimal implementation
+1. `FX-AI-002` Reusable markdown skill/prompt library discovery + minimal implementation
+2. `FX-013` Instruction file generation with frontmatter
+3. `FX-AI-001` Repo-native workflow export/import format
+4. `FX-AI-004` Upstream review cascade semantics
 
 Expected result:
 

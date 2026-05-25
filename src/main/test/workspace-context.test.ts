@@ -3,7 +3,12 @@ import matter from 'gray-matter'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyProjectContextDraft, normalizeProjectContextDraft, Workflow } from '@shared'
+import {
+  createEmptyProjectContextDraft,
+  normalizeProjectContextDraft,
+  Workflow
+} from '@shared'
+import { workflowTextUnsupportedFields } from '@core'
 import { memoryManager } from '../services/memory-manager'
 import { RunStateStore } from '../services/run-state-store'
 import { workspaceService } from '../services/workspace.service'
@@ -284,5 +289,154 @@ describe('workspaceService project context', () => {
       step: 'init',
       status: 'error'
     })
+  })
+
+  it('reads and saves workspace memory files through the workspace service', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workspace-memory-'))
+    await mkdir(join(workspacePath, '.fluxion', 'memory', 'long-term'), { recursive: true })
+    await writeFile(
+      join(workspacePath, '.fluxion', 'memory', 'global-context.md'),
+      ['---', 'type: global', 'version: "1.0"', '---', '', '# Global Workspace Rules', ''].join(
+        '\n'
+      ),
+      'utf8'
+    )
+    await writeFile(
+      join(workspacePath, '.fluxion', 'memory', 'long-term', 'index.md'),
+      '# Long-Term Memory\n\n- Keep this.',
+      'utf8'
+    )
+
+    const files = await workspaceService.readWorkspaceMemoryFiles(workspacePath)
+    expect(files.globalContext).toContain('# Global Workspace Rules')
+    expect(files.longTermIndex).toContain('# Long-Term Memory')
+
+    await workspaceService.saveWorkspaceMemoryFiles(
+      workspacePath,
+      '# Updated Global Rules',
+      '# Updated Long-Term\n\n- Note'
+    )
+
+    expect(
+      await readFile(join(workspacePath, '.fluxion', 'memory', 'global-context.md'), 'utf8')
+    ).toContain('# Updated Global Rules')
+    expect(
+      await readFile(join(workspacePath, '.fluxion', 'memory', 'long-term', 'index.md'), 'utf8')
+    ).toContain('# Updated Long-Term')
+  })
+
+  it('exports workflow text in canonical order with frontmatter', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workflow-export-'))
+    const workflow = createWorkflow('workflow-export', 'Export Me')
+    workflow.nodes = [
+      {
+        ...workflow.nodes[0],
+        id: 'node-b',
+        label: 'B',
+        position: { x: 20, y: 0 }
+      },
+      {
+        ...workflow.nodes[0],
+        id: 'node-a',
+        label: 'A',
+        position: { x: 0, y: 0 }
+      }
+    ]
+    workflow.edges = [
+      { id: 'edge-b', source: 'node-b', target: 'node-a' },
+      { id: 'edge-a', source: 'node-a', target: 'node-b' }
+    ]
+    const workflowFilePath = join(workspacePath, '.fluxion', 'workflows', 'export-me.fluxion.json')
+    await mkdir(join(workspacePath, '.fluxion', 'workflows'), { recursive: true })
+    await writeFile(workflowFilePath, JSON.stringify(workflow, null, 2), 'utf8')
+
+    const exportResult = await workspaceService.exportWorkflowText(workspacePath, workflowFilePath)
+
+    expect(exportResult.content).toContain('format: fluxion-workflow')
+    expect(exportResult.content).toContain('workflowId: workflow-export')
+    expect(exportResult.content).toContain('"id": "node-a"')
+    expect(exportResult.content.indexOf('"id": "node-a"')).toBeLessThan(
+      exportResult.content.indexOf('"id": "node-b"')
+    )
+    expect(exportResult.content.indexOf('"id": "edge-a"')).toBeLessThan(
+      exportResult.content.indexOf('"id": "edge-b"')
+    )
+  })
+
+  it('imports reviewable workflow text back into a fluxion.json file', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workflow-import-'))
+    const workflow = createWorkflow('workflow-import', 'Import Me')
+    const exported = [
+      '---',
+      'format: fluxion-workflow',
+      'schema: "1.0"',
+      'workflowId: workflow-import',
+      'name: Import Me',
+      'executionMode: auto',
+      'fluxionVersion: "1.0"',
+      "generatedAt: '2026-05-24T00:00:00.000Z'",
+      '---',
+      JSON.stringify(workflow, null, 2)
+    ].join('\n')
+    const textFilePath = join(workspacePath, 'workflow-import.workflow.md')
+    await writeFile(textFilePath, exported, 'utf8')
+
+    const result = await workspaceService.importWorkflowText(workspacePath, textFilePath)
+
+    expect(result.workflow.name).toBe('Import Me')
+    expect(JSON.parse(await readFile(result.workflowFilePath, 'utf8')).id).toBe('workflow-import')
+  })
+
+  it('round-trips representative workflows and normalizes unsupported text details', async () => {
+    workspacePath = await mkdtemp(join(tmpdir(), 'fluxion-workflow-roundtrip-'))
+    const workflow = createWorkflow('workflow-roundtrip', 'Round Trip')
+    workflow.description = 'Representative workflow with extra node metadata'
+    workflow.nodes[0] = {
+      ...workflow.nodes[0],
+      data: {
+        ...workflow.nodes[0].data,
+        customField: 'preserve-through-json-payload'
+      } as Workflow['nodes'][number]['data']
+    }
+    workflow.nodes.push({
+      id: 'node-z',
+      type: 'agentNode',
+      label: 'Z',
+      data: {
+        provider: 'codex',
+        model: 'gpt-5.5',
+        prompt: 'Finish'
+      },
+      position: { x: 100, y: 0 }
+    })
+    const workflowFilePath = join(
+      workspacePath,
+      '.fluxion',
+      'workflows',
+      'workflow-roundtrip.fluxion.json'
+    )
+    await mkdir(join(workspacePath, '.fluxion', 'workflows'), { recursive: true })
+    await writeFile(workflowFilePath, JSON.stringify(workflow, null, 2), 'utf8')
+
+    const exportResult = await workspaceService.exportWorkflowText(workspacePath, workflowFilePath)
+    expect(exportResult.content).toContain('format: fluxion-workflow')
+    expect(exportResult.content).toContain("schema: '1.0'")
+    expect(exportResult.content).toContain('workflowId: workflow-roundtrip')
+    expect(workflowTextUnsupportedFields).toContain(
+      'custom node data fields that are not part of the persisted workflow contract'
+    )
+
+    const textFilePath = join(workspacePath, 'workflow-roundtrip.workflow.md')
+    await writeFile(textFilePath, exportResult.content, 'utf8')
+    const imported = await workspaceService.importWorkflowText(workspacePath, textFilePath)
+
+    expect(imported.workflow.id).toBe('workflow-roundtrip')
+    expect(imported.workflow.name).toBe('Round Trip')
+    expect(imported.workflow.nodes).toHaveLength(2)
+    expect(imported.workflow.nodes[0]?.id).toBe('node-z')
+    expect(imported.workflow.nodes[1]?.id).toBe('review-node')
+    expect(imported.workflow.nodes[0]?.data.provider).toBe('codex')
+    expect(imported.workflow.nodes[0]?.data.model).toBe('gpt-5.5')
+    expect((imported.workflow.nodes[0]?.data as Record<string, unknown>).customField).toBeUndefined()
   })
 })
