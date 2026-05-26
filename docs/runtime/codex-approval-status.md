@@ -1,58 +1,47 @@
 # Codex Approval Status
 
-Status updated: 2026-05-17
-Decision: `blocked / unsupported`
-Scope: interactive approval host for Codex CLI inside Fluxion
+Updated: 2026-05-26
+Decision: `guarded, needs redesign`
+Scope: how Fluxion should model Codex approvals and sandbox posture
 
-## Current Status
+Status: focused runtime note, not a replacement for `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, or the backlog
 
-Do not implement an interactive Codex approval host yet.
+## Current Position
 
-Current evidence shows that `codex exec --json` does not expose a stable structured approval protocol that Fluxion can safely drive.
+Do not treat approval hosting as a simple `supported / unsupported` binary.
 
-Observed conclusion from the latest retained probe batch:
+Recent research shows the Codex config and security model are richer than the older Fluxion assumptions, including:
 
-- no structured approval request event
-- no stable request id or correlation key
-- no documented or observed programmatic reply channel
-- approve/reject behavior cannot be validated deterministically
+- `approval_policy` granular
+- `approvals_reviewer`
+- MCP/app tool approval modes
+- richer sandbox and network policy combinations
 
-Because of that, Fluxion must keep the existing guardrail:
+## What This Means For Fluxion
 
-- `approval_policy=never`: allowed
-- `approval_policy=on-request`: blocked
-- `approval_policy=untrusted`: blocked
+Fluxion needs a small redesign of the approval surface:
 
-## Why This Is Blocked
+1. map the actual policy combinations
+2. distinguish runtime blockers from risk warnings
+3. show approval categories more clearly
+4. keep the product `Codex-first` and Windows-safe
 
-Fluxion is a Windows-first desktop runner and cannot rely on parsing human terminal prompts such as `Approve? y/n`.
+## Current Guardrail
 
-A future implementation is allowed only if the CLI exposes all of the following:
+Until Fluxion supports richer policy modeling:
 
-1. structured approval request events
-2. stable request correlation
-3. a programmatic reply channel
-4. deterministic approve and reject behavior
-5. Windows-native behavior that remains safe under abort and process cleanup
+- `never`: supported
+- `on-request`: should be evaluated against runtime support and workflow mode instead of being hard-blocked without explanation
+- granular policies: not yet surfaced properly in the UI
 
-## What To Re-check Before Unblocking
+## Next Step
 
-- a newer Codex CLI version
-- current OpenAI Codex approval and sandbox docs
-- a fresh local probe on Windows using Fluxion's expected execution path
+Related backlog items:
 
-## Current Next Step
+- `FX-CX-001` Effective Codex config diagnostics view
+- `FX-CX-002` Rich approval policy mapping
+- `FX-CX-004` MCP readiness and topology surface
 
-Do not continue Phase 2B approval-host design work.
+## Canonical Reference
 
-The practical next step remains runtime hardening that does not depend on an approval protocol:
-
-- desktop smoke for run/retry/review/abort flows
-- Windows CLI readiness clarity
-- output preview and operator UX polish
-
-## Canonical References
-
-- Current project assessment: [`docs/assessments/fluxion-project-assessment.md`](../assessments/fluxion-project-assessment.md)
-- Master backlog: [`docs/backlog/fluxion-master-backlog.md`](../backlog/fluxion-master-backlog.md)
-- Paused review recovery: [`docs/runtime/paused-review-recovery.md`](./paused-review-recovery.md)
+- Backlog: [`docs/backlog/backlog.md`](../backlog/backlog.md)

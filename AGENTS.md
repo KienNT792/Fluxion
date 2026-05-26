@@ -2,6 +2,8 @@
 
 Project-specific instructions for Codex working in this repository.
 
+Keep this file short. Use it for durable repository rules, then follow the referenced docs for deeper task context.
+
 ## Repository intent
 
 - Fluxion is a Windows-first Electron desktop app for designing and running Codex-based workflows.
@@ -23,10 +25,21 @@ Project-specific instructions for Codex working in this repository.
 - `src/preload`: `contextBridge` API exposed to the renderer
 - `src/renderer`: React UI, React Flow canvas, Zustand stores, terminal viewer, and dialogs
 - `src/shared`: shared workflow types, provider metadata, and IPC payloads
-- `scripts/smoke/windows-build.mjs`: Windows smoke verification for packaging
-- `docs/`: backlog and assessment notes
-- `DESIGN.md`: detailed design language and visual direction
-- `README.md`: current product overview, setup, commands, and architecture summary
+- `docs/agents/`: agent-facing doc map and review checklist
+- `docs/backlog/backlog.md`: current backlog and priorities
+- `DESIGN.md`: visual direction
+- `README.md`: product overview and contributor quickstart
+- `ARCHITECTURE.md`: canonical technical architecture reference
+
+## Read order
+
+For non-trivial work, read in this order:
+
+1. `README.md`
+2. this `AGENTS.md`
+3. `docs/agents/README.md`
+4. `ARCHITECTURE.md` only if the task touches runtime, IPC, persistence, or workflow execution
+5. `DESIGN.md` only if the task touches UX or visual behavior
 
 ## Architecture boundaries
 
@@ -75,6 +88,7 @@ Project-specific instructions for Codex working in this repository.
 - Prefer updating the nearest existing module instead of introducing parallel patterns.
 - Keep changes scoped. Do not widen a task into a refactor unless the user asks for it or the current design blocks the fix.
 - If the requested change affects app UX, preserve the existing "editorial calm" design direction and consult `DESIGN.md` for details.
+- If you need detailed repo-specific operating context, prefer `docs/agents/` over reading broad notes under `docs/runtime/`.
 
 ## Commands
 
@@ -122,3 +136,4 @@ npm run smoke:win
 - Do not add new dependencies unless the existing stack clearly cannot support the change.
 - Do not silently change `.fluxion/` file shapes, IPC payload contracts, or workflow semantics without updating all affected layers.
 - Do not replace practical project rules with generic boilerplate.
+- Do not treat ad hoc runtime notes as canonical when `README.md`, `AGENTS.md`, or `ARCHITECTURE.md` already define the current contract.
