@@ -1,9 +1,14 @@
-import { execFile } from 'child_process'
+import { ChildProcess, execFile, spawn, SpawnOptions } from 'child_process'
 import {
   CODEX_DEFAULT_MODEL,
   CODEX_DEFAULT_REASONING_LEVEL,
   CODEX_REASONING_LEVELS,
+  CodexApprovalPolicy,
   CodexApprovalProtocolProbeResult,
+  CodexReasoningSummary,
+  CodexResolvedMcpServer,
+  CodexResolvedMcpToolPolicy,
+  CodexVerbosity,
   OPENAI_DEFAULT_MODEL,
   OPENAI_DEFAULT_REASONING_LEVEL,
   OPENAI_MVP_MODELS,
@@ -12,6 +17,7 @@ import {
   ProviderModel,
   ProviderParameterSpec,
   ProviderReadinessState,
+  ResolvedCodexConfig,
   ReasoningLevel
 } from '@shared'
 import { settingsService } from './settings.service'
@@ -20,10 +26,15 @@ import {
   ResolvedCodexCli,
   resolveCodexCliCandidates
 } from '../runners/codex-cli-resolver'
+import { workspaceTrustService } from './workspace-trust.service'
+import { access, readFile } from 'fs/promises'
+import { isAbsolute, join, resolve } from 'path'
 
 const OPENAI_MODELS_TIMEOUT_MS = 10_000
 const CODEX_MODELS_TIMEOUT_MS = 10_000
 const EXEC_FILE_MAX_BUFFER = 1024 * 1024
+const MCP_HTTP_PROBE_TIMEOUT_MS = 2_500
+const MCP_STDIO_PROBE_TIMEOUT_MS = 2_500
 
 function createUnknownCodexApprovalProtocol(): CodexApprovalProtocolProbeResult {
   return {
@@ -125,6 +136,7 @@ interface ExecFileErrorWithOutput extends Error {
 interface CodexCapabilitiesDependencies {
   resolveCli?: () => Promise<ResolvedCodexCli[]>
   runCommand?: (command: string, args: string[]) => Promise<ExecFileResult>
+  workspacePath?: string
 }
 
 interface CodexCommandAttemptResult {
@@ -317,6 +329,674 @@ function buildCodexReadiness(
     ...overrides,
     code
   }
+}
+
+function parseSimpleTomlValue(raw: string): string | number | boolean | string[] | undefined {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  if (trimmed === 'true') {
+    return true
+  }
+  if (trimmed === 'false') {
+    return false
+  }
+  if (/^-?\d+$/.test(trimmed)) {
+    return Number(trimmed)
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1)
+  }
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return trimmed
+      .slice(1, -1)
+      .split(',')
+      .map((item) => item.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  }
+
+  return trimmed
+}
+
+async function readProjectCodexConfig(workspacePath?: string): Promise<string | null> {
+  if (!workspacePath) {
+    return null
+  }
+
+  try {
+    return await readFile(join(workspacePath, '.codex', 'config.toml'), 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function readQuotedConfigValue(rawConfig: string | null, key: string): string | undefined {
+  if (!rawConfig) {
+    return undefined
+  }
+
+  const match = rawConfig.match(new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\\\]/g, '\\$&')}\\s*=\\s*"([^"]+)"`, 'm'))
+  return match?.[1]
+}
+
+function readBooleanConfigValue(rawConfig: string | null, key: string): boolean | undefined {
+  if (!rawConfig) {
+    return undefined
+  }
+
+  const match = rawConfig.match(new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\\\]/g, '\\$&')}\\s*=\\s*(true|false)\\s*$`, 'mi'))
+  if (!match) {
+    return undefined
+  }
+
+  return match[1].toLowerCase() === 'true'
+}
+
+function readNumberConfigValue(rawConfig: string | null, key: string): number | undefined {
+  if (!rawConfig) {
+    return undefined
+  }
+
+  const match = rawConfig.match(new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\\\]/g, '\\$&')}\\s*=\\s*(\\d+)\\s*$`, 'm'))
+  if (!match) {
+    return undefined
+  }
+
+  const parsed = Number(match[1])
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function readStringArrayConfigValue(rawConfig: string | null, key: string): string[] | undefined {
+  if (!rawConfig) {
+    return undefined
+  }
+
+  const match = rawConfig.match(
+    new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\\\]/g, '\\$&')}\\s*=\\s*\\[(.*?)\\]\\s*$`, 'ms')
+  )
+  if (!match) {
+    return undefined
+  }
+
+  const values = [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]).filter(Boolean)
+  return values.length > 0 ? values : undefined
+}
+
+function parseResolvedMcpServers(rawConfig: string | null): CodexResolvedMcpServer[] {
+  if (!rawConfig) {
+    return []
+  }
+
+  const lines = rawConfig.split(/\r?\n/)
+  const servers = new Map<string, CodexResolvedMcpServer>()
+  let currentServerId: string | null = null
+  let currentToolName: string | null = null
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+
+    const toolSectionMatch = trimmed.match(/^\[mcp_servers\.([^.]+)\.tools\.([^\]]+)\]$/)
+    if (toolSectionMatch) {
+      currentServerId = toolSectionMatch[1]
+      currentToolName = toolSectionMatch[2]
+      if (!servers.has(currentServerId)) {
+        servers.set(currentServerId, {
+          id: currentServerId,
+          transport: 'unknown',
+          enabled: true,
+          readiness: 'unknown'
+        })
+      }
+      continue
+    }
+
+    const sectionMatch = trimmed.match(/^\[mcp_servers\.([^\]]+)\]$/)
+    if (sectionMatch) {
+      currentServerId = sectionMatch[1]
+      currentToolName = null
+      if (!servers.has(currentServerId)) {
+        servers.set(currentServerId, {
+          id: currentServerId,
+          transport: 'unknown',
+          enabled: true,
+          readiness: 'unknown'
+        })
+      }
+      continue
+    }
+
+    if (!currentServerId) {
+      continue
+    }
+
+    const equalsIndex = trimmed.indexOf('=')
+    if (equalsIndex < 0) {
+      continue
+    }
+
+    const key = trimmed.slice(0, equalsIndex).trim()
+    const value = parseSimpleTomlValue(trimmed.slice(equalsIndex + 1))
+    const server = servers.get(currentServerId)
+    if (!server) {
+      continue
+    }
+
+    if (currentToolName) {
+      server.toolPolicies ??= []
+      const existingToolPolicy =
+        server.toolPolicies.find((tool) => tool.name === currentToolName) ??
+        (() => {
+          const created = { name: currentToolName } as CodexResolvedMcpToolPolicy
+          server.toolPolicies?.push(created)
+          return created
+        })()
+
+      if (key === 'approval_mode' && typeof value === 'string') {
+        existingToolPolicy.approvalMode = value as 'auto' | 'prompt' | 'approve'
+      } else if (key === 'enabled' && typeof value === 'boolean') {
+        existingToolPolicy.enabled = value
+      }
+
+      continue
+    }
+
+    if (key === 'command' && typeof value === 'string') {
+      server.command = value
+      server.transport = 'stdio'
+    } else if (key === 'url' && typeof value === 'string') {
+      server.url = value
+      server.transport = 'http'
+    } else if (key === 'enabled' && typeof value === 'boolean') {
+      server.enabled = value
+      server.readiness = value ? server.readiness : 'disabled'
+    } else if (key === 'required' && typeof value === 'boolean') {
+      server.required = value
+    } else if (key === 'args' && Array.isArray(value)) {
+      server.args = value
+    } else if (key === 'cwd' && typeof value === 'string') {
+      server.cwd = value
+    } else if (key === 'env_vars' && Array.isArray(value)) {
+      server.envVarNames = value.filter((item): item is string => typeof item === 'string')
+    } else if (key === 'enabled_tools' && Array.isArray(value)) {
+      server.enabledTools = value
+    } else if (key === 'disabled_tools' && Array.isArray(value)) {
+      server.disabledTools = value
+    } else if (key === 'default_tools_approval_mode' && typeof value === 'string') {
+      server.defaultToolsApprovalMode = value as 'auto' | 'prompt' | 'approve'
+    } else if (key === 'experimental_environment' && typeof value === 'string') {
+      server.environment = value as 'local' | 'remote'
+    } else if (key === 'startup_timeout_sec' && typeof value === 'number') {
+      server.startupTimeoutSec = value
+    } else if (key === 'tool_timeout_sec' && typeof value === 'number') {
+      server.toolTimeoutSec = value
+    }
+  }
+
+  return [...servers.values()].map((server) => {
+    if (!server.enabled) {
+      return {
+        ...server,
+        readiness: 'disabled',
+        readinessCategory: 'disabled',
+        reason: 'Disabled in project config.'
+      }
+    }
+
+    if (server.transport === 'stdio' && !server.command) {
+      return {
+        ...server,
+        readiness: 'not-ready',
+        readinessCategory: 'missing-config',
+        reason: 'Enabled MCP stdio server is missing a launcher command.'
+      }
+    }
+
+    if (server.transport === 'http' && !server.url) {
+      return {
+        ...server,
+        readiness: 'not-ready',
+        readinessCategory: 'missing-config',
+        reason: 'Enabled MCP HTTP server is missing a URL.'
+      }
+    }
+
+    if (server.transport === 'stdio' && server.cwd && !isAbsolute(server.cwd)) {
+      return {
+        ...server,
+        readiness: (server.required ? 'not-ready' : 'unknown') as CodexResolvedMcpServer['readiness'],
+        readinessCategory: 'invalid-config',
+        reason: 'MCP stdio server cwd is relative; Fluxion cannot verify it reliably.'
+      }
+    }
+
+    if (server.transport === 'http' && server.url && !/^https?:\/\//i.test(server.url)) {
+      return {
+        ...server,
+        readiness: (server.required ? 'not-ready' : 'unknown') as CodexResolvedMcpServer['readiness'],
+        readinessCategory: 'invalid-config',
+        reason: 'MCP HTTP server URL is not a valid http/https endpoint.'
+      }
+    }
+
+    if (server.transport === 'unknown') {
+      return {
+        ...server,
+        readiness: server.required ? 'not-ready' : 'unknown',
+        readinessCategory: 'missing-config',
+        reason: server.required
+          ? 'Required MCP server is missing both command and URL configuration.'
+          : 'MCP server transport could not be resolved from config.'
+      }
+    }
+
+    return {
+      ...server,
+      readiness: 'ready',
+      readinessCategory: (
+        server.enabledTools?.length ||
+        server.disabledTools?.length ||
+        server.defaultToolsApprovalMode ||
+        (server.toolPolicies?.length ?? 0) > 0
+          ? 'policy-constrained'
+          : 'ready'
+      ) as CodexResolvedMcpServer['readinessCategory'],
+      constrainedByPolicy:
+        Boolean(server.enabledTools?.length) ||
+        Boolean(server.disabledTools?.length) ||
+        Boolean(server.defaultToolsApprovalMode) ||
+        Boolean(server.toolPolicies?.length),
+      reason: undefined
+    }
+  })
+}
+
+function createLayerValue<T>(
+  trusted: boolean,
+  source: 'project',
+  value: T,
+  detail?: string
+): { source: 'project' | 'ignored-project'; value: T; detail?: string } {
+  return trusted
+    ? { source, value, detail }
+    : {
+        source: 'ignored-project',
+        value,
+        detail:
+          detail ??
+          'Declared in project .codex/config.toml, but Codex ignores project-scoped config until the workspace is trusted.'
+      }
+}
+
+function createProjectEffectiveValue<T>(
+  trusted: boolean,
+  value: T | undefined
+): T | undefined {
+  return trusted ? value : undefined
+}
+
+export function parseResolvedCodexConfig(
+  rawConfig: string | null,
+  trusted: boolean
+): ResolvedCodexConfig | undefined {
+  const warnings: string[] = []
+  if (!trusted && rawConfig) {
+    warnings.push('Project-scoped .codex/config.toml exists but Codex only loads it for trusted projects.')
+  }
+
+  const modelMatch = rawConfig?.match(/^\s*model\s*=\s*"([^"]+)"/m)
+  const reviewModel = readQuotedConfigValue(rawConfig, 'review_model')
+  const sandboxMatch = rawConfig?.match(/^\s*sandbox_mode\s*=\s*"([^"]+)"/m)
+  const approvalMatch = rawConfig?.match(/^\s*approval_policy\s*=\s*(.+)$/m)
+  const approvalsReviewer = readQuotedConfigValue(rawConfig, 'approvals_reviewer')
+  const profile = readQuotedConfigValue(rawConfig, 'profile')
+  const serviceTier = readQuotedConfigValue(rawConfig, 'service_tier')
+  const modelContextWindow = readNumberConfigValue(rawConfig, 'model_context_window')
+  const modelAutoCompactTokenLimit = readNumberConfigValue(
+    rawConfig,
+    'model_auto_compact_token_limit'
+  )
+  const compactPrompt = readQuotedConfigValue(rawConfig, 'compact_prompt')
+  const memoriesDisableOnExternalContext = readBooleanConfigValue(
+    rawConfig,
+    'memories.disable_on_external_context'
+  )
+  const modelVerbosity = readQuotedConfigValue(rawConfig, 'model_verbosity') as
+    | CodexVerbosity
+    | undefined
+  const modelReasoningSummary = readQuotedConfigValue(rawConfig, 'model_reasoning_summary') as
+    | CodexReasoningSummary
+    | undefined
+  const hideAgentReasoning = readBooleanConfigValue(rawConfig, 'hide_agent_reasoning')
+  const showRawAgentReasoning = readBooleanConfigValue(rawConfig, 'show_raw_agent_reasoning')
+  const writableRoots = readStringArrayConfigValue(rawConfig, 'sandbox_workspace_write.writable_roots')
+  const networkAccess = readBooleanConfigValue(rawConfig, 'sandbox_workspace_write.network_access')
+
+  const approvalPolicy: CodexApprovalPolicy =
+    approvalMatch && approvalMatch[1].includes('granular')
+      ? { kind: 'granular' }
+      : ((approvalMatch?.[1]?.trim().replace(/^"|"$/g, '') as CodexApprovalPolicy) ?? 'never')
+
+  if (profile) {
+    warnings.push(
+      'Project-scoped profile keys are ignored by Codex. Put profile selection in user-level config or launch Codex with an explicit profile.'
+    )
+  }
+
+  const effectiveModel = createProjectEffectiveValue(trusted, modelMatch?.[1])
+  const effectiveReviewModel = createProjectEffectiveValue(trusted, reviewModel)
+  const effectiveServiceTier = createProjectEffectiveValue(trusted, serviceTier)
+  const effectiveSandboxMode = createProjectEffectiveValue(
+    trusted,
+    sandboxMatch?.[1] as ResolvedCodexConfig['sandboxMode'] | undefined
+  )
+  const effectiveApprovalPolicy = trusted ? approvalPolicy : ('never' as CodexApprovalPolicy)
+  const effectiveApprovalsReviewer = createProjectEffectiveValue(
+    trusted,
+    approvalsReviewer as ResolvedCodexConfig['approvalsReviewer']
+  )
+  const effectiveModelContextWindow = createProjectEffectiveValue(trusted, modelContextWindow)
+  const effectiveModelAutoCompactTokenLimit = createProjectEffectiveValue(
+    trusted,
+    modelAutoCompactTokenLimit
+  )
+  const effectiveCompactPrompt = createProjectEffectiveValue(trusted, compactPrompt)
+  const effectiveMemoriesDisableOnExternalContext = createProjectEffectiveValue(
+    trusted,
+    memoriesDisableOnExternalContext
+  )
+  const effectiveModelVerbosity = createProjectEffectiveValue(trusted, modelVerbosity)
+  const effectiveModelReasoningSummary = createProjectEffectiveValue(
+    trusted,
+    modelReasoningSummary
+  )
+  const effectiveHideAgentReasoning = createProjectEffectiveValue(trusted, hideAgentReasoning)
+  const effectiveShowRawAgentReasoning = createProjectEffectiveValue(trusted, showRawAgentReasoning)
+  const effectiveWritableRoots = createProjectEffectiveValue(trusted, writableRoots)
+  const effectiveNetworkAccess = createProjectEffectiveValue(trusted, networkAccess)
+  const effectiveMcpServers = trusted ? parseResolvedMcpServers(rawConfig) : []
+
+  return {
+    model: effectiveModel,
+    reviewModel: effectiveReviewModel,
+    serviceTier: effectiveServiceTier,
+    sandboxMode: effectiveSandboxMode ?? 'workspace-write',
+    approvalPolicy: effectiveApprovalPolicy,
+    approvalsReviewer: effectiveApprovalsReviewer,
+    profile,
+    trustLevel: trusted ? 'trusted' : 'untrusted',
+    writableRoots: effectiveWritableRoots,
+    networkAccess: effectiveNetworkAccess,
+    modelContextWindow: effectiveModelContextWindow,
+    modelAutoCompactTokenLimit: effectiveModelAutoCompactTokenLimit,
+    compactPrompt: effectiveCompactPrompt,
+    memoriesDisableOnExternalContext: effectiveMemoriesDisableOnExternalContext,
+    modelVerbosity: effectiveModelVerbosity,
+    modelReasoningSummary: effectiveModelReasoningSummary,
+    hideAgentReasoning: effectiveHideAgentReasoning,
+    showRawAgentReasoning: effectiveShowRawAgentReasoning,
+    mcpServers: effectiveMcpServers,
+    layers: {
+      model: modelMatch
+        ? [createLayerValue(trusted, 'project', modelMatch[1])]
+        : undefined,
+      reviewModel: reviewModel
+        ? [createLayerValue(trusted, 'project', reviewModel)]
+        : undefined,
+      serviceTier: serviceTier
+        ? [createLayerValue(trusted, 'project', serviceTier)]
+        : undefined,
+      sandboxMode: sandboxMatch
+        ? [createLayerValue(trusted, 'project', sandboxMatch[1] as ResolvedCodexConfig['sandboxMode'])]
+        : [{ source: 'runtime-default', value: 'workspace-write' }],
+      approvalPolicy: approvalMatch
+        ? [createLayerValue(trusted, 'project', approvalPolicy)]
+        : [{ source: 'runtime-default', value: effectiveApprovalPolicy }],
+      approvalsReviewer: approvalsReviewer
+        ? [
+            createLayerValue(
+              trusted,
+              'project',
+              approvalsReviewer as NonNullable<ResolvedCodexConfig['approvalsReviewer']>
+            )
+          ]
+        : undefined,
+      profile: profile
+        ? [
+            {
+              source: 'ignored-project',
+              value: profile,
+              detail:
+                'Project-scoped profile keys are ignored by Codex; keep them in user config or apply them at launch.'
+            }
+          ]
+        : undefined,
+      modelContextWindow:
+        typeof modelContextWindow === 'number'
+          ? [createLayerValue(trusted, 'project', modelContextWindow)]
+          : undefined,
+      modelAutoCompactTokenLimit:
+        typeof modelAutoCompactTokenLimit === 'number'
+          ? [createLayerValue(trusted, 'project', modelAutoCompactTokenLimit)]
+          : undefined,
+      compactPrompt: compactPrompt
+        ? [createLayerValue(trusted, 'project', compactPrompt)]
+        : undefined,
+      memoriesDisableOnExternalContext:
+        typeof memoriesDisableOnExternalContext === 'boolean'
+          ? [createLayerValue(trusted, 'project', memoriesDisableOnExternalContext)]
+          : undefined,
+      modelVerbosity: modelVerbosity
+        ? [createLayerValue(trusted, 'project', modelVerbosity)]
+        : undefined,
+      modelReasoningSummary: modelReasoningSummary
+        ? [createLayerValue(trusted, 'project', modelReasoningSummary)]
+        : undefined,
+      hideAgentReasoning:
+        typeof hideAgentReasoning === 'boolean'
+          ? [createLayerValue(trusted, 'project', hideAgentReasoning)]
+          : undefined,
+      showRawAgentReasoning:
+        typeof showRawAgentReasoning === 'boolean'
+          ? [createLayerValue(trusted, 'project', showRawAgentReasoning)]
+          : undefined
+    },
+    warnings: warnings.length > 0 ? warnings : undefined
+  }
+}
+
+async function buildResolvedCodexConfig(workspacePath?: string): Promise<ResolvedCodexConfig | undefined> {
+  if (!workspacePath) {
+    return undefined
+  }
+
+  const [trusted, rawConfig] = await Promise.all([
+    workspaceTrustService.isWorkspaceTrusted(workspacePath),
+    readProjectCodexConfig(workspacePath)
+  ])
+
+  const resolvedConfig = parseResolvedCodexConfig(rawConfig, trusted)
+  if (!resolvedConfig?.mcpServers || !workspacePath) {
+    return resolvedConfig
+  }
+
+  const validatedServers = await Promise.all(
+    resolvedConfig.mcpServers.map(async (server) => {
+      if (server.transport !== 'stdio' || !server.cwd || !isAbsolute(server.cwd)) {
+        return server
+      }
+
+      const resolvedCwd = resolve(server.cwd)
+      try {
+        await access(resolvedCwd)
+        return server
+      } catch {
+        return {
+          ...server,
+          readiness: (server.required ? 'not-ready' : 'unknown') as CodexResolvedMcpServer['readiness'],
+          readinessCategory: 'invalid-config' as const,
+          reason: `MCP stdio server cwd does not exist: ${resolvedCwd}`
+        } satisfies CodexResolvedMcpServer
+      }
+    })
+  )
+
+  const probedServers = await Promise.all(
+    validatedServers.map(async (server) => probeMcpServerReadiness(server))
+  )
+
+  return {
+    ...resolvedConfig,
+    mcpServers: probedServers
+  }
+}
+
+export async function probeMcpServerReadiness(
+  server: CodexResolvedMcpServer
+): Promise<CodexResolvedMcpServer> {
+  if (!server.enabled || server.readiness === 'disabled' || server.readiness === 'not-ready') {
+    return server
+  }
+
+  if (server.transport === 'http' && server.url) {
+    return probeHttpMcpServer(server)
+  }
+
+  if (server.transport === 'stdio' && server.command) {
+    return probeStdioMcpServer(server)
+  }
+
+  return server
+}
+
+async function probeHttpMcpServer(
+  server: CodexResolvedMcpServer
+): Promise<CodexResolvedMcpServer> {
+  if (!server.url) {
+    return server
+  }
+
+  const controller = new AbortController()
+  const timeoutHandle = setTimeout(() => controller.abort(), MCP_HTTP_PROBE_TIMEOUT_MS)
+
+  try {
+    let response: Response
+
+    try {
+      response = await fetch(server.url, {
+        method: 'HEAD',
+        signal: controller.signal
+      })
+    } catch {
+      response = await fetch(server.url, {
+        method: 'GET',
+        signal: controller.signal
+      })
+    }
+
+    if (response.ok || response.status === 401 || response.status === 403) {
+      return {
+        ...server,
+        readiness: 'ready',
+        readinessCategory: response.ok ? server.readinessCategory ?? 'ready' : 'probe-auth',
+        reason:
+          response.ok
+            ? undefined
+            : `Endpoint responded with ${response.status}; server appears reachable but may require auth.`
+      }
+    }
+
+    return {
+      ...server,
+      readiness: server.required ? 'not-ready' : 'unknown',
+      readinessCategory: 'probe-unreachable',
+      reason: `Endpoint responded with ${response.status}.`
+    }
+  } catch (error) {
+    return {
+      ...server,
+      readiness: server.required ? 'not-ready' : 'unknown',
+      readinessCategory: 'probe-unreachable',
+      reason:
+        error instanceof Error
+          ? `HTTP probe failed: ${error.message}`
+          : 'HTTP probe failed.'
+    }
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
+}
+
+async function probeStdioMcpServer(
+  server: CodexResolvedMcpServer
+): Promise<CodexResolvedMcpServer> {
+  if (!server.command) {
+    return server
+  }
+  const command = server.command
+
+  return new Promise((resolveProbe) => {
+    let settled = false
+    const spawnOptions: SpawnOptions = {
+      cwd: server.cwd,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+    const child: ChildProcess = spawn(command, server.args ?? [], spawnOptions)
+
+    const finish = (result: CodexResolvedMcpServer): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      try {
+        child.kill()
+      } catch {
+        // best-effort cleanup
+      }
+      resolveProbe(result)
+    }
+
+    const timer = setTimeout(() => {
+      finish({
+        ...server,
+        readiness: 'ready',
+        readinessCategory: server.readinessCategory ?? 'ready',
+        reason: 'Process stayed alive through the startup probe window.'
+      })
+    }, Math.max(250, Math.min(MCP_STDIO_PROBE_TIMEOUT_MS, (server.startupTimeoutSec ?? 2) * 1000)))
+
+    child.once('spawn', () => {
+      // Wait for the timer or an early exit/error.
+    })
+
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      finish({
+        ...server,
+        readiness: server.required ? 'not-ready' : 'unknown',
+        readinessCategory: 'probe-spawn-failed',
+        reason: `Process spawn failed: ${error.message}`
+      })
+    })
+
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer)
+      finish({
+        ...server,
+        readiness: server.required ? 'not-ready' : 'unknown',
+        readinessCategory: 'probe-exit',
+        reason:
+          code === 0
+            ? 'Process exited immediately during startup probe.'
+            : `Process exited during startup probe with code ${code ?? 'unknown'}${signal ? `, signal ${signal}` : ''}.`
+      })
+    })
+  })
 }
 
 export function isCodexAuthMissingMessage(message: string): boolean {
@@ -580,6 +1260,7 @@ export async function getCodexCapabilities(
   dependencies: CodexCapabilitiesDependencies = {}
 ): Promise<ProviderCapabilities> {
   try {
+    const resolvedConfig = await buildResolvedCodexConfig(dependencies.workspacePath)
     const discoveryContext = await createCodexDiscoveryContext(dependencies)
     const versionStatus = await runCodexCommandAcrossCandidates(discoveryContext, ['--version'])
     const codexVersion = versionStatus.result
@@ -615,6 +1296,7 @@ export async function getCodexCapabilities(
           error: combinedOutput || readiness.message,
           models: [],
           parameters: CODEX_PARAMETERS,
+          resolvedConfig,
           refreshHint:
             'Install or update @openai/codex globally, fix PATH or App Execution Alias settings, then refresh Codex readiness.'
         })
@@ -637,6 +1319,7 @@ export async function getCodexCapabilities(
           error: combinedOutput || readiness.message,
           models: [],
           parameters: CODEX_PARAMETERS,
+          resolvedConfig,
           refreshHint: 'Run `codex login`, then refresh Codex readiness.'
         })
       }
@@ -693,6 +1376,7 @@ export async function getCodexCapabilities(
         error: errorMessage,
         models: [],
         parameters: CODEX_PARAMETERS,
+        resolvedConfig,
         refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
       })
     }
@@ -735,6 +1419,7 @@ export async function getCodexCapabilities(
       models,
       defaultModel,
       parameters: CODEX_PARAMETERS,
+      resolvedConfig,
       refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
     })
   } catch (error) {
@@ -760,6 +1445,7 @@ export async function getCodexCapabilities(
         error: CODEX_CLI_NOT_FOUND_MESSAGE,
         models: [],
         parameters: CODEX_PARAMETERS,
+        resolvedConfig: await buildResolvedCodexConfig(dependencies.workspacePath),
         refreshHint: 'Install @openai/codex in Windows, then refresh Codex readiness.'
       })
     }
@@ -780,6 +1466,7 @@ export async function getCodexCapabilities(
         error: combinedOutput,
         models: [],
         parameters: CODEX_PARAMETERS,
+        resolvedConfig: await buildResolvedCodexConfig(dependencies.workspacePath),
         refreshHint: 'Run `codex login`, then refresh Codex readiness.'
       })
     }
@@ -805,6 +1492,7 @@ export async function getCodexCapabilities(
         (error instanceof Error ? error.message : 'Codex model discovery failed.'),
       models: [],
       parameters: CODEX_PARAMETERS,
+      resolvedConfig: await buildResolvedCodexConfig(dependencies.workspacePath),
       refreshHint: 'Uses `codex login status` and `codex debug models` for readiness.'
     })
   }
@@ -830,7 +1518,7 @@ export class ProviderRegistryService {
     return ProviderRegistryService.instance
   }
 
-  public async fetchCapabilities(forceRefresh = false): Promise<ProviderCapabilitiesMap> {
+  public async fetchCapabilities(forceRefresh = false, workspacePath?: string): Promise<ProviderCapabilitiesMap> {
     const now = Date.now()
     if (!forceRefresh && this.cachedCapabilities && now - this.cachedAt < this.cacheTtlMs) {
       return this.cachedCapabilities
@@ -841,7 +1529,10 @@ export class ProviderRegistryService {
     }
 
     const generation = this.cacheGeneration
-    const pendingCapabilities = Promise.all([getCodexCapabilities(), getOpenAICapabilities()]).then(
+    const pendingCapabilities = Promise.all([
+      getCodexCapabilities({ workspacePath }),
+      getOpenAICapabilities()
+    ]).then(
       ([codex, openai]) => {
         const capabilities: ProviderCapabilitiesMap = {
           codex,

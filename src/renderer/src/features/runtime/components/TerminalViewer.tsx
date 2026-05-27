@@ -4,17 +4,19 @@ import '@xterm/xterm/css/xterm.css'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useThemeStore } from '@renderer/stores/theme.store'
-import { Copy, Terminal, Trash2 } from 'lucide-react'
+import { Copy, ExternalLink, Terminal, Trash2 } from 'lucide-react'
 import { truncateTerminalText } from '@renderer/lib/terminal'
 import { useXtermTerminal } from '../hooks/useXtermTerminal'
 import { STATUS_DOT } from '../lib/runtime-status'
 import { RuntimeLogCategory } from '@renderer/stores/execution.store'
+import { buildNodeTerminalLaunchPayload } from '../lib/terminal-launch'
 
 const EMPTY_TERMINAL_LOGS: string[] = []
 
 export const TerminalViewer: React.FC = () => {
   const terminalNodeId = useWorkflowStore((state) => state.terminalNodeId)
   const terminalFollowMode = useWorkflowStore((state) => state.terminalFollowMode)
+  const workspacePath = useWorkflowStore((state) => state.workspacePath)
   const nodes = useWorkflowStore((state) => state.nodes)
   const clearLogs = useExecutionStore((state) => state.clearLogs)
   const terminalLogs = useExecutionStore((state) =>
@@ -28,6 +30,7 @@ export const TerminalViewer: React.FC = () => {
   const status = useExecutionStore((state) =>
     terminalNodeId ? (state.nodeStatuses[terminalNodeId] ?? 'idle') : 'idle'
   )
+  const activeRunId = useExecutionStore((state) => state.activeRunId)
   const [logFilter, setLogFilter] = React.useState<RuntimeLogCategory>('progress')
 
   const theme = useThemeStore((state) => state.theme)
@@ -37,6 +40,9 @@ export const TerminalViewer: React.FC = () => {
   const nodeLabel = activeNode?.data?.label as string | undefined
   const nodeModel = activeNode?.data?.model as string | undefined
   const displayName = nodeLabel || nodeModel || terminalNodeId || ''
+  const outputPath = useExecutionStore((state) =>
+    terminalNodeId ? (state.nodeOutputPaths[terminalNodeId] ?? undefined) : undefined
+  )
   const filteredLogs = React.useMemo(() => {
     if (runtimeLogs.length === 0) {
       return terminalLogs
@@ -126,6 +132,28 @@ export const TerminalViewer: React.FC = () => {
               {copyFeedback}
             </span>
           ) : null}
+          <HeaderActionButton
+            ariaLabel="Open Windows Terminal"
+            title="Open Windows Terminal"
+            onClick={() => {
+              if (!workspacePath) {
+                return
+              }
+
+              void window.api.openTerminal(
+                buildNodeTerminalLaunchPayload({
+                  workspacePath,
+                  runId: activeRunId,
+                  nodeId: terminalNodeId,
+                  nodeLabel,
+                  outputPath
+                })
+              )
+            }}
+          >
+            <ExternalLink size={12} />
+            <span>Terminal</span>
+          </HeaderActionButton>
           <HeaderActionButton
             ariaLabel="Copy selection"
             title="Copy Selection"

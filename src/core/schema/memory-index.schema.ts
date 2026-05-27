@@ -32,8 +32,20 @@ export const RawOutputMemoryIndexEntrySchema = z.object({
   attempt: z.number().int().positive().optional()
 })
 
+export const SummaryMemoryIndexEntrySchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('summary'),
+  workflowId: z.string().min(1),
+  runId: z.string().min(1),
+  sourcePath: RelativeMemoryPathSchema,
+  createdAt: z.string().min(1),
+  sourceNodeIds: z.array(z.string().min(1)).min(1),
+  replacedPaths: z.array(RelativeMemoryPathSchema).optional()
+})
+
 export const MemoryIndexEntrySchema = z.discriminatedUnion('type', [
-  RawOutputMemoryIndexEntrySchema
+  RawOutputMemoryIndexEntrySchema,
+  SummaryMemoryIndexEntrySchema
 ])
 
 export const MemoryIndexSchema = z.object({

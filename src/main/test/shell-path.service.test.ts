@@ -3,10 +3,12 @@ import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  openInWindowsTerminal,
   openShellPath,
   revealShellPath,
   validateShellTargetPath
 } from '../services/shell-path.service'
+import childProcess from 'child_process'
 
 let tempDir: string | undefined
 
@@ -76,5 +78,113 @@ describe('shell-path.service', () => {
     await expect(openShellPath(shellAdapter, filePath)).rejects.toThrow(
       'No app can open this file.'
     )
+  })
+
+  it('launches Windows Terminal with the expected arguments', async () => {
+    const filePath = await createTempFile()
+    const cwd = path.dirname(filePath)
+    const spawnMock = vi
+      .spyOn(childProcess, 'spawn')
+      .mockImplementation((() => {
+        const handlers = new Map<string, (...args: unknown[]) => void>()
+        return {
+          once: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+            handlers.set(event, handler)
+            if (event === 'spawn') {
+              queueMicrotask(() => handler())
+            }
+            return undefined
+          }),
+          unref: vi.fn()
+        } as unknown as ReturnType<typeof childProcess.spawn>
+      }) as typeof childProcess.spawn)
+
+    await openInWindowsTerminal({
+      cwd,
+      title: 'Fluxion Runtime',
+      commandline: "Write-Host 'ready'"
+    })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wt.exe',
+      [
+        '-d',
+        cwd,
+        '--title',
+        'Fluxion Runtime',
+        'powershell.exe',
+        '-NoExit',
+        '-Command',
+        "Write-Host 'ready'"
+      ],
+      expect.objectContaining({
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    )
+
+    spawnMock.mockRestore()
+  })
+
+  it('launches Windows Terminal split panes for multi-session debug payloads', async () => {
+    const filePath = await createTempFile()
+    const cwd = path.dirname(filePath)
+    const spawnMock = vi
+      .spyOn(childProcess, 'spawn')
+      .mockImplementation((() => {
+        const handlers = new Map<string, (...args: unknown[]) => void>()
+        return {
+          once: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+            handlers.set(event, handler)
+            if (event === 'spawn') {
+              queueMicrotask(() => handler())
+            }
+            return undefined
+          }),
+          unref: vi.fn()
+        } as unknown as ReturnType<typeof childProcess.spawn>
+      }) as typeof childProcess.spawn)
+
+    await openInWindowsTerminal({
+      cwd,
+      panes: [
+        { title: 'Repro', commandline: "Write-Host 'pane-a'" },
+        { title: 'Trace', commandline: "Write-Host 'pane-b'" }
+      ]
+    })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'wt.exe',
+      [
+        '-d',
+        cwd,
+        '--title',
+        'Repro',
+        'powershell.exe',
+        '-NoExit',
+        '-Command',
+        "Write-Host 'pane-a'",
+        ';',
+        'split-pane',
+        '-d',
+        cwd,
+        '--title',
+        'Trace',
+        'powershell.exe',
+        '-NoExit',
+        '-Command',
+        "Write-Host 'pane-b'"
+      ],
+      expect.objectContaining({
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    )
+
+    spawnMock.mockRestore()
   })
 })

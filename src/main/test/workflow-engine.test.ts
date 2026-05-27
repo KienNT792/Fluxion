@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FlowContextDocument, WorkflowTraceEvent, WorkflowTraceEventSchema } from '@core'
 import {
   AbortReason,
@@ -536,6 +536,7 @@ describe('WorkflowEngine', () => {
       [createNode('node-a'), createNode('node-b')],
       [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }]
     )
+    workflow.modelAutoCompactTokenLimit = 256
 
     await engine.start(workflow, workspacePath, sender)
 
@@ -696,7 +697,13 @@ describe('WorkflowEngine', () => {
     )
     expect(memoryContextReady?.payload).toEqual({
       nodeId: 'node-b',
-      compiledContext: expect.any(String)
+      compiledContext: expect.any(String),
+      diagnostics: expect.objectContaining({
+        estimatedTotalTokens: expect.any(Number),
+        estimatedTotalBytes: expect.any(Number),
+        pressure: expect.any(String),
+        breakdown: expect.any(Array)
+      })
     })
   })
 
@@ -806,6 +813,76 @@ describe('WorkflowEngine', () => {
     expect(runStateAfter.status).toBe('completed')
   })
 
+  it('auto-compacts workflow memory when compiled context diagnostics suggest it', async () => {
+    await memoryManager.initWorkspace(workspacePath)
+    await writeFile(
+      join(workspacePath, '.fluxion', 'memory', 'global-context.md'),
+      `---\ntype: global\nversion: '1.0'\n---\n${'A'.repeat(70000)}\n`,
+      'utf8'
+    )
+
+    const adapter = new FakeAdapter({
+      'node-a': {
+        output: 'Node A output'
+      },
+      'node-b': {
+        output: 'Node B output'
+      }
+    })
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    const sender = new FakeSender()
+    const workflow = createWorkflow(
+      [createNode('node-a'), createNode('node-b')],
+      [{ id: 'edge-a-b', source: 'node-a', target: 'node-b' }]
+    )
+    workflow.modelAutoCompactTokenLimit = 256
+
+    await engine.start(workflow, workspacePath, sender)
+
+    const runState = await readSingleRunState(workspacePath)
+    const trace = await readTrace(workspacePath, runState.runId)
+    expect(
+      trace.find((event) => event.nodeId === 'node-b' && event.type === 'node.context_compacted')
+    ).toMatchObject({
+      data: {
+        sourceNodeIds: ['node-a'],
+        summaryPath: expect.stringContaining('.fluxion')
+      }
+    })
+    expect(
+      sender.events.find(
+        (event) =>
+          event.channel === IpcChannels.TERMINAL_DATA_BATCH &&
+          (event.payload as { nodeId?: string; rawType?: string }).nodeId === 'node-b' &&
+          (event.payload as { rawType?: string }).rawType === 'context-compaction'
+      )
+    ).toMatchObject({
+      payload: expect.objectContaining({
+        category: 'progress',
+        severity: 'info',
+        rawType: 'context-compaction'
+      })
+    })
+
+    const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-1', ['node-a'])
+    expect(report.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'long-term',
+          included: true,
+          summaryKind: 'summary',
+          runId: runState.runId,
+          sourceNodeIds: ['node-a']
+        })
+      ])
+    )
+  })
+
   it('records provider-aware state for OpenAI nodes in flow context', async () => {
     const adapter = new FakeAdapter({
       'node-a': {
@@ -846,6 +923,80 @@ describe('WorkflowEngine', () => {
       data: {
         providerStateKeys: ['openai']
       }
+    })
+  })
+
+  it('flags stale upstream attempts only when retry history actually exists', async () => {
+    const adapter = new FakeAdapter({
+      'node-a': { output: 'Node A output' },
+      'node-b': { output: 'Node B output' },
+      'node-c': { output: 'Node C output' }
+    })
+    const compileSpy = vi.spyOn(memoryManager, 'compileContextWithSources')
+    const attemptHistorySpy = vi.spyOn(memoryManager, 'getNodeAttemptHistory')
+    const engine = WorkflowEngine.createForTesting({
+      adapter,
+      memoryManager,
+      runStateStore: new RunStateStore(),
+      artifactGateService: new ArtifactGateService()
+    })
+    const sender = new FakeSender()
+    const workflow = createWorkflow(
+      [createNode('node-a'), createNode('node-b'), createNode('node-c')],
+      [
+        { id: 'edge-a-c', source: 'node-a', target: 'node-c' },
+        { id: 'edge-b-c', source: 'node-b', target: 'node-c' }
+      ]
+    )
+
+    await memoryManager.saveNodeOutput(workspacePath, workflow.id, {
+      runId: 'prior-run',
+      nodeId: 'node-a',
+      attempt: 1,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'Older output'
+    })
+    await memoryManager.saveNodeOutput(workspacePath, workflow.id, {
+      runId: 'prior-run',
+      nodeId: 'node-a',
+      attempt: 2,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:02.000Z',
+      completedAt: '2026-05-06T00:00:03.000Z',
+      content: 'Retry output'
+    })
+    await memoryManager.saveNodeOutput(workspacePath, workflow.id, {
+      runId: 'prior-run',
+      nodeId: 'node-b',
+      attempt: 1,
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:04.000Z',
+      completedAt: '2026-05-06T00:00:05.000Z',
+      content: 'Single attempt output'
+    })
+
+    await engine.start(workflow, workspacePath, sender)
+
+    expect(attemptHistorySpy).toHaveBeenCalledWith(workspacePath, workflow.id, 'node-a')
+    expect(attemptHistorySpy).toHaveBeenCalledWith(workspacePath, workflow.id, 'node-b')
+    expect(
+      compileSpy.mock.calls.find(
+        (call) =>
+          call[1] === workflow.id &&
+          Array.isArray(call[2]) &&
+          call[2].includes('node-a') &&
+          call[2].includes('node-b')
+      )?.[3]
+    ).toMatchObject({
+      staleAttemptNodeIds: ['node-a']
     })
   })
 

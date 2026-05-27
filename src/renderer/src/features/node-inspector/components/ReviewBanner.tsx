@@ -1,13 +1,17 @@
 import React from 'react'
+import { ExternalLink } from 'lucide-react'
 import type { NodeId } from '@shared'
 import {
   approveReviewNode,
+  compactWorkflowContextForNode,
   rejectReviewNode,
   rerunReviewNode
 } from '@renderer/lib/workflow-session'
 import { StatusChip } from '@renderer/components/ui/StatusChip'
 import { useExecutionStore, type ReviewActionKind } from '@renderer/stores/execution.store'
 import { buildAttemptLineageSummary } from '@renderer/features/runtime/lib/attempt-lineage'
+import { useWorkflowStore } from '@renderer/stores/workflow.store'
+import { buildNodeTerminalLaunchPayload } from '@renderer/features/runtime/lib/terminal-launch'
 
 interface ReviewBannerProps {
   nodeAttemptCount?: number
@@ -29,8 +33,16 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
   onUpstreamNodeIdChange
 }) => {
   const pendingReviewContext = useExecutionStore((state) => state.pendingReviewByNodeId[selectedNodeId])
+  const activeRunId = useExecutionStore((state) => state.activeRunId)
+  const outputPath = useExecutionStore((state) => state.nodeOutputPaths[selectedNodeId])
+  const contextDiagnostics = useExecutionStore(
+    (state) => state.compiledContextDiagnostics[selectedNodeId]
+  )
+  const workspacePath = useWorkflowStore((state) => state.workspacePath)
+  const nodes = useWorkflowStore((state) => state.nodes)
   const isReviewActionPending = Boolean(reviewActionInFlight)
   const attemptLineage = buildAttemptLineageSummary(nodeAttemptCount)
+  const nodeLabel = nodes.find((node) => node.id === selectedNodeId)?.data?.label as string | undefined
   const reviewActionLabel = {
     approve: reviewActionInFlight === 'approve' ? 'Approving...' : 'Approve',
     rerun: reviewActionInFlight === 'rerun' ? 'Rerunning...' : 'Rerun',
@@ -48,17 +60,59 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
       }}
     >
       <div className="flex items-center justify-between gap-2">
-        <StatusChip
-          tone="paused"
-          label={reviewActionInFlight === 'rerun' ? 'Rerunning' : 'Awaiting Review'}
-          animate={reviewActionInFlight === 'rerun'}
-        />
-        <span
-          className="text-[10px]"
-          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+        <div className="flex items-center gap-2">
+          <StatusChip
+            tone="paused"
+            label={reviewActionInFlight === 'rerun' ? 'Rerunning' : 'Awaiting Review'}
+            animate={reviewActionInFlight === 'rerun'}
+          />
+          <span
+            className="text-[10px]"
+            style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}
+          >
+            {attemptLineage.label}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] transition-colors"
+          style={{ color: 'var(--color-muted)' }}
+          title="Open Windows Terminal repro session"
+          onClick={() => {
+            if (!workspacePath) {
+              return
+            }
+
+            void window.api.openTerminal(
+              buildNodeTerminalLaunchPayload({
+                workspacePath,
+                runId: activeRunId,
+                nodeId: selectedNodeId,
+                nodeLabel,
+                outputPath,
+                mode: 'review',
+                issueHint:
+                  pendingReviewContext?.reviewPrompt ||
+                  'Node is paused and waiting for a review decision.',
+                focusHint:
+                  pendingReviewContext?.agentVerdict === 'NEEDS_REVISION'
+                    ? 'Compare output and trace before rejecting or rerunning.'
+                    : 'Inspect output and trace before approving downstream work.'
+              })
+            )
+          }}
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background = 'var(--color-surface-strong)'
+            event.currentTarget.style.color = 'var(--color-ink)'
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = 'transparent'
+            event.currentTarget.style.color = 'var(--color-muted)'
+          }}
         >
-          {attemptLineage.label}
-        </span>
+          <ExternalLink size={12} />
+          <span>Terminal</span>
+        </button>
       </div>
       {attemptLineage.previousAttempts > 0 ? (
         <div className="mt-1 text-[10px]" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>
@@ -119,6 +173,14 @@ export const ReviewBanner: React.FC<ReviewBannerProps> = ({
           tone="approve"
           onClick={() => void approveReviewNode(selectedNodeId)}
         />
+        <ReviewActionButton
+          disabled={isReviewActionPending || !contextDiagnostics?.compactSuggested}
+          label="Compact"
+          tone="rerun"
+          onClick={() => void compactWorkflowContextForNode(selectedNodeId)}
+        />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <ReviewActionButton
           disabled={isReviewActionPending}
           label={reviewActionLabel.rerun}

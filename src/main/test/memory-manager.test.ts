@@ -142,6 +142,26 @@ describe('MemoryManager', () => {
         })
       ])
     )
+    expect(await memoryManager.getNodeAttemptHistory(workspacePath, 'workflow-1', 'node-a')).toEqual(
+      [1, 2]
+    )
+  })
+
+  it('returns an empty attempt history when the node has no retry history', async () => {
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-5', {
+      runId: 'run-5',
+      nodeId: 'node-a',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'Single attempt'
+    })
+
+    expect(await memoryManager.getNodeAttemptHistory(workspacePath, 'workflow-5', 'node-a')).toEqual(
+      []
+    )
   })
 
   it('removes latest output evidence from the memory index while preserving attempt history', async () => {
@@ -265,6 +285,146 @@ describe('MemoryManager', () => {
         })
       ])
     )
+  })
+
+  it('surfaces compaction priority and memory eligibility reasons in diagnostics', async () => {
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-6', {
+      runId: 'run-6',
+      nodeId: 'node-a',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'x'.repeat(2000)
+    })
+
+    const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-6', ['node-a'], {
+      modelContextWindow: 300,
+      autoCompactTokenLimit: 200,
+      includesExternalContext: true,
+      memoriesDisableOnExternalContext: true,
+      staleAttemptNodeIds: ['node-a']
+    })
+
+    expect(report.diagnostics).toMatchObject({
+      compactSuggested: true,
+      compactPriority: 'high',
+      memoryGenerationEligible: false,
+      memoryEligibilityReason: expect.stringContaining('disables memory generation'),
+      compactReason: expect.any(String),
+      compactCandidateSourceIds: expect.arrayContaining(['short-term-memory'])
+    })
+  })
+
+  it('creates long-term summary artifacts that future context compilation can reuse', async () => {
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-4', {
+      runId: 'run-4',
+      nodeId: 'node-a',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:00.000Z',
+      completedAt: '2026-05-06T00:00:01.000Z',
+      content: 'Detailed output A'
+    })
+    await memoryManager.saveNodeOutput(workspacePath, 'workflow-4', {
+      runId: 'run-4',
+      nodeId: 'node-b',
+      runner: 'codex',
+      model: 'gpt-5.5',
+      status: 'completed',
+      startedAt: '2026-05-06T00:00:02.000Z',
+      completedAt: '2026-05-06T00:00:03.000Z',
+      content: 'Detailed output B'
+    })
+
+    const compacted = await memoryManager.compactWorkflowMemory({
+      workspacePath,
+      workflowId: 'workflow-4',
+      runId: 'run-4',
+      sourceNodeIds: ['node-a', 'node-b'],
+      summary: 'Condensed summary for reruns.',
+      createdAt: '2026-05-06T00:00:04.000Z'
+    })
+
+    expect(compacted.indexEntry).toMatchObject({
+      type: 'summary',
+      workflowId: 'workflow-4',
+      runId: 'run-4',
+      sourceNodeIds: ['node-a', 'node-b']
+    })
+
+    const report = await memoryManager.compileContextWithSources(workspacePath, 'workflow-4', ['node-a'])
+    expect(report.compiledContext).toContain('[LONG-TERM CONTEXT]')
+    expect(report.compiledContext).toContain('Condensed summary for reruns.')
+    expect(report.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'long-term',
+          included: true,
+          path: '.fluxion/memory/long-term/index.md',
+          summaryKind: 'index'
+        }),
+        expect.objectContaining({
+          type: 'long-term',
+          included: true,
+          path: '.fluxion/memory/long-term/workflow-4/run-4-summary.md',
+          summaryKind: 'summary',
+          runId: 'run-4',
+          sourceNodeIds: ['node-a', 'node-b']
+        })
+      ])
+    )
+  })
+
+  it('builds a suggested compact summary from diagnostics when the caller omits custom text', () => {
+    const summary = memoryManager.buildSuggestedCompactSummary({
+      runId: 'run-7',
+      sourceNodeIds: ['node-a', 'node-b'],
+      diagnostics: {
+        estimatedTotalTokens: 4096,
+        pressure: 'high',
+        compactPriority: 'high',
+        compactReason: 'Context pressure is high enough that compacting memory-heavy sections would likely improve rerun efficiency.',
+        memoryEligibilityReason:
+          'External context is present and the active Codex config disables memory generation for such threads.',
+        compactCandidateSourceIds: ['short-term-memory', 'long-term-memory'],
+        staleAttemptNodeIds: ['node-b'],
+        includesExternalContext: true,
+        memoriesDisableOnExternalContext: true
+      }
+    })
+
+    expect(summary).toContain('## Why this summary exists')
+    expect(summary).toContain('Estimated tokens: 4096')
+    expect(summary).toContain('Memory-heavy sections: short-term-memory, long-term-memory')
+    expect(summary).toContain('Stale retry risk from: node-b')
+    expect(summary).toContain('Memory on external context: disabled')
+    expect(summary).toContain('Reuse this summary before re-injecting all raw upstream outputs')
+  })
+
+  it('reuses an existing workflow summary for the same run and source node set', async () => {
+    const first = await memoryManager.compactWorkflowMemory({
+      workspacePath,
+      workflowId: 'workflow-4',
+      runId: 'run-4',
+      sourceNodeIds: ['node-a', 'node-b'],
+      summary: 'Condensed summary for reruns.',
+      createdAt: '2026-05-06T00:00:04.000Z'
+    })
+
+    const second = await memoryManager.compactWorkflowMemory({
+      workspacePath,
+      workflowId: 'workflow-4',
+      runId: 'run-4',
+      sourceNodeIds: ['node-b', 'node-a'],
+      summary: 'A newer summary should not overwrite the existing one.',
+      createdAt: '2026-05-06T00:00:05.000Z'
+    })
+
+    expect(second.summaryPath).toBe(first.summaryPath)
+    expect(second.indexEntry.id).toBe(first.indexEntry.id)
   })
 
   it('excludes global context when frontmatter is invalid', async () => {

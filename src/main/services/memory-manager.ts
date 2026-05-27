@@ -15,8 +15,10 @@ import {
   MemoryIndex,
   MemoryIndexEntry,
   MemoryContextSource,
+  SummaryMemoryIndexEntry,
   SaveNodeOutputParams
 } from '../../shared/memory.types'
+import { CompiledContextDiagnostics, CompiledContextSourceBreakdown } from '../../shared/workflow.types'
 
 export class MemoryManager {
   private static instance: MemoryManager
@@ -63,6 +65,185 @@ export class MemoryManager {
     }
   }
 
+  private estimateTokens(content: string): number {
+    if (!content) {
+      return 0
+    }
+
+    return Math.max(1, Math.ceil(Buffer.byteLength(content, 'utf8') / 4))
+  }
+
+  private buildDiagnostics(
+    compiledContext: string,
+    sources: MemoryContextSource[],
+    options: {
+      model?: string
+      modelContextWindow?: number
+      autoCompactTokenLimit?: number
+      previousNodeIds?: NodeId[]
+      staleAttemptNodeIds?: NodeId[]
+      includesExternalContext?: boolean
+      memoriesDisableOnExternalContext?: boolean
+      contextHash?: string
+    } = {}
+  ): CompiledContextDiagnostics {
+    const aggregated = new Map<CompiledContextSourceBreakdown['id'], CompiledContextSourceBreakdown>()
+
+    const ensureBucket = (
+      id: CompiledContextSourceBreakdown['id'],
+      label: string
+    ): CompiledContextSourceBreakdown => {
+      const existing = aggregated.get(id)
+      if (existing) {
+        return existing
+      }
+
+      const created: CompiledContextSourceBreakdown = {
+        id,
+        label,
+        bytes: 0,
+        estimatedTokens: 0
+      }
+      aggregated.set(id, created)
+      return created
+    }
+
+    for (const source of sources) {
+      if (!source.included) {
+        continue
+      }
+
+      const bytes = source.bytes ?? 0
+      const estimatedTokens = Math.max(1, Math.ceil(bytes / 4))
+      if (source.type === 'global') {
+        const bucket = ensureBucket('global-context', 'Global context')
+        bucket.bytes += bytes
+        bucket.estimatedTokens += estimatedTokens
+        continue
+      }
+
+      if (source.type === 'short-term') {
+        const bucket = ensureBucket('short-term-memory', 'Short-term memory')
+        bucket.bytes += bytes
+        bucket.estimatedTokens += estimatedTokens
+        continue
+      }
+
+      if (source.type === 'long-term') {
+        const bucket = ensureBucket('long-term-memory', 'Long-term memory')
+        bucket.bytes += bytes
+        bucket.estimatedTokens += estimatedTokens
+        continue
+      }
+
+      const bucket = ensureBucket('other', 'Other')
+      bucket.bytes += bytes
+      bucket.estimatedTokens += estimatedTokens
+    }
+
+    const totalBytes = Buffer.byteLength(compiledContext, 'utf8')
+    const totalTokens = this.estimateTokens(compiledContext)
+
+    const pressure =
+      typeof options.modelContextWindow === 'number' && options.modelContextWindow > 0
+        ? totalTokens >= options.modelContextWindow
+          ? 'over-limit'
+          : totalTokens >= Math.floor(options.modelContextWindow * 0.8)
+            ? 'high'
+            : totalTokens >= Math.floor(options.modelContextWindow * 0.5)
+              ? 'medium'
+              : 'low'
+        : totalTokens > 32000
+          ? 'high'
+          : totalTokens > 12000
+            ? 'medium'
+            : 'low'
+
+    const warnings: string[] = []
+    const staleAttemptNodeIds = [...new Set(options.staleAttemptNodeIds ?? [])]
+    const compactCandidateSourceIds = [...aggregated.values()]
+      .filter((bucket) => bucket.id === 'short-term-memory' || bucket.id === 'long-term-memory')
+      .sort((a, b) => b.estimatedTokens - a.estimatedTokens)
+      .map((bucket) => bucket.id)
+    let compactSuggested = false
+    let compactReason: string | undefined
+    let compactPriority: CompiledContextDiagnostics['compactPriority'] = 'none'
+    if (typeof options.autoCompactTokenLimit === 'number' && totalTokens >= options.autoCompactTokenLimit) {
+      warnings.push('Compiled context is above the configured auto-compaction threshold.')
+      compactSuggested = compactCandidateSourceIds.length > 0
+      compactPriority = compactCandidateSourceIds.length > 0 ? 'high' : 'medium'
+      compactReason =
+        compactCandidateSourceIds.length > 0
+          ? 'Short-term or long-term memory is large enough that a semantic compaction pass should be considered before reruns.'
+          : 'Context is above the configured auto-compaction threshold.'
+    }
+    if (pressure === 'high' || pressure === 'over-limit') {
+      warnings.push('Compiled context is large enough that model pressure should be reviewed before reruns.')
+      if (!compactSuggested) {
+        compactSuggested = compactCandidateSourceIds.length > 0
+        compactPriority = compactCandidateSourceIds.length > 0 ? 'high' : 'medium'
+        compactReason =
+          compactCandidateSourceIds.length > 0
+            ? 'Context pressure is high enough that compacting memory-heavy sections would likely improve rerun efficiency.'
+            : 'Context pressure is high enough that rerun inputs should be reduced.'
+      } else if (compactPriority !== 'high') {
+        compactPriority = 'high'
+      }
+    }
+    if (staleAttemptNodeIds.length > 0) {
+      warnings.push(
+        `Context still includes upstream outputs from retried nodes: ${staleAttemptNodeIds.join(', ')}. Review whether downstream evidence is stale before reruns.`
+      )
+      if (!compactSuggested) {
+        compactSuggested = true
+        compactPriority = 'medium'
+        compactReason =
+          'Upstream retries are still represented in the compiled context. Compacting to a semantic summary can reduce stale carry-over risk before reruns.'
+      } else if (compactPriority === 'none') {
+        compactPriority = 'medium'
+      }
+    }
+    if (options.includesExternalContext && options.memoriesDisableOnExternalContext) {
+      warnings.push(
+        'This context includes external inputs and the active Codex config disables memory generation for such threads.'
+      )
+    }
+
+    const memoryGenerationEligible =
+      options.includesExternalContext && options.memoriesDisableOnExternalContext ? false : true
+    const memoryEligibilityReason = memoryGenerationEligible
+      ? options.includesExternalContext
+        ? 'External context is present, but the active Codex config still allows memory generation.'
+        : 'No external context was detected, so this thread remains eligible for memory generation.'
+      : 'External context is present and the active Codex config disables memory generation for such threads.'
+
+    return {
+      model: options.model,
+      modelContextWindow: options.modelContextWindow,
+      autoCompactTokenLimit: options.autoCompactTokenLimit,
+      estimatedTotalBytes: totalBytes,
+      estimatedTotalTokens: totalTokens,
+      pressure,
+      breakdown: [...aggregated.values()],
+      contextHash: options.contextHash,
+      previousNodeIds: options.previousNodeIds,
+      staleSourceNodeIds: staleAttemptNodeIds,
+      staleAttemptNodeIds,
+      includesExternalContext: options.includesExternalContext,
+      memoriesDisableOnExternalContext: options.memoriesDisableOnExternalContext,
+      memoryGenerationEligible,
+      memoryEligibilityReason,
+      compactPriority,
+      compactSuggested,
+      compactReason,
+      compactCandidateSourceIds:
+        compactSuggested && compactCandidateSourceIds.length > 0
+          ? compactCandidateSourceIds
+          : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined
+    }
+  }
+
   /**
    * Injects the context for a specific node execution.
    * Compiles Global Context + Short-term Context + Long-term Context.
@@ -79,7 +260,15 @@ export class MemoryManager {
   public async compileContextWithSources(
     workspacePath: string,
     workflowId: string,
-    previousNodeIds: NodeId[]
+    previousNodeIds: NodeId[],
+    options: {
+      model?: string
+      modelContextWindow?: number
+      autoCompactTokenLimit?: number
+      staleAttemptNodeIds?: NodeId[]
+      includesExternalContext?: boolean
+      memoriesDisableOnExternalContext?: boolean
+    } = {}
   ): Promise<CompiledMemoryContext> {
     const memoryDir = path.join(workspacePath, '.fluxion', 'memory')
     let context = ''
@@ -167,10 +356,42 @@ export class MemoryManager {
     const longTermPath = path.join(memoryDir, 'long-term', 'index.md')
     try {
       const longTermIndex = await fs.readFile(longTermPath, 'utf-8')
-      context += `[LONG-TERM CONTEXT]\n${longTermIndex}\n\n`
-      sources.push(
-        this.createIncludedSource(workspacePath, 'long-term', longTermPath, longTermIndex)
+      context += `[LONG-TERM CONTEXT]\n${longTermIndex}\n`
+      sources.push({
+        ...this.createIncludedSource(workspacePath, 'long-term', longTermPath, longTermIndex),
+        summaryKind: 'index'
+      })
+
+      const memoryIndex = await this.readMemoryIndex(workspacePath)
+      const longTermSummaries = memoryIndex.entries.filter(
+        (entry): entry is SummaryMemoryIndexEntry =>
+          entry.type === 'summary' && entry.workflowId === workflowId
       )
+
+      for (const summaryEntry of longTermSummaries) {
+        const summaryPath = path.join(workspacePath, summaryEntry.sourcePath)
+        try {
+          const summaryContent = await fs.readFile(summaryPath, 'utf-8')
+          context += `\n--- Summary from Run ${summaryEntry.runId} (${summaryEntry.sourceNodeIds.join(', ')}) ---\n`
+          context += `${summaryContent}\n`
+          sources.push({
+            ...this.createIncludedSource(workspacePath, 'long-term', summaryPath, summaryContent),
+            runId: summaryEntry.runId,
+            sourceNodeIds: [...summaryEntry.sourceNodeIds],
+            summaryKind: 'summary'
+          })
+        } catch (error) {
+          console.warn(`Could not read long-term summary ${summaryEntry.sourcePath}`, error)
+          sources.push({
+            type: 'long-term',
+            path: summaryEntry.sourcePath,
+            included: false,
+            warning: `Could not read long-term summary ${summaryEntry.sourcePath}.`
+          })
+        }
+      }
+
+      context += '\n'
     } catch {
       // It's ok if long-term index doesn't exist yet
       sources.push({
@@ -181,12 +402,22 @@ export class MemoryManager {
       })
     }
 
+    const contextHash = this.hashContent(context)
+
     return {
       compiledContext: context,
       sources,
-      contextHash: this.hashContent(context),
+      contextHash,
       contextBytes: Buffer.byteLength(context, 'utf8'),
-      contextChars: context.length
+      contextChars: context.length,
+      previousNodeIds: [...previousNodeIds],
+      diagnostics: this.buildDiagnostics(context, sources, options)
+        ? this.buildDiagnostics(context, sources, {
+            ...options,
+            previousNodeIds,
+            contextHash
+          })
+        : undefined
     }
   }
 
@@ -246,6 +477,140 @@ export class MemoryManager {
     return outputPath
   }
 
+  public async compactWorkflowMemory(params: {
+    workspacePath: string
+    workflowId: string
+    runId: string
+    sourceNodeIds: NodeId[]
+    summary: string
+    createdAt: string
+  }): Promise<{ summaryPath: string; indexEntry: SummaryMemoryIndexEntry }> {
+    const existingIndex = await this.readMemoryIndex(params.workspacePath)
+    const normalizedSourceNodeIds = [...params.sourceNodeIds].sort()
+    const existingEntry = existingIndex.entries.find(
+      (entry): entry is SummaryMemoryIndexEntry =>
+        entry.type === 'summary' &&
+        entry.workflowId === params.workflowId &&
+        entry.runId === params.runId &&
+        [...entry.sourceNodeIds].sort().join('|') === normalizedSourceNodeIds.join('|')
+    )
+
+    if (existingEntry) {
+      return {
+        summaryPath: path.join(params.workspacePath, existingEntry.sourcePath),
+        indexEntry: existingEntry
+      }
+    }
+
+    const longTermDir = path.join(params.workspacePath, '.fluxion', 'memory', 'long-term', params.workflowId)
+    await fs.mkdir(longTermDir, { recursive: true })
+
+    const summaryFilename = `${params.runId}-summary.md`
+    const summaryPath = path.join(longTermDir, summaryFilename)
+    const summaryBody = [
+      '# Workflow Memory Summary',
+      '',
+      `Run: ${params.runId}`,
+      `Nodes: ${params.sourceNodeIds.join(', ')}`,
+      '',
+      params.summary.trim()
+    ].join('\n')
+    await fs.writeFile(summaryPath, `${summaryBody}\n`, 'utf-8')
+
+    const longTermIndexPath = path.join(params.workspacePath, '.fluxion', 'memory', 'long-term', 'index.md')
+    const longTermIndexContent = [
+      `- ${params.createdAt} | workflow ${params.workflowId} | run ${params.runId} | nodes ${params.sourceNodeIds.join(', ')} | ${this.toWorkspaceRelative(params.workspacePath, summaryPath)}`
+    ]
+    let existingLongTermIndex = ''
+    try {
+      existingLongTermIndex = await fs.readFile(longTermIndexPath, 'utf-8')
+    } catch {
+      existingLongTermIndex = ''
+    }
+    const mergedLongTermIndex = [longTermIndexContent[0], existingLongTermIndex.trim()].filter(Boolean).join('\n')
+    await fs.mkdir(path.dirname(longTermIndexPath), { recursive: true })
+    await fs.writeFile(longTermIndexPath, `${mergedLongTermIndex}\n`, 'utf-8')
+
+    const replacedPaths = params.sourceNodeIds.map((nodeId) =>
+      this.toWorkspaceRelative(
+        params.workspacePath,
+        this.getNodeOutputPath(params.workspacePath, params.workflowId, nodeId)
+      )
+    )
+    const indexEntry: SummaryMemoryIndexEntry = {
+      id: ['summary', params.workflowId, params.runId, params.createdAt].join(':'),
+      type: 'summary',
+      workflowId: params.workflowId,
+      runId: params.runId,
+      sourcePath: this.toWorkspaceRelative(params.workspacePath, summaryPath),
+      createdAt: params.createdAt,
+      sourceNodeIds: [...params.sourceNodeIds],
+      replacedPaths
+    }
+
+    existingIndex.entries.push(indexEntry as MemoryIndexEntry)
+    await this.writeMemoryIndex(params.workspacePath, existingIndex)
+
+    return { summaryPath, indexEntry }
+  }
+
+  public buildSuggestedCompactSummary(params: {
+    runId: string
+    sourceNodeIds: NodeId[]
+    diagnostics?: Pick<
+      CompiledContextDiagnostics,
+      | 'estimatedTotalTokens'
+      | 'pressure'
+      | 'compactPriority'
+      | 'compactReason'
+      | 'memoryEligibilityReason'
+      | 'compactCandidateSourceIds'
+      | 'previousNodeIds'
+      | 'staleAttemptNodeIds'
+      | 'includesExternalContext'
+      | 'memoriesDisableOnExternalContext'
+    >
+  }): string {
+    const lines = [
+      '## Why this summary exists',
+      params.diagnostics?.compactReason ??
+        'Compiled context was flagged as a compaction candidate before reruns.',
+      '',
+      '## Covered nodes',
+      params.sourceNodeIds.map((nodeId) => `- ${nodeId}`).join('\n'),
+      '',
+      '## Context signals',
+      typeof params.diagnostics?.estimatedTotalTokens === 'number'
+        ? `- Estimated tokens: ${params.diagnostics.estimatedTotalTokens}`
+        : null,
+      params.diagnostics?.pressure ? `- Pressure: ${params.diagnostics.pressure}` : null,
+      params.diagnostics?.compactPriority
+        ? `- Compact priority: ${params.diagnostics.compactPriority}`
+        : null,
+      params.diagnostics?.compactCandidateSourceIds?.length
+        ? `- Memory-heavy sections: ${params.diagnostics.compactCandidateSourceIds.join(', ')}`
+        : null,
+      params.diagnostics?.staleAttemptNodeIds?.length
+        ? `- Stale retry risk from: ${params.diagnostics.staleAttemptNodeIds.join(', ')}`
+        : null,
+      typeof params.diagnostics?.includesExternalContext === 'boolean'
+        ? `- External context: ${params.diagnostics.includesExternalContext ? 'present' : 'not detected'}`
+        : null,
+      typeof params.diagnostics?.memoriesDisableOnExternalContext === 'boolean'
+        ? `- Memory on external context: ${params.diagnostics.memoriesDisableOnExternalContext ? 'disabled' : 'allowed'}`
+        : null,
+      params.diagnostics?.memoryEligibilityReason
+        ? `- Memory policy: ${params.diagnostics.memoryEligibilityReason}`
+        : null,
+      '',
+      '## Reuse guidance',
+      'Reuse this summary before re-injecting all raw upstream outputs during reruns or review retries.',
+      'Preserve artifact references and only pull full node outputs back in when the summary is insufficient.'
+    ].filter(Boolean)
+
+    return lines.join('\n')
+  }
+
   public getNodeOutputPath(workspacePath: string, workflowId: string, nodeId: NodeId): string {
     return path.join(this.getWorkflowShortTermDir(workspacePath, workflowId), `${nodeId}.md`)
   }
@@ -264,6 +629,27 @@ export class MemoryManager {
       nodeId,
       `attempt-${attempt}.md`
     )
+  }
+
+  public async getNodeAttemptHistory(
+    workspacePath: string,
+    workflowId: string,
+    nodeId: NodeId
+  ): Promise<number[]> {
+    const index = await this.readMemoryIndex(workspacePath)
+
+    return [...new Set(
+      index.entries
+        .filter(
+          (entry): entry is Extract<MemoryIndexEntry, { type: 'raw_output' }> =>
+            entry.type === 'raw_output' &&
+            entry.workflowId === workflowId &&
+            entry.nodeId === nodeId &&
+            typeof entry.attempt === 'number' &&
+            entry.attempt > 0
+        )
+        .map((entry) => entry.attempt as number)
+    )].sort((a, b) => a - b)
   }
 
   public async deleteNodeOutput(

@@ -87,8 +87,67 @@ describe('getAggregateReadinessState', () => {
       'save',
       'context',
       'codex',
+      'policy',
+      'mcp',
       'activity',
       'permissions'
     ])
+  })
+
+  it('summarizes config issues in the policy row', () => {
+    const state = getAggregateReadinessState({
+      ...baseOptions,
+      codexReadiness: {
+        ...baseOptions.codexReadiness,
+        label: 'Config warning',
+        actionItems: [
+          {
+            id: 'ignored-project-overrides',
+            kind: 'config',
+            severity: 'warning',
+            title: 'Project config is not fully active',
+            detail: 'Workspace trust is still gating project config.'
+          }
+        ]
+      }
+    })
+
+    const policyRow = state.rows.find((row) => row.id === 'policy')
+    expect(policyRow).toMatchObject({
+      tone: 'warning',
+      value: '1 config issue',
+      detail: 'Project config is not fully active'
+    })
+    expect(state.label).toBe('Config warning')
+  })
+
+  it('elevates blocked MCP issues into the aggregate label and MCP row', () => {
+    const state = getAggregateReadinessState({
+      ...baseOptions,
+      codexReadiness: {
+        ...baseOptions.codexReadiness,
+        label: 'MCP warning',
+        summary: '1 required MCP server is not ready.',
+        actionItems: [
+          {
+            id: 'mcp-blocked-repo',
+            kind: 'mcp',
+            severity: 'blocked',
+            title: 'repo is blocking expected MCP capability',
+            detail: 'Probe failed with exit code 1'
+          }
+        ]
+      }
+    })
+
+    const mcpRow = state.rows.find((row) => row.id === 'mcp')
+    expect(mcpRow).toMatchObject({
+      tone: 'error',
+      value: '1 MCP blocker',
+      detail: 'repo is blocking expected MCP capability'
+    })
+    expect(state.label).toBe('MCP blocked')
+    expect(state.tone).toBe('error')
+    expect(state.detail).toBe('Probe failed with exit code 1')
   })
 })

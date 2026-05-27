@@ -1,4 +1,10 @@
-import { ModelId, NodeId, ProviderType, RunnerId } from './workflow.types'
+import {
+  CompiledContextDiagnostics,
+  ModelId,
+  NodeId,
+  ProviderType,
+  RunnerId
+} from './workflow.types'
 
 // ─── Memory Tier ──────────────────────────────────────────────────────────────
 
@@ -111,7 +117,18 @@ export interface RawOutputMemoryIndexEntry {
   attempt?: number
 }
 
-export type MemoryIndexEntry = RawOutputMemoryIndexEntry
+export interface SummaryMemoryIndexEntry {
+  id: string
+  type: 'summary'
+  workflowId: string
+  runId: string
+  sourcePath: string
+  createdAt: string
+  sourceNodeIds: NodeId[]
+  replacedPaths?: string[]
+}
+
+export type MemoryIndexEntry = RawOutputMemoryIndexEntry | SummaryMemoryIndexEntry
 
 export interface MemoryIndex {
   schemaVersion: 1
@@ -126,6 +143,8 @@ export interface MemoryContextSource {
   included: boolean
   nodeId?: NodeId
   runId?: string
+  sourceNodeIds?: NodeId[]
+  summaryKind?: 'index' | 'summary'
   bytes?: number
   hash?: string
   warning?: string
@@ -137,4 +156,6 @@ export interface CompiledMemoryContext {
   contextHash: string
   contextBytes: number
   contextChars: number
+  previousNodeIds?: NodeId[]
+  diagnostics?: CompiledContextDiagnostics
 }

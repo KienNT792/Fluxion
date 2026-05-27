@@ -60,22 +60,22 @@ Nhung khoi can uu tien tiep theo:
 
 | ID | Status | Item | Why it matters |
 | --- | --- | --- | --- |
-| FX-CX-001 | NEW | Effective Codex config diagnostics view | Giam runtime confusion do config layer, trust, profile, sandbox, approval, MCP |
-| FX-CX-002 | NEW | Rich approval policy mapping | Fluxion dang model approval qua don gian so voi Codex config hien tai |
-| FX-CX-003 | NEW | Split run model va review model | Codex config co `review_model`; UX/runtime nen phan tach ro |
-| FX-CX-004 | NEW | MCP readiness and topology surface | MCP la first-class capability trong Codex hien tai, Fluxion chua surface dung muc |
-| FX-CX-005 | NEW | Context budget inspector | Fluxion da compile context nhung chua cho operator thay budget/pressure |
-| FX-DOC-001 | NEW | Repo document cleanup and source-of-truth pass | Tai lieu hien co da drift, gay nham cho implementation va planning |
+| FX-CX-001 | IN PROGRESS | Effective Codex config diagnostics view | Da co layer trace explainability o readiness/settings surfaces; con lai la mo rong den cac authoring/runtime surfaces khac |
+| FX-CX-002 | DONE | Rich approval policy mapping | Granular approval + reviewer mode da di end-to-end qua schema, UI, runner, guardrail |
+| FX-CX-003 | IN PROGRESS | Split run model va review model | Da co workflow-level fallback, runner wiring, va effective-value explainability trong workflow settings, node inspector, va runtime inspector; con lai la polish them cac surfaces authoring/runtime khac |
+| FX-CX-004 | IN PROGRESS | MCP readiness and topology surface | Da co topology + live probe + readiness taxonomy + policy posture; node tool UX da biet dependency ready/warning/blocked theo server policy, con lai la workflow-level dependency UX va exhaustiveness trong renderer |
+| FX-CX-005 | DONE | Context budget inspector | Da co diagnostics, breakdown, pressure, threshold hints trong runtime va inspector |
+| FX-DOC-001 | IN PROGRESS | Repo document cleanup and source-of-truth pass | Backlog da duoc chuan hoa, nhung cleanup/doc drift toan repo chua xong |
 
 ### P2 - Sau khi P1 on
 
 | ID | Status | Item | Why it matters |
 | --- | --- | --- | --- |
-| FX-CX-006 | NEW | Workflow policy view | Hien thi trust/sandbox/approval/network/MCP posture cua workflow |
-| FX-CX-007 | NEW | MCP tool scoping in node UX | Node nao duoc phep dung tool/server nao phai thay duoc truoc khi run |
-| FX-CX-008 | NEW | Context compaction policy UX | Dung flow-context da co de giam prompt bloat va stale carry-over |
-| FX-WIN-001 | NEW | Windows Terminal integration pass | Tang cam giac Windows-native workstation cho runtime va debug |
-| FX-CX-009 | NEW | Service tier / verbosity / reasoning controls | Codex/OpenAI capability hien tai da vuot qua model picker co ban |
+| FX-CX-006 | IN PROGRESS | Workflow policy view | Da co summary band + policy drilldown co ich hon, con lai la polish severity va tiep tuc lam ro dangerous combinations |
+| FX-CX-007 | IN PROGRESS | MCP tool scoping in node UX | Da co node-specific allowlist/denylist inline config, dependency state ready/warning/blocked theo MCP server, con lai la validation va preview fidelity |
+| FX-CX-008 | IN PROGRESS | Context compaction policy UX | Da co policy UX, threshold plumbing, stale carry-over warning, compact priority, semantic summary primitive, long-term summary reuse, va manual compaction action tu inspector/retry/review flows; con lai la tu dong hoa workflow compaction |
+| FX-WIN-001 | IN PROGRESS | Windows Terminal integration pass | Da mo duoc terminal ngoai, session repro theo node/run, deep-link tu failure/review surfaces, va split-pane debug layout; con lai la polish launch presets va richer issue-driven shortcuts |
+| FX-CX-009 | IN PROGRESS | Service tier / verbosity / reasoning controls | Da co node-level va workflow-level fallback; con lai la explain effective value va consistency UX |
 
 ### P3 - Dau tu kien truc lon hon
 
@@ -92,7 +92,7 @@ Nhung khoi can uu tien tiep theo:
 #### FX-CX-001 Effective Codex config diagnostics view
 
 Priority: `P1`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -131,7 +131,7 @@ Implementation anchors:
 #### FX-CX-002 Rich approval policy mapping
 
 Priority: `P1`
-Status: `NEW`
+Status: `DONE`
 
 Outcome:
 
@@ -167,7 +167,7 @@ Implementation anchors:
 #### FX-CX-003 Split run model va review model
 
 Priority: `P1`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -178,6 +178,7 @@ Scope:
 - Workflow-level hoac settings-level `review_model`
 - UI readiness cho model review rieng
 - Explain/review/review gate use-case dung review model khi phu hop
+- Hien thi effective fallback cho review model, service tier, verbosity, reasoning summary, va reasoning visibility tren node/runtime surfaces
 
 Acceptance:
 
@@ -193,7 +194,7 @@ Implementation anchors:
 #### FX-CX-004 MCP readiness and topology surface
 
 Priority: `P1`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -205,6 +206,7 @@ Scope:
 - Hien thi server list, enabled state, timeouts, tool allow/deny
 - Ready/not ready state cho MCP servers
 - Workflow-level warning neu node phu thuoc config/tool chua available
+- Node-level tool scope warning khi server ready nhung bi constraint boi tool policy, disabled, hoac not-ready
 
 Acceptance:
 
@@ -220,7 +222,7 @@ Implementation anchors:
 #### FX-CX-005 Context budget inspector
 
 Priority: `P1`
-Status: `NEW`
+Status: `DONE`
 
 Outcome:
 
@@ -253,7 +255,7 @@ Implementation anchors:
 #### FX-CX-006 Workflow policy view
 
 Priority: `P2`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -272,7 +274,7 @@ Scope:
 #### FX-CX-007 MCP tool scoping in node UX
 
 Priority: `P2`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -285,11 +287,12 @@ Scope:
   - MCP
   - app/connector
 - Preview allow/deny state theo server/tool
+- Preview dependency state cua node voi MCP server ma no override
 
 #### FX-CX-008 Context compaction policy UX
 
 Priority: `P2`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -300,13 +303,14 @@ Scope:
 - Chon compact mode cho workflow/profile
 - Giu semantic summary + artifact refs + selected evidence
 - Warning khi subtree rerun dang carry stale payload risk
+- Tao duoc long-term summary truc tiep tu compaction warnings trong inspector va retry/review-adjacent actions
 
 ### Track C - Windows-first runtime polish
 
 #### FX-WIN-001 Windows Terminal integration pass
 
 Priority: `P2`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -317,6 +321,17 @@ Scope:
 - Open selected node/run in external Windows Terminal
 - Optional pane layout launch cho debug session
 - Deep-link tu runtime issue sang shell session reproducible
+
+Current state:
+
+- Da co IPC `shell:open-terminal` va Windows Terminal launch trong main process
+- Runtime log/output surfaces co the mo session ngoai theo workspace
+- Session moi hien thong tin workspace/run/node/output va goi y command de reproduce/inspect
+
+Remaining gap:
+
+- pane layout hoac split-session cho cac debug flow phuc tap hon
+- deep-link sau fail/review tu issue card/banner thay vi chi tu terminal/output actions
 
 Implementation anchors:
 
@@ -329,7 +344,7 @@ Implementation anchors:
 #### FX-CX-009 Service tier / verbosity / reasoning controls
 
 Priority: `P2`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 
@@ -385,7 +400,7 @@ Outcome:
 ### FX-DOC-001 Repo document cleanup and source-of-truth pass
 
 Priority: `P1`
-Status: `NEW`
+Status: `IN PROGRESS`
 
 Outcome:
 

@@ -8,6 +8,7 @@ import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { Button } from '@renderer/components/ui/Button'
 import { CodexCliSettingsSection } from './components/CodexCliSettingsSection'
 import { OpenAiApiKeySection } from './components/OpenAiApiKeySection'
+import { WorkflowPolicySection } from './components/WorkflowPolicySection'
 import { CommandRow, getCodexCopy, getStatusCopy } from './lib/settings-copy'
 
 interface GlobalSettingsDialogProps {
@@ -23,6 +24,32 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({ isOp
   const isProviderCapabilitiesLoading = useWorkflowStore(
     (state) => state.isProviderCapabilitiesLoading
   )
+  const reviewModel = useWorkflowStore((state) => state.reviewModel)
+  const serviceTier = useWorkflowStore((state) => state.serviceTier)
+  const modelVerbosity = useWorkflowStore((state) => state.modelVerbosity)
+  const modelReasoningSummary = useWorkflowStore((state) => state.modelReasoningSummary)
+  const hideAgentReasoning = useWorkflowStore((state) => state.hideAgentReasoning)
+  const showRawAgentReasoning = useWorkflowStore((state) => state.showRawAgentReasoning)
+  const modelAutoCompactTokenLimit = useWorkflowStore((state) => state.modelAutoCompactTokenLimit)
+  const modelContextWindow = useWorkflowStore((state) => state.modelContextWindow)
+  const setWorkflowReviewModel = useWorkflowStore((state) => state.setWorkflowReviewModel)
+  const setWorkflowServiceTier = useWorkflowStore((state) => state.setWorkflowServiceTier)
+  const setWorkflowModelVerbosity = useWorkflowStore((state) => state.setWorkflowModelVerbosity)
+  const setWorkflowModelReasoningSummary = useWorkflowStore(
+    (state) => state.setWorkflowModelReasoningSummary
+  )
+  const setWorkflowHideAgentReasoning = useWorkflowStore(
+    (state) => state.setWorkflowHideAgentReasoning
+  )
+  const setWorkflowShowRawAgentReasoning = useWorkflowStore(
+    (state) => state.setWorkflowShowRawAgentReasoning
+  )
+  const setWorkflowModelAutoCompactTokenLimit = useWorkflowStore(
+    (state) => state.setWorkflowModelAutoCompactTokenLimit
+  )
+  const setWorkflowModelContextWindow = useWorkflowStore(
+    (state) => state.setWorkflowModelContextWindow
+  )
 
   const [summary, setSummary] = useState<ProviderSettingsSummaryPayload | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState('')
@@ -36,6 +63,12 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({ isOp
   const statusCopy = getStatusCopy(summary)
   const codexReadiness = getCodexReadinessBadgeState(providerCapabilities, [])
   const codexCopy = getCodexCopy(codexReadiness.tone, codexReadiness.detail)
+  const modelOptions = (providerCapabilities.codex?.models ?? [])
+    .filter((model) => model.visibility !== 'hide')
+    .map((model) => ({
+      id: model.id,
+      label: model.displayName
+    }))
   const canClearStoredKey = summary?.openaiApiKeySource === 'stored'
   const apiKeyActionLabel = summary?.openaiApiKeyConfigured ? 'Replace Key' : 'Add API Key'
 
@@ -264,6 +297,26 @@ export const GlobalSettingsDialog: React.FC<GlobalSettingsDialogProps> = ({ isOp
             setShowCodexCommands={setShowCodexCommands}
             onCopyCommand={(command) => void handleCopyCommand(command)}
             onRefreshCodex={() => void handleRefreshCodex()}
+          />
+
+          <WorkflowPolicySection
+            reviewModel={reviewModel}
+            serviceTier={serviceTier}
+            modelVerbosity={modelVerbosity}
+            modelReasoningSummary={modelReasoningSummary}
+            hideAgentReasoning={hideAgentReasoning}
+            showRawAgentReasoning={showRawAgentReasoning}
+            modelAutoCompactTokenLimit={modelAutoCompactTokenLimit}
+            modelContextWindow={modelContextWindow}
+            modelOptions={modelOptions}
+            onReviewModelChange={setWorkflowReviewModel}
+            onServiceTierChange={setWorkflowServiceTier}
+            onModelVerbosityChange={setWorkflowModelVerbosity}
+            onModelReasoningSummaryChange={setWorkflowModelReasoningSummary}
+            onHideAgentReasoningChange={setWorkflowHideAgentReasoning}
+            onShowRawAgentReasoningChange={setWorkflowShowRawAgentReasoning}
+            onModelAutoCompactTokenLimitChange={setWorkflowModelAutoCompactTokenLimit}
+            onModelContextWindowChange={setWorkflowModelContextWindow}
           />
 
           <OpenAiApiKeySection

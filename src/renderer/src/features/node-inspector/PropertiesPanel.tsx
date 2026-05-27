@@ -5,6 +5,7 @@ import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { AdvancedSection } from './components/AdvancedSection'
 import { CodexPermissionsSection } from './components/CodexPermissionsSection'
+import { CodexToolsSection } from './components/CodexToolsSection'
 import { InspectorHeader } from './components/InspectorHeader'
 import { InstructionsSection } from './components/InstructionsSection'
 import { NodeInspectorTabs } from './components/NodeInspectorTabs'
@@ -58,6 +59,12 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
   const deleteNode = useWorkflowStore((state) => state.deleteNode)
   const providerCapabilities = useWorkflowStore((state) => state.providerCapabilities)
   const executionMode = useWorkflowStore((state) => state.executionMode)
+  const workflowReviewModel = useWorkflowStore((state) => state.reviewModel)
+  const workflowServiceTier = useWorkflowStore((state) => state.serviceTier)
+  const workflowModelVerbosity = useWorkflowStore((state) => state.modelVerbosity)
+  const workflowModelReasoningSummary = useWorkflowStore((state) => state.modelReasoningSummary)
+  const workflowHideAgentReasoning = useWorkflowStore((state) => state.hideAgentReasoning)
+  const workflowShowRawAgentReasoning = useWorkflowStore((state) => state.showRawAgentReasoning)
   const workspacePath = useWorkflowStore((state) => state.workspacePath)
   const hasFetchedProviderCapabilities = useWorkflowStore(
     (state) => state.hasFetchedProviderCapabilities
@@ -81,6 +88,9 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
   )
   const nodeRunMetrics = useExecutionStore((state) =>
     selectedNodeId ? state.nodeRunMetrics[selectedNodeId] : undefined
+  )
+  const contextDiagnostics = useExecutionStore((state) =>
+    selectedNodeId ? state.compiledContextDiagnostics[selectedNodeId] : undefined
   )
   const reviewActionInFlight = useExecutionStore((state) =>
     selectedNodeId ? state.reviewActionInFlightByNodeId[selectedNodeId] : undefined
@@ -120,6 +130,7 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
     currentDefaultReasoningLevel,
     currentModel,
     currentModelDisplayName,
+    currentReviewModel,
     currentSandboxMode,
     currentWindowsSandbox,
     isReasoningModel,
@@ -134,6 +145,7 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
     executionMode,
     localData,
     providerCapabilities,
+    workflowReviewModel,
     selectedNode,
     selectedNodeId
   })
@@ -239,8 +251,18 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
             <ParametersSection
               currentDefaultReasoningLevel={currentDefaultReasoningLevel}
               currentModel={currentModel}
+              currentReviewModel={currentReviewModel}
+              workflowReviewModel={workflowReviewModel ?? undefined}
+              workflowServiceTier={workflowServiceTier ?? undefined}
+              workflowModelVerbosity={workflowModelVerbosity ?? undefined}
+              workflowModelReasoningSummary={workflowModelReasoningSummary ?? undefined}
+              workflowHideAgentReasoning={workflowHideAgentReasoning}
+              workflowShowRawAgentReasoning={workflowShowRawAgentReasoning}
+              hideAgentReasoning={localData.codex?.hideAgentReasoning}
               humanReview={Boolean(localData.humanReview)}
               isReasoningModel={isReasoningModel}
+              modelReasoningSummary={localData.codex?.modelReasoningSummary}
+              modelVerbosity={localData.codex?.modelVerbosity}
               modelOptions={modelOptions}
               onHumanReviewChange={(humanReview) =>
                 setLocalData((prev) => ({ ...prev, humanReview }))
@@ -259,30 +281,56 @@ const PropertiesPanelContent: React.FC<PropertiesPanelContentProps> = ({
                   reasoningLevel: nextReasoningLevel
                 }))
               }}
+              onHideAgentReasoningChange={(hideAgentReasoning) =>
+                updateCodexOptions({ hideAgentReasoning })
+              }
+              onModelReasoningSummaryChange={(modelReasoningSummary) =>
+                updateCodexOptions({ modelReasoningSummary })
+              }
+              onModelVerbosityChange={(modelVerbosity) => updateCodexOptions({ modelVerbosity })}
+              onReviewModelChange={(reviewModel) => updateCodexOptions({ reviewModel })}
               onReasoningLevelChange={(reasoningLevel) =>
                 setLocalData((prev) => ({ ...prev, reasoningLevel }))
+              }
+              onServiceTierChange={(serviceTier) => updateCodexOptions({ serviceTier })}
+              onShowRawAgentReasoningChange={(showRawAgentReasoning) =>
+                updateCodexOptions({ showRawAgentReasoning })
               }
               providerNote={providerNote}
               reasoningLevel={localData.reasoningLevel}
               reasoningOptions={reasoningOptions}
               reviewModeNote={reviewModeNote}
+              serviceTier={localData.codex?.serviceTier}
+              showRawAgentReasoning={localData.codex?.showRawAgentReasoning}
             />
           )}
 
           {visibleActiveTab === 'permissions' && (
-            <CodexPermissionsSection
-              approvalPolicy={currentApprovalPolicy}
-              nodeApprovalGuardrail={nodeApprovalGuardrail}
-              onApprovalPolicyChange={(approvalPolicy) => updateCodexOptions({ approvalPolicy })}
-              onSandboxModeChange={(sandboxMode) => updateCodexOptions({ sandboxMode })}
-              onWindowsSandboxChange={updateWindowsSandbox}
-              sandboxMode={currentSandboxMode}
-              windowsSandbox={currentWindowsSandbox}
-            />
+            <>
+              <CodexPermissionsSection
+                approvalPolicy={currentApprovalPolicy}
+                approvalsReviewer={localData.codex?.approvalsReviewer ?? selectedNode.data.codex?.approvalsReviewer}
+                nodeApprovalGuardrail={nodeApprovalGuardrail}
+                onApprovalPolicyChange={(approvalPolicy) => updateCodexOptions({ approvalPolicy })}
+                onApprovalsReviewerChange={(approvalsReviewer) =>
+                  updateCodexOptions({ approvalsReviewer })
+                }
+                onSandboxModeChange={(sandboxMode) => updateCodexOptions({ sandboxMode })}
+                onWindowsSandboxChange={updateWindowsSandbox}
+                sandboxMode={currentSandboxMode}
+                windowsSandbox={currentWindowsSandbox}
+              />
+              <CodexToolsSection
+                codexConfig={localData.codex?.config}
+                onCodexConfigChange={(config) => updateCodexOptions({ config })}
+                providerCapabilities={providerCapabilities}
+              />
+            </>
           )}
 
           {visibleActiveTab === 'output' && (
             <RuntimeSection
+              contextDiagnostics={contextDiagnostics}
               nodeAttemptCount={nodeAttemptCount}
               nodeError={nodeError}
               nodeExitCode={nodeExitCode}

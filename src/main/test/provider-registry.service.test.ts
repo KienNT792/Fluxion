@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getCodexCapabilities,
+  parseResolvedCodexConfig,
   parseCodexDebugModelsOutput,
-  parseCodexVersionOutput
+  parseCodexVersionOutput,
+  probeMcpServerReadiness
 } from '../services/provider-registry.service'
 
 vi.mock('electron', () => ({
@@ -150,6 +152,190 @@ describe('provider-registry.service', () => {
     expect(capabilities.approvalProtocol).toMatchObject({
       status: 'unknown'
     })
+  })
+
+  it('reads extended resolved config fields from trusted project config', async () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+model = "gpt-5.5"
+review_model = "gpt-5.5-review"
+service_tier = "fast"
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+approvals_reviewer = "auto_review"
+model_context_window = 64000
+model_auto_compact_token_limit = 28000
+model_verbosity = "high"
+model_reasoning_summary = "concise"
+hide_agent_reasoning = true
+show_raw_agent_reasoning = false
+sandbox_workspace_write.network_access = true
+sandbox_workspace_write.writable_roots = ["D:\\\\extra", "D:\\\\cache"]
+`,
+      true
+    )
+
+    expect(resolved).toMatchObject({
+      model: 'gpt-5.5',
+      reviewModel: 'gpt-5.5-review',
+      serviceTier: 'fast',
+      approvalsReviewer: 'auto_review',
+      modelContextWindow: 64000,
+      modelAutoCompactTokenLimit: 28000,
+      modelVerbosity: 'high',
+      modelReasoningSummary: 'concise',
+      hideAgentReasoning: true,
+      showRawAgentReasoning: false,
+      networkAccess: true,
+      writableRoots: ['D:\\\\extra', 'D:\\\\cache']
+    })
+  })
+
+  it('marks required MCP servers without transport as not-ready', () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+[mcp_servers.repo]
+enabled = true
+required = true
+`,
+      true
+    )
+
+    expect(resolved?.mcpServers).toEqual([
+      expect.objectContaining({
+        id: 'repo',
+        enabled: true,
+        required: true,
+        readiness: 'not-ready',
+        reason: expect.stringContaining('missing both command and URL')
+      })
+    ])
+  })
+
+  it('parses MCP tool approval overrides and environment hints', () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+[mcp_servers.repo]
+command = "node"
+args = ["server.js"]
+cwd = "D:\\\\repo-tools"
+experimental_environment = "remote"
+env_vars = ["GITHUB_TOKEN", "OPENAI_API_KEY"]
+
+[mcp_servers.repo.tools.search]
+approval_mode = "prompt"
+enabled = true
+`,
+      true
+    )
+
+    expect(resolved?.mcpServers).toEqual([
+      expect.objectContaining({
+        id: 'repo',
+        transport: 'stdio',
+        environment: 'remote',
+        constrainedByPolicy: true,
+        readinessCategory: 'policy-constrained',
+        envVarNames: ['GITHUB_TOKEN', 'OPENAI_API_KEY'],
+        toolPolicies: [
+          expect.objectContaining({
+            name: 'search',
+            approvalMode: 'prompt',
+            enabled: true
+          })
+        ]
+      })
+    ])
+  })
+
+  it('classifies disabled and malformed MCP servers for downstream diagnostics', () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+[mcp_servers.disabledRepo]
+enabled = false
+command = "node"
+
+[mcp_servers.badHttp]
+enabled = true
+required = true
+url = "ftp://example.com"
+`,
+      true
+    )
+
+    expect(resolved?.mcpServers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'disabledRepo',
+          readiness: 'disabled',
+          readinessCategory: 'disabled'
+        }),
+        expect.objectContaining({
+          id: 'badHttp',
+          readiness: 'not-ready',
+          readinessCategory: 'invalid-config'
+        })
+      ])
+    )
+  })
+
+  it('downgrades relative MCP cwd validation to unknown unless required', () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+[mcp_servers.repo]
+command = "node"
+cwd = "."
+`,
+      true
+    )
+
+    expect(resolved?.mcpServers).toEqual([
+      expect.objectContaining({
+        id: 'repo',
+        readiness: 'unknown',
+        reason: expect.stringContaining('cwd is relative')
+      })
+    ])
+  })
+
+  it('treats untrusted project config as declared but ignored by Codex', () => {
+    const resolved = parseResolvedCodexConfig(
+      `
+model = "gpt-5.5"
+review_model = "gpt-5.5-review"
+profile = "fast-lane"
+sandbox_mode = "danger-full-access"
+approval_policy = "on-request"
+`,
+      false
+    )
+
+    expect(resolved).toMatchObject({
+      model: undefined,
+      reviewModel: undefined,
+      sandboxMode: 'workspace-write',
+      approvalPolicy: 'never',
+      trustLevel: 'untrusted',
+      mcpServers: []
+    })
+    expect(resolved?.layers.model).toEqual([
+      expect.objectContaining({
+        source: 'ignored-project',
+        value: 'gpt-5.5'
+      })
+    ])
+    expect(resolved?.layers.profile).toEqual([
+      expect.objectContaining({
+        source: 'ignored-project',
+        value: 'fast-lane'
+      })
+    ])
+    expect(resolved?.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('only loads it for trusted projects'),
+        expect.stringContaining('profile keys are ignored')
+      ])
+    )
   })
 
   it('reuses the first working Codex CLI candidate across discovery commands', async () => {
@@ -404,5 +590,46 @@ describe('provider-registry.service', () => {
       catalogSource: 'none'
     })
     expect(capabilities.models).toEqual([])
+  })
+
+  it('treats reachable MCP HTTP endpoints as ready even when auth is required', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn(async () => new Response(null, { status: 401 })) as typeof fetch
+
+    try {
+      const probed = await probeMcpServerReadiness({
+        id: 'remote',
+        transport: 'http',
+        enabled: true,
+        required: true,
+        url: 'https://example.com/mcp',
+        readiness: 'unknown'
+      })
+
+      expect(probed).toMatchObject({
+        id: 'remote',
+        readiness: 'ready',
+        reason: expect.stringContaining('401')
+      })
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
+  it('marks stdio MCP servers unknown when the launcher cannot be spawned', async () => {
+    const probed = await probeMcpServerReadiness({
+      id: 'repo',
+      transport: 'stdio',
+      enabled: true,
+      command: 'this-command-should-not-exist-fluxion',
+      args: ['--help'],
+      readiness: 'unknown'
+    })
+
+    expect(probed).toMatchObject({
+      id: 'repo',
+      readiness: 'unknown',
+      reason: expect.stringContaining('Process spawn failed')
+    })
   })
 })

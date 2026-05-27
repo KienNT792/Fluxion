@@ -12,6 +12,16 @@ interface CodexCliSettingsSectionProps {
   }
   codexReadiness: {
     label: string
+    mcpDetail?: string[]
+    policySummary?: string
+    resolvedConfigDetail?: Array<{
+      label: string
+      value: string
+      source?: string
+      detail?: string
+      layers?: Array<{ source: string; value: string; detail?: string }>
+    }>
+    warnings?: string[]
   }
   copiedCommandId: string | null
   isProviderCapabilitiesLoading: boolean
@@ -129,6 +139,107 @@ export const CodexCliSettingsSection: React.FC<CodexCliSettingsSectionProps> = (
             Command copied.
           </div>
         )}
+      </div>
+    )}
+
+    {codexReadiness.resolvedConfigDetail && codexReadiness.resolvedConfigDetail.length > 0 && (
+      <div
+        className="mt-3 rounded-md px-3 py-2"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)'
+        }}
+      >
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Effective Config
+        </div>
+        <div className="mt-2 grid gap-1.5 text-[11px]">
+          {codexReadiness.resolvedConfigDetail.map((item) => (
+            <div key={item.label} className="flex items-start justify-between gap-3">
+              <span style={{ color: 'var(--color-muted)' }}>{item.label}</span>
+              <div className="text-right">
+                <div style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}>
+                  {item.value}
+                </div>
+                {item.source && (
+                  <div className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    {item.source}
+                  </div>
+                )}
+                {item.layers && item.layers.length > 1 && (
+                  <div className="mt-1 grid gap-0.5 text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    {item.layers.map((layer, index) => (
+                      <div key={`${item.label}-${layer.source}-${index}`}>
+                        {layer.source}: {layer.value}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {item.detail && (
+                  <div className="mt-1 max-w-[18rem] text-[10px]" style={{ color: 'var(--color-muted)' }}>
+                    {item.detail}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {codexReadiness.policySummary && (
+      <div
+        className="mt-3 rounded-md px-3 py-2 text-[11px] leading-5"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)',
+          color: 'var(--color-body)'
+        }}
+      >
+        {codexReadiness.policySummary}
+      </div>
+    )}
+
+    {codexReadiness.mcpDetail && codexReadiness.mcpDetail.length > 0 && (
+      <div
+        className="mt-3 rounded-md px-3 py-2"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)'
+        }}
+      >
+        <div
+          className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          MCP Servers
+        </div>
+        <div
+          className="mt-2 grid gap-1.5 text-[11px]"
+          style={{ color: 'var(--color-body)', fontFamily: 'var(--font-mono)' }}
+        >
+          {codexReadiness.mcpDetail.map((item) => (
+            <div key={item}>{item}</div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {codexReadiness.warnings && codexReadiness.warnings.length > 0 && (
+      <div
+        className="mt-3 rounded-md px-3 py-2 text-[11px] leading-5"
+        style={{
+          background: 'var(--color-surface-card)',
+          border: '1px solid var(--color-hairline)',
+          color: 'var(--color-body)'
+        }}
+      >
+        {codexReadiness.warnings.map((warning) => (
+          <div key={warning}>{warning}</div>
+        ))}
       </div>
     )}
   </section>

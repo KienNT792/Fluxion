@@ -38,3 +38,15 @@ Use these docs to answer:
 - [`../qa/`](../qa/): smoke and verification checklists
 - [`../dogfood/`](../dogfood/): sample Fluxion workflows checked into the repo
 
+Useful current runtime notes include:
+
+- [`../runtime/codex-approval-status.md`](../runtime/codex-approval-status.md): current approval/reviewer/runtime posture
+- `Flow Context` and provider diagnostics in the running app: current source of truth for policy/config/MCP/context pressure inspection, effective node policy inspection, long-term summary reuse, and rerun compaction guidance
+
+Treat runtime notes as supporting material, not source-of-truth planning. If a runtime note conflicts with root docs or the current backlog, prefer:
+
+1. `AGENTS.md`
+2. `README.md`
+3. `ARCHITECTURE.md`
+4. `docs/backlog/backlog.md`
+

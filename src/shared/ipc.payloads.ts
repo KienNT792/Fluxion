@@ -28,6 +28,7 @@ import {
   SaveOnboardingPacketResult
 } from './onboarding.types'
 import {
+  CompiledContextDiagnostics,
   ExecutionMode,
   NodeId,
   NodeStatus,
@@ -213,6 +214,7 @@ export interface WorkflowRunPayload {
 
 export interface GetProviderCapabilitiesPayload {
   forceRefresh?: boolean
+  workspacePath?: string
 }
 
 export interface WorkflowAbortPayload {
@@ -305,11 +307,52 @@ export interface TerminalExitPayload {
   code: number | null
 }
 
+export interface OpenTerminalPanePayload {
+  title?: string
+  commandline?: string
+}
+
+export interface OpenTerminalPayload {
+  cwd: string
+  title?: string
+  commandline?: string
+  panes?: OpenTerminalPanePayload[]
+}
+
 // Memory payloads
 export interface MemoryContextReadyPayload {
   nodeId: NodeId
   /** The compiled memory context used as one input when building the execution prompt. */
   compiledContext: string
+  diagnostics?: CompiledContextDiagnostics
+}
+
+export interface MemoryCompactWorkflowPayload {
+  workspacePath: string
+  workflowId: string
+  runId: string
+  sourceNodeIds: NodeId[]
+  summary?: string
+  diagnostics?: Pick<
+    CompiledContextDiagnostics,
+    | 'estimatedTotalTokens'
+    | 'pressure'
+    | 'compactPriority'
+    | 'compactReason'
+    | 'memoryEligibilityReason'
+    | 'compactCandidateSourceIds'
+    | 'previousNodeIds'
+    | 'staleAttemptNodeIds'
+    | 'includesExternalContext'
+    | 'memoriesDisableOnExternalContext'
+  >
+  createdAt?: string
+}
+
+export interface MemoryCompactWorkflowResult {
+  summaryPath: string
+  runId: string
+  sourceNodeIds: NodeId[]
 }
 
 export type ProviderCapabilitiesPayload = ProviderCapabilitiesMap

@@ -137,6 +137,501 @@ describe('provider-capabilities readiness helpers', () => {
     })
   })
 
+  it('warns when enabled MCP servers are still non-ready even if Codex itself is runnable', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            mcpServers: [
+              {
+                id: 'repo',
+                enabled: true,
+                transport: 'stdio',
+                command: 'node',
+                readiness: 'unknown',
+                reason: 'Process spawn failed: command not found'
+              }
+            ],
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state).toMatchObject({
+      label: 'MCP warning',
+      tone: 'warning',
+      blocking: false
+    })
+    expect(state.detail).toContain('repo')
+  })
+
+  it('summarizes ignored project-local overrides separately from effective config', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'untrusted',
+            layers: {
+              model: [{ source: 'ignored-project', value: 'gpt-5.5' }],
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            },
+            warnings: ['Project config is ignored until trust is granted.']
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.label).toBe('Config warning')
+    expect(state.resolvedConfigSummary).toContain('ignored project override')
+    expect(state.policySummary).toContain('project config gated by trust')
+    expect(state.warnings).toEqual(['Project config is ignored until trust is granted.'])
+    expect(state.actionItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'ignored-project-overrides',
+          kind: 'config',
+          severity: 'warning'
+        })
+      ])
+    )
+  })
+
+  it('includes compact prompt and memory external-context posture in config detail', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            compactPrompt: 'Prefer semantic summaries.',
+            memoriesDisableOnExternalContext: true,
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }],
+              compactPrompt: [{ source: 'project', value: 'Prefer semantic summaries.' }],
+              memoriesDisableOnExternalContext: [{ source: 'project', value: true }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.resolvedConfigSummary).toContain('compact=custom')
+    expect(state.resolvedConfigSummary).toContain('memories.external=off')
+    expect(state.policySummary).toContain('compaction prompt custom')
+    expect(
+      state.resolvedConfigDetail?.find((item) => item.label === 'Compact prompt')
+    ).toEqual(expect.objectContaining({ value: 'custom', source: 'project' }))
+    expect(
+      state.resolvedConfigDetail?.find((item) => item.label === 'Memory on external context')
+    ).toEqual(expect.objectContaining({ value: 'disabled', source: 'project' }))
+  })
+
+  it('summarizes MCP readiness counts, not only enabled totals', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            mcpServers: [
+              {
+                id: 'repo',
+                enabled: true,
+                transport: 'stdio',
+                command: 'node',
+                readiness: 'ready'
+              },
+              {
+                id: 'browser',
+                enabled: true,
+                transport: 'http',
+                url: 'https://example.test/mcp',
+                readiness: 'unknown'
+              },
+              {
+                id: 'search',
+                enabled: false,
+                transport: 'stdio',
+                readiness: 'disabled'
+              }
+            ],
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.mcpSummary).toBe('2/3 enabled | 1 ready | 1 warning')
+    expect(state.actionItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mcp-warning-browser',
+          kind: 'mcp',
+          severity: 'warning'
+        })
+      ])
+    )
+  })
+
+  it('adds blocked MCP action items for required or invalid servers', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            mcpServers: [
+              {
+                id: 'repo',
+                enabled: true,
+                required: true,
+                transport: 'stdio',
+                command: 'node',
+                readiness: 'not-ready',
+                reason: 'Probe failed with exit code 1'
+              }
+            ],
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.actionItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'mcp-blocked-repo',
+          kind: 'mcp',
+          severity: 'blocked',
+          title: 'repo is blocking expected MCP capability'
+        })
+      ])
+    )
+  })
+
+  it('includes config layer traces for explainability instead of only the first source', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            model: 'gpt-5.5',
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            layers: {
+              model: [
+                { source: 'workflow', value: 'gpt-5.5', detail: 'Workflow fallback.' },
+                { source: 'project', value: 'gpt-5.5', detail: 'Declared in .codex/config.toml.' }
+              ],
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.resolvedConfigDetail?.find((item) => item.label === 'Model')).toEqual(
+      expect.objectContaining({
+        source: 'workflow',
+        layers: [
+          expect.objectContaining({ source: 'workflow', value: 'gpt-5.5' }),
+          expect.objectContaining({ source: 'project', value: 'gpt-5.5' })
+        ]
+      })
+    )
+  })
+
+  it('prioritizes required non-ready MCP servers over generic catalog-ready state', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            mcpServers: [
+              {
+                id: 'repo',
+                enabled: true,
+                required: true,
+                transport: 'stdio',
+                command: 'node',
+                readiness: 'not-ready',
+                reason: 'Enabled MCP stdio server is missing a launcher command.'
+              }
+            ],
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.label).toBe('MCP warning')
+    expect(state.summary).toContain('required or invalid MCP')
+    expect(state.detail).toContain('repo')
+  })
+
+  it('warns when MCP servers are reachable but constrained by tool policy', () => {
+    const state = getCodexReadinessBadgeState(
+      {
+        codex: {
+          provider: 'codex',
+          displayName: 'Codex',
+          available: true,
+          auth: {
+            type: 'cli-login',
+            status: 'authenticated',
+            loginCommand: 'codex login'
+          },
+          readiness: {
+            code: 'ready',
+            blocking: false,
+            title: 'Codex CLI ready.',
+            message: 'Ready.',
+            catalogSource: 'live'
+          },
+          models: [
+            {
+              id: 'gpt-5.5',
+              displayName: 'gpt-5.5',
+              visibility: 'list',
+              supportedReasoningLevels: []
+            }
+          ],
+          parameters: [],
+          resolvedConfig: {
+            sandboxMode: 'workspace-write',
+            approvalPolicy: 'never',
+            trustLevel: 'trusted',
+            mcpServers: [
+              {
+                id: 'repo',
+                enabled: true,
+                transport: 'stdio',
+                command: 'node',
+                readiness: 'ready',
+                readinessCategory: 'policy-constrained',
+                constrainedByPolicy: true,
+                defaultToolsApprovalMode: 'prompt',
+                enabledTools: ['search', 'fetch'],
+                toolPolicies: [{ name: 'search', approvalMode: 'approve' }]
+              }
+            ],
+            layers: {
+              sandboxMode: [{ source: 'runtime-default', value: 'workspace-write' }],
+              approvalPolicy: [{ source: 'runtime-default', value: 'never' }]
+            }
+          }
+        }
+      },
+      ['gpt-5.5']
+    )
+
+    expect(state.label).toBe('MCP warning')
+    expect(state.summary).toContain('constrained by tool policy')
+    expect(state.detail).toContain('default approval=prompt')
+    expect(state.mcpDetail?.[0]).toContain('category=policy-constrained')
+  })
+
   it('summarizes provider availability in a provider-neutral way', () => {
     const summary = getProviderReadinessSummary(
       createCapabilities({

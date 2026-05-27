@@ -17,6 +17,8 @@ import {
   GenerateOnboardingPacketRequest,
   ExecutionMode,
   MemoryContextReadyPayload,
+  MemoryCompactWorkflowPayload,
+  MemoryCompactWorkflowResult,
   NodeId,
   OnboardingPacket,
   GetProviderCapabilitiesPayload,
@@ -28,6 +30,7 @@ import {
   SaveOnboardingPacketRequest,
   SaveOnboardingPacketResult,
   RecentWorkspaceEntry,
+  OpenTerminalPayload,
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
@@ -114,6 +117,7 @@ export interface FluxionAPI {
   setOpenAIApiKey: (apiKey: string | null) => Promise<ProviderSettingsSummaryPayload>
   openPath: (path: string) => Promise<void>
   revealPath: (path: string) => Promise<void>
+  openTerminal: (payload: OpenTerminalPayload) => Promise<void>
 
   // ─── Multi-Workflow ────────────────────────────────────────────────────────
   createWorkflow: (workspacePath: string, name: string) => Promise<WorkflowCreateResult>
@@ -134,6 +138,9 @@ export interface FluxionAPI {
   explainWorkflowFailure: (
     payload: WorkflowExplainFailurePayload
   ) => Promise<WorkflowExplainFailureResult>
+  compactWorkflowMemory: (
+    payload: MemoryCompactWorkflowPayload
+  ) => Promise<MemoryCompactWorkflowResult>
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) => () => void
   onWorkspaceLoading: (callback: (payload: WorkspaceLoadingEvent) => void) => () => void

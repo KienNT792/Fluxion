@@ -16,6 +16,7 @@ import {
 import {
   AbortReason,
   AgentResult,
+  CodexExecutionOptions,
   ExecutionMode,
   IpcChannels,
   NodeId,
@@ -42,7 +43,16 @@ type WorkflowMemoryManager = Pick<
   MemoryManager,
   'initWorkspace' | 'compileContext' | 'saveNodeOutput' | 'getNodeOutputPath' | 'deleteNodeOutput'
 > &
-  Partial<Pick<MemoryManager, 'compileContextWithSources' | 'getNodeOutputHistoryPath'>>
+  Partial<
+    Pick<
+      MemoryManager,
+      | 'compileContextWithSources'
+      | 'getNodeOutputHistoryPath'
+      | 'getNodeAttemptHistory'
+      | 'buildSuggestedCompactSummary'
+      | 'compactWorkflowMemory'
+    >
+  >
 
 interface WorkflowEngineDependencies {
   adapter?: IAgentAdapter
@@ -779,13 +789,62 @@ export class WorkflowEngine {
   private async compileNodeContext(
     workspacePath: string,
     workflowId: string,
-    previousNodeIds: NodeId[]
+    previousNodeIds: NodeId[],
+    node?: WorkflowNode,
+    workflow?: Workflow
   ): Promise<CompiledMemoryContext> {
+    const model =
+      typeof node?.data.model === 'string' && node.data.model.trim().length > 0
+        ? node.data.model.trim()
+        : undefined
+    const modelContextWindow =
+      workflow?.modelContextWindow ??
+      (typeof node?.data.codex?.config?.model_context_window === 'number'
+        ? node.data.codex.config.model_context_window
+        : undefined)
+    const autoCompactTokenLimit =
+      workflow?.modelAutoCompactTokenLimit ??
+      (typeof node?.data.codex?.config?.model_auto_compact_token_limit === 'number'
+        ? node.data.codex.config.model_auto_compact_token_limit
+        : undefined)
+    const memoriesDisableOnExternalContext =
+      typeof node?.data.codex?.config?.['memories.disable_on_external_context'] === 'boolean'
+        ? node.data.codex.config['memories.disable_on_external_context']
+        : undefined
+    const includesExternalContext = Boolean(
+      node?.data.codex?.config?.mcp_server ||
+        node?.data.codex?.config?.web_search ||
+        node?.data.codex?.config?.tool_search
+    )
+
     if (this.memoryManager.compileContextWithSources) {
+      const staleAttemptNodeIds = this.memoryManager.getNodeAttemptHistory
+        ? (
+            await Promise.all(
+              previousNodeIds.map(async (nodeId) => {
+                const attempts = await this.memoryManager.getNodeAttemptHistory!(
+                  workspacePath,
+                  workflowId,
+                  nodeId
+                )
+                return attempts.length > 1 ? nodeId : null
+              })
+            )
+          ).filter((nodeId): nodeId is NodeId => Boolean(nodeId))
+        : []
+
       return this.memoryManager.compileContextWithSources(
         workspacePath,
         workflowId,
-        previousNodeIds
+        previousNodeIds,
+        {
+          model,
+          modelContextWindow,
+          autoCompactTokenLimit,
+          staleAttemptNodeIds,
+          includesExternalContext,
+          memoriesDisableOnExternalContext
+        }
       )
     }
 
@@ -1297,13 +1356,26 @@ export class WorkflowEngine {
       const contextReport = await this.compileNodeContext(
         runtime.workspacePath,
         runtime.workflow.id,
-        previousNodeIds
+        previousNodeIds,
+        node,
+        runtime.workflow
       )
+      const effectiveCodexOptions = this.buildEffectiveCodexOptions(runtime.workflow, node)
       const context = contextReport.compiledContext
       runtime.sender.send(IpcChannels.MEMORY_CONTEXT_READY, {
         nodeId: node.id,
-        compiledContext: context
+        compiledContext: context,
+        diagnostics: {
+          ...contextReport.diagnostics,
+          effectiveReviewModel: effectiveCodexOptions.reviewModel,
+          effectiveServiceTier: effectiveCodexOptions.serviceTier,
+          effectiveModelVerbosity: effectiveCodexOptions.modelVerbosity,
+          effectiveModelReasoningSummary: effectiveCodexOptions.modelReasoningSummary,
+          effectiveHideAgentReasoning: effectiveCodexOptions.hideAgentReasoning,
+          effectiveShowRawAgentReasoning: effectiveCodexOptions.showRawAgentReasoning
+        }
       })
+      await this.maybeAutoCompactWorkflowMemory(runtime, node.id, contextReport.diagnostics)
       await this.trace(runtime, 'node.context_compiled', node.id, {
         previousNodeIds,
         contextBytes: contextReport.contextBytes,
@@ -1614,6 +1686,90 @@ export class WorkflowEngine {
     }
   }
 
+  private async maybeAutoCompactWorkflowMemory(
+    runtime: WorkflowRuntime,
+    nodeId: NodeId,
+    diagnostics: CompiledMemoryContext['diagnostics']
+  ): Promise<void> {
+    if (!this.memoryManager.compactWorkflowMemory || !this.memoryManager.buildSuggestedCompactSummary) {
+      return
+    }
+
+    if (!diagnostics || !diagnostics.compactSuggested) {
+      return
+    }
+
+    const sourceNodeIds =
+      diagnostics.previousNodeIds?.length
+        ? diagnostics.previousNodeIds
+        : diagnostics.staleAttemptNodeIds?.length
+          ? diagnostics.staleAttemptNodeIds
+          : []
+
+    if (sourceNodeIds.length === 0) {
+      return
+    }
+
+    const createdAt = new Date().toISOString()
+    const summary = this.memoryManager.buildSuggestedCompactSummary({
+      runId: runtime.runId,
+      sourceNodeIds,
+      diagnostics: {
+        estimatedTotalTokens: diagnostics.estimatedTotalTokens,
+        pressure: diagnostics.pressure,
+        compactPriority: diagnostics.compactPriority,
+        compactReason: diagnostics.compactReason,
+        memoryEligibilityReason: diagnostics.memoryEligibilityReason,
+        compactCandidateSourceIds: diagnostics.compactCandidateSourceIds,
+        previousNodeIds: diagnostics.previousNodeIds,
+        staleAttemptNodeIds: diagnostics.staleAttemptNodeIds,
+        includesExternalContext: diagnostics.includesExternalContext,
+        memoriesDisableOnExternalContext: diagnostics.memoriesDisableOnExternalContext
+      }
+    })
+
+    try {
+      const compacted = await this.memoryManager.compactWorkflowMemory({
+        workspacePath: runtime.workspacePath,
+        workflowId: runtime.workflow.id,
+        runId: runtime.runId,
+        sourceNodeIds,
+        summary,
+        createdAt
+      })
+      runtime.sender.send(IpcChannels.TERMINAL_DATA_BATCH, {
+        nodeId,
+        batch: [
+          `[compaction] Created long-term summary for ${sourceNodeIds.join(', ')} at ${this.toWorkspaceRelative(runtime.workspacePath, compacted.summaryPath)}.\n`
+        ],
+        sourceType: 'stdout',
+        category: 'progress',
+        severity: 'info',
+        rawType: 'context-compaction'
+      })
+      await this.trace(runtime, 'node.context_compacted', nodeId, {
+        sourceNodeIds,
+        summaryPath: this.toWorkspaceRelative(runtime.workspacePath, compacted.summaryPath),
+        compactPriority: diagnostics.compactPriority,
+        compactReason: diagnostics.compactReason
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.sender.send(IpcChannels.TERMINAL_DATA_BATCH, {
+        nodeId,
+        batch: [`[compaction] Failed to create long-term summary: ${message}\n`],
+        sourceType: 'stderr',
+        category: 'diagnostics',
+        severity: 'warning',
+        rawType: 'context-compaction-failed'
+      })
+      await this.trace(runtime, 'node.context_compaction_failed', nodeId, {
+        sourceNodeIds,
+        error: message
+      })
+    }
+  }
+
   private async executeNode(
     node: WorkflowNode,
     fullPrompt: ExecutionPrompt,
@@ -1649,7 +1805,19 @@ export class WorkflowEngine {
         success: false,
         error: 'Agent execution exited without a result.'
       }
-      const iterator = this.adapter.execute(node.id, node.data, fullPrompt, runtime.workspacePath)
+      const effectiveNode: WorkflowNode = {
+        ...node,
+        data: {
+          ...node.data,
+          codex: this.buildEffectiveCodexOptions(runtime.workflow, node)
+        }
+      }
+      const iterator = this.adapter.execute(
+        effectiveNode.id,
+        effectiveNode.data,
+        fullPrompt,
+        runtime.workspacePath
+      )
 
       while (true) {
         const next = await iterator.next()
@@ -1687,6 +1855,35 @@ export class WorkflowEngine {
       flushBatch()
     }
   }
+
+  private buildEffectiveCodexOptions(
+    workflow: Workflow,
+    node: WorkflowNode
+  ): CodexExecutionOptions {
+    return {
+      ...(node.data.codex ?? {}),
+      reviewModel:
+        node.data.codex?.reviewModel && String(node.data.codex.reviewModel).trim().length > 0
+          ? node.data.codex.reviewModel
+          : workflow.reviewModel,
+      serviceTier:
+        node.data.codex?.serviceTier && String(node.data.codex.serviceTier).trim().length > 0
+          ? node.data.codex.serviceTier
+          : workflow.serviceTier,
+      modelVerbosity: node.data.codex?.modelVerbosity ?? workflow.modelVerbosity,
+      modelReasoningSummary:
+        node.data.codex?.modelReasoningSummary ?? workflow.modelReasoningSummary,
+      hideAgentReasoning:
+        typeof node.data.codex?.hideAgentReasoning === 'boolean'
+          ? node.data.codex.hideAgentReasoning
+          : workflow.hideAgentReasoning,
+      showRawAgentReasoning:
+        typeof node.data.codex?.showRawAgentReasoning === 'boolean'
+          ? node.data.codex.showRawAgentReasoning
+          : workflow.showRawAgentReasoning
+    }
+  }
+
 
   private async ensureRequiredArtifacts(workspacePath: string, node: WorkflowNode): Promise<void> {
     const result = await this.artifactGateService.validateRequires(

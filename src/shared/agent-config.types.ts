@@ -1,4 +1,5 @@
 import { ProjectContextDraft } from './context.types'
+import { CodexApprovalPolicy, CodexApprovalReviewer, CodexSandboxMode } from './workflow.types'
 
 export type AgentConfigExporterId = 'codex' | 'claude' | 'gemini'
 
@@ -15,8 +16,10 @@ export interface AgentConfigExporterSummary {
 
 export interface AgentConfigExportOptions {
   includeAdvancedConfig?: boolean
-  sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
-  approvalPolicy?: 'untrusted' | 'on-request' | 'never'
+  sandboxMode?: CodexSandboxMode
+  approvalPolicy?: CodexApprovalPolicy
+  approvalsReviewer?: CodexApprovalReviewer
+  reviewModel?: string
   projectDocMaxBytes?: number
 }
 

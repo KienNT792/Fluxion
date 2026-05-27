@@ -65,6 +65,50 @@ describe('WorkflowSchema', () => {
     })
   })
 
+  it('accepts granular approval policy and review model metadata', () => {
+    const parsed = WorkflowSchema.parse({
+      id: 'workflow-1',
+      name: 'Workflow 1',
+      reviewModel: 'gpt-5.5-review',
+      nodes: [
+        {
+          id: 'node-a',
+          type: 'agentNode',
+          label: 'Node A',
+          position: { x: 0, y: 0 },
+          data: {
+            provider: 'codex',
+            model: 'gpt-5.5',
+            prompt: 'Do the thing',
+            codex: {
+              approvalPolicy: {
+                kind: 'granular',
+                sandboxApproval: true,
+                requestPermissions: false
+              },
+              approvalsReviewer: 'auto_review',
+              reviewModel: 'gpt-5.5-review'
+            }
+          }
+        }
+      ],
+      edges: []
+    })
+
+    expect(parsed.reviewModel).toBe('gpt-5.5-review')
+    expect(parsed.nodes[0].data.codex).toEqual({
+      json: true,
+      sandboxMode: 'workspace-write',
+      approvalPolicy: {
+        kind: 'granular',
+        sandboxApproval: true,
+        requestPermissions: false
+      },
+      approvalsReviewer: 'auto_review',
+      reviewModel: 'gpt-5.5-review'
+    })
+  })
+
   it('rejects an invalid codex sandbox mode', () => {
     expect(() =>
       WorkflowSchema.parse({

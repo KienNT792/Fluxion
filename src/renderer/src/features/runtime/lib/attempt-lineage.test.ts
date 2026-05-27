@@ -6,13 +6,17 @@ describe('attempt lineage', () => {
     expect(buildAttemptLineageSummary()).toEqual({
       currentAttempt: 1,
       previousAttempts: 0,
-      label: 'Attempt 1'
+      label: 'Attempt 1',
+      staleRisk: false,
+      detail: 'No retry lineage recorded yet.'
     })
 
     expect(buildAttemptLineageSummary(3)).toEqual({
       currentAttempt: 3,
       previousAttempts: 2,
-      label: 'Attempt 3'
+      label: 'Attempt 3',
+      staleRisk: true,
+      detail: '2 earlier attempts may still influence downstream context.'
     })
   })
 })

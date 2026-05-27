@@ -109,6 +109,24 @@ export function encodeCodexConfigValue(value: string | number | boolean): string
   return String(value)
 }
 
+function encodeApprovalPolicyConfigValue(value: NonNullable<ReturnType<typeof CodexExecutionOptionsSchema.parse>['approvalPolicy']>): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  const granularEntries = [
+    ['sandbox_approval', value.sandboxApproval],
+    ['rules', value.rules],
+    ['mcp_elicitations', value.mcpElicitations],
+    ['request_permissions', value.requestPermissions],
+    ['skill_approval', value.skillApproval]
+  ]
+    .filter(([, enabled]) => typeof enabled === 'boolean')
+    .map(([key, enabled]) => `${key}=${enabled ? 'true' : 'false'}`)
+
+  return `{ granular = { ${granularEntries.join(', ')} } }`
+}
+
 async function modelSupportsReasoningEffort(modelId: string): Promise<boolean> {
   const capabilities = await providerRegistryService.fetchCapabilities()
   const model = capabilities.codex?.models.find((candidate) => candidate.id === modelId)
@@ -147,10 +165,47 @@ export async function buildCodexExecArgs(
     args.push('--profile', codexOptions.profile)
   }
 
-  args.push('--config', `approval_policy=${codexOptions.approvalPolicy}`)
+  args.push('--config', `approval_policy=${encodeApprovalPolicyConfigValue(codexOptions.approvalPolicy)}`)
+
+  if (codexOptions.approvalsReviewer) {
+    args.push('--config', `approvals_reviewer=${codexOptions.approvalsReviewer}`)
+  }
 
   if (codexOptions.windowsSandbox) {
     args.push('--config', `windows.sandbox=${codexOptions.windowsSandbox}`)
+  }
+
+  if (codexOptions.reviewModel) {
+    args.push('--config', `review_model=${encodeCodexConfigValue(codexOptions.reviewModel)}`)
+  }
+
+  if (codexOptions.serviceTier) {
+    args.push('--config', `service_tier=${encodeCodexConfigValue(codexOptions.serviceTier)}`)
+  }
+
+  if (codexOptions.modelVerbosity) {
+    args.push('--config', `model_verbosity=${encodeCodexConfigValue(codexOptions.modelVerbosity)}`)
+  }
+
+  if (codexOptions.modelReasoningSummary) {
+    args.push(
+      '--config',
+      `model_reasoning_summary=${encodeCodexConfigValue(codexOptions.modelReasoningSummary)}`
+    )
+  }
+
+  if (typeof codexOptions.hideAgentReasoning === 'boolean') {
+    args.push(
+      '--config',
+      `hide_agent_reasoning=${encodeCodexConfigValue(codexOptions.hideAgentReasoning)}`
+    )
+  }
+
+  if (typeof codexOptions.showRawAgentReasoning === 'boolean') {
+    args.push(
+      '--config',
+      `show_raw_agent_reasoning=${encodeCodexConfigValue(codexOptions.showRawAgentReasoning)}`
+    )
   }
 
   if (

@@ -18,6 +18,7 @@ import {
   RepoOnboardingSkillPreviewRequest,
   ApplyRepoOnboardingSkillPreviewRequest,
   GetProviderCapabilitiesPayload,
+  OpenTerminalPayload,
   ProjectContextDraft,
   WorkflowExplainFailurePayload,
   WorkflowExplainFailureResult,
@@ -44,7 +45,11 @@ import { workflowEngine } from '../services/workflow-engine'
 import { providerRegistryService } from '../services/provider-registry.service'
 import { processManager } from '../services/process-manager'
 import { settingsService } from '../services/settings.service'
-import { openShellPath, revealShellPath } from '../services/shell-path.service'
+import {
+  openInWindowsTerminal,
+  openShellPath,
+  revealShellPath
+} from '../services/shell-path.service'
 import { agentConfigPreviewService } from '../services/agent-config/agent-config-preview.service'
 import { contextEnrichmentService } from '../services/context-enrichment.service'
 import { onboardingService } from '../services/onboarding.service'
@@ -52,6 +57,7 @@ import { runStateStore } from '../services/run-state-store'
 import { workspaceService } from '../services/workspace.service'
 import { workspaceTrustService } from '../services/workspace-trust.service'
 import { recentWorkspacesService } from '../services/recent-workspaces.service'
+import { memoryManager } from '../services/memory-manager'
 
 const DEFAULT_TEXT_PREVIEW_MAX_BYTES = 256 * 1024
 const HARD_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024
@@ -482,7 +488,10 @@ export function registerWorkflowHandlers(): void {
   ipcMain.handle(
     IpcChannels.PROVIDERS_GET_CAPABILITIES,
     async (_event, payload?: GetProviderCapabilitiesPayload) => {
-      return providerRegistryService.fetchCapabilities(Boolean(payload?.forceRefresh))
+      return providerRegistryService.fetchCapabilities(
+        Boolean(payload?.forceRefresh),
+        payload?.workspacePath
+      )
     }
   )
 
@@ -509,6 +518,13 @@ export function registerWorkflowHandlers(): void {
   ipcMain.handle(IpcChannels.SHELL_REVEAL_PATH, async (_event, pathValue: string) => {
     await revealShellPath(shell, pathValue)
   })
+
+  ipcMain.handle(
+    IpcChannels.SHELL_OPEN_TERMINAL,
+    async (_event, payload: OpenTerminalPayload) => {
+      await openInWindowsTerminal(payload)
+    }
+  )
 
   ipcMain.on(IpcChannels.WORKFLOW_RUN, async (event: IpcMainEvent, payload: WorkflowRunPayload) => {
     try {
@@ -621,6 +637,32 @@ export function registerWorkflowHandlers(): void {
       return summarizeWorkflowFailure(payload)
     }
   )
+
+  ipcMain.handle(IpcChannels.MEMORY_COMPACT_WORKFLOW, async (_event, payload) => {
+    const createdAt = payload.createdAt ?? new Date().toISOString()
+    const summary =
+      payload.summary?.trim().length
+        ? payload.summary
+        : memoryManager.buildSuggestedCompactSummary({
+            runId: payload.runId,
+            sourceNodeIds: payload.sourceNodeIds,
+            diagnostics: payload.diagnostics
+          })
+    const result = await memoryManager.compactWorkflowMemory({
+      workspacePath: payload.workspacePath,
+      workflowId: payload.workflowId,
+      runId: payload.runId,
+      sourceNodeIds: payload.sourceNodeIds,
+      summary,
+      createdAt
+    })
+
+    return {
+      summaryPath: result.summaryPath,
+      runId: payload.runId,
+      sourceNodeIds: payload.sourceNodeIds
+    }
+  })
 
   app.on('before-quit', async (e: Electron.Event) => {
     e.preventDefault()

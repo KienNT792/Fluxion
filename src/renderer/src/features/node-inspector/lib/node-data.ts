@@ -30,9 +30,28 @@ const codexExecutionOptionsSchema = z
   .object({
     json: z.boolean().optional(),
     sandboxMode: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
-    approvalPolicy: z.enum(['never', 'on-request', 'untrusted']).optional(),
+    approvalPolicy: z
+      .union([
+        z.enum(['never', 'on-request', 'untrusted']),
+        z.object({
+          kind: z.literal('granular'),
+          sandboxApproval: z.boolean().optional(),
+          rules: z.boolean().optional(),
+          mcpElicitations: z.boolean().optional(),
+          requestPermissions: z.boolean().optional(),
+          skillApproval: z.boolean().optional()
+        })
+      ])
+      .optional(),
+    approvalsReviewer: z.enum(['user', 'auto_review']).optional(),
     windowsSandbox: z.enum(['unelevated', 'elevated']).optional(),
     profile: z.string().optional(),
+    reviewModel: z.string().optional(),
+    serviceTier: z.string().optional(),
+    modelVerbosity: z.enum(['low', 'medium', 'high']).optional(),
+    modelReasoningSummary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
+    hideAgentReasoning: z.boolean().optional(),
+    showRawAgentReasoning: z.boolean().optional(),
     config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional()
   })
   .optional()

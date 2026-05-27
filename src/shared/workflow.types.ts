@@ -12,6 +12,8 @@ export type ProviderType = 'codex' | 'openai'
 export type ModelId = string
 
 export type ReasoningLevel = 'low' | 'medium' | 'high' | 'xhigh'
+export type CodexVerbosity = 'low' | 'medium' | 'high'
+export type CodexReasoningSummary = 'auto' | 'concise' | 'detailed' | 'none'
 
 export type RunnerId = 'codex' | 'custom'
 
@@ -19,11 +21,158 @@ export type ExecutionMode = 'auto' | 'manual'
 
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
-export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never'
+export type CodexApprovalReviewer = 'user' | 'auto_review'
+
+export interface CodexGranularApprovalPolicy {
+  kind: 'granular'
+  sandboxApproval?: boolean
+  rules?: boolean
+  mcpElicitations?: boolean
+  requestPermissions?: boolean
+  skillApproval?: boolean
+}
+
+export type CodexApprovalPolicyMode = 'untrusted' | 'on-request' | 'never'
+
+export type CodexApprovalPolicy = CodexApprovalPolicyMode | CodexGranularApprovalPolicy
 
 export type CodexWindowsSandbox = 'unelevated' | 'elevated'
 
 export type CodexApprovalProtocolStatus = 'supported' | 'unsupported' | 'unknown'
+
+export type CodexConfigLayerSource =
+  | 'user'
+  | 'project'
+  | 'ignored-project'
+  | 'profile'
+  | 'workflow'
+  | 'node'
+  | 'inline'
+  | 'managed-requirements'
+  | 'runtime-default'
+
+export interface CodexConfigLayerValue<T = unknown> {
+  source: CodexConfigLayerSource
+  value: T
+  detail?: string
+}
+
+export interface CodexResolvedMcpToolPolicy {
+  name: string
+  enabled?: boolean
+  approvalMode?: 'auto' | 'prompt' | 'approve'
+}
+
+export interface CodexResolvedMcpServer {
+  id: string
+  transport: 'stdio' | 'http' | 'unknown'
+  enabled: boolean
+  required?: boolean
+  environment?: 'local' | 'remote'
+  command?: string
+  args?: string[]
+  url?: string
+  cwd?: string
+  envVarNames?: string[]
+  startupTimeoutSec?: number
+  toolTimeoutSec?: number
+  enabledTools?: string[]
+  disabledTools?: string[]
+  defaultToolsApprovalMode?: 'auto' | 'prompt' | 'approve'
+  toolPolicies?: CodexResolvedMcpToolPolicy[]
+  readiness: 'ready' | 'disabled' | 'not-ready' | 'unknown'
+  reason?: string
+  constrainedByPolicy?: boolean
+  readinessCategory?:
+    | 'disabled'
+    | 'missing-config'
+    | 'invalid-config'
+    | 'probe-auth'
+    | 'probe-unreachable'
+    | 'probe-exit'
+    | 'probe-spawn-failed'
+    | 'policy-constrained'
+    | 'ready'
+}
+
+export interface ResolvedCodexConfig {
+  model?: string
+  reviewModel?: string
+  serviceTier?: string
+  sandboxMode: CodexSandboxMode
+  approvalPolicy: CodexApprovalPolicy
+  approvalsReviewer?: CodexApprovalReviewer
+  windowsSandbox?: CodexWindowsSandbox
+  profile?: string
+  trustLevel?: 'trusted' | 'untrusted' | 'unknown'
+  writableRoots?: string[]
+  networkAccess?: boolean
+  modelContextWindow?: number
+  modelAutoCompactTokenLimit?: number
+  compactPrompt?: string
+  memoriesDisableOnExternalContext?: boolean
+  modelVerbosity?: CodexVerbosity
+  modelReasoningSummary?: CodexReasoningSummary
+  hideAgentReasoning?: boolean
+  showRawAgentReasoning?: boolean
+  mcpServers?: CodexResolvedMcpServer[]
+  configEntries?: Record<string, string | number | boolean>
+  layers: {
+    model?: CodexConfigLayerValue<string>[]
+    reviewModel?: CodexConfigLayerValue<string>[]
+    serviceTier?: CodexConfigLayerValue<string>[]
+    sandboxMode?: CodexConfigLayerValue<CodexSandboxMode>[]
+    approvalPolicy?: CodexConfigLayerValue<CodexApprovalPolicy>[]
+    approvalsReviewer?: CodexConfigLayerValue<CodexApprovalReviewer>[]
+    windowsSandbox?: CodexConfigLayerValue<CodexWindowsSandbox>[]
+    profile?: CodexConfigLayerValue<string>[]
+    modelContextWindow?: CodexConfigLayerValue<number>[]
+    modelAutoCompactTokenLimit?: CodexConfigLayerValue<number>[]
+    compactPrompt?: CodexConfigLayerValue<string>[]
+    memoriesDisableOnExternalContext?: CodexConfigLayerValue<boolean>[]
+    modelVerbosity?: CodexConfigLayerValue<CodexVerbosity>[]
+    modelReasoningSummary?: CodexConfigLayerValue<CodexReasoningSummary>[]
+    hideAgentReasoning?: CodexConfigLayerValue<boolean>[]
+    showRawAgentReasoning?: CodexConfigLayerValue<boolean>[]
+  }
+  warnings?: string[]
+}
+
+export interface CompiledContextSourceBreakdown {
+  id: 'global-context' | 'short-term-memory' | 'long-term-memory' | 'node-prompt' | 'system-instruction' | 'artifacts' | 'other'
+  label: string
+  bytes: number
+  estimatedTokens: number
+}
+
+export interface CompiledContextDiagnostics {
+  model?: string
+  modelContextWindow?: number
+  autoCompactTokenLimit?: number
+  estimatedTotalTokens: number
+  estimatedTotalBytes: number
+  pressure: 'low' | 'medium' | 'high' | 'over-limit' | 'unknown'
+  breakdown: CompiledContextSourceBreakdown[]
+  contextHash?: string
+  previousNodeIds?: NodeId[]
+  staleSourceNodeIds?: NodeId[]
+  staleAttemptNodeIds?: NodeId[]
+  includesExternalContext?: boolean
+  memoriesDisableOnExternalContext?: boolean
+  memoryGenerationEligible?: boolean
+  compactPriority?: 'none' | 'low' | 'medium' | 'high'
+  memoryEligibilityReason?: string
+  compactSuggested?: boolean
+  compactReason?: string
+  compactCandidateSourceIds?: CompiledContextSourceBreakdown['id'][]
+  effectiveReviewModel?: string
+  effectiveServiceTier?: string
+  effectiveModelVerbosity?: CodexVerbosity
+  effectiveModelReasoningSummary?: CodexReasoningSummary
+  effectiveHideAgentReasoning?: boolean
+  effectiveShowRawAgentReasoning?: boolean
+  warnings?: string[]
+}
 
 export interface CodexApprovalProtocolProbeResult {
   status: CodexApprovalProtocolStatus
@@ -43,8 +192,15 @@ export interface CodexExecutionOptions {
   json?: boolean
   sandboxMode?: CodexSandboxMode
   approvalPolicy?: CodexApprovalPolicy
+  approvalsReviewer?: CodexApprovalReviewer
   windowsSandbox?: CodexWindowsSandbox
   profile?: string
+  reviewModel?: string
+  serviceTier?: string
+  modelVerbosity?: CodexVerbosity
+  modelReasoningSummary?: CodexReasoningSummary
+  hideAgentReasoning?: boolean
+  showRawAgentReasoning?: boolean
   config?: Record<string, string | number | boolean>
 }
 
@@ -135,6 +291,7 @@ export interface ProviderCapabilities {
   defaultModel?: string
   parameters: ProviderParameterSpec[]
   approvalProtocol?: CodexApprovalProtocolProbeResult
+  resolvedConfig?: ResolvedCodexConfig
   refreshHint?: string
 }
 
@@ -256,6 +413,22 @@ export interface Workflow {
   tags?: string[]
   /** Workflow-level review gating mode. */
   executionMode?: ExecutionMode
+  /** Optional override for review-focused Codex flows. */
+  reviewModel?: string
+  /** Workflow-level Codex service tier fallback when nodes do not override it. */
+  serviceTier?: string
+  /** Workflow-level Codex verbosity fallback when nodes do not override it. */
+  modelVerbosity?: CodexVerbosity
+  /** Workflow-level Codex reasoning-summary fallback when nodes do not override it. */
+  modelReasoningSummary?: CodexReasoningSummary
+  /** Workflow-level reasoning visibility fallback when nodes do not override it. */
+  hideAgentReasoning?: boolean
+  /** Workflow-level raw reasoning visibility fallback when nodes do not override it. */
+  showRawAgentReasoning?: boolean
+  /** Workflow-level context compaction threshold override. */
+  modelAutoCompactTokenLimit?: number
+  /** Workflow-level context window hint when the active model catalog is incomplete. */
+  modelContextWindow?: number
   /** Schema version. */
   fluxionVersion?: FluxionSchemaVersion
   nodes: WorkflowNode[]

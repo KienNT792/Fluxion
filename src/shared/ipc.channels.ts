@@ -59,6 +59,7 @@ export const IpcChannels = {
 
   // Memory
   MEMORY_CONTEXT_READY: 'memory:context-ready',
+  MEMORY_COMPACT_WORKFLOW: 'memory:compact-workflow',
 
   // Providers
   PROVIDERS_GET_CAPABILITIES: 'providers:get-capabilities',
@@ -69,7 +70,8 @@ export const IpcChannels = {
 
   // Shell
   SHELL_OPEN_PATH: 'shell:open-path',
-  SHELL_REVEAL_PATH: 'shell:reveal-path'
+  SHELL_REVEAL_PATH: 'shell:reveal-path',
+  SHELL_OPEN_TERMINAL: 'shell:open-terminal'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

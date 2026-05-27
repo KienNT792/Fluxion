@@ -27,11 +27,11 @@ Mo ta dung hon:
 
 ## Major Gaps Now
 
-- Effective Codex config diagnostics chua co.
-- Approval model trong UI/runtime chua theo kip capability Codex hien tai.
-- MCP chua duoc surface nhu first-class topology.
-- Context/token budget chua duoc giai thich ro cho operator.
-- Mot so docs trong repo da drift va can cleanup.
+- Effective Codex config diagnostics da co pass explainability dau tien, nhung chua full-stack cho moi layer authoring path.
+- Approval model trong UI/runtime da theo kip hon capability Codex hien tai, nhung app/tool-level authoring van chua xong.
+- MCP da duoc surface nhu topology + readiness taxonomy + policy posture, nhung coverage UX van chua exhaustive.
+- Context/token budget diagnostics da ro hon va da co long-term summary reuse primitive, nhung semantic compaction workflow van chua fully automated.
+- Mot so docs trong repo da drift va can cleanup tiep.
 
 ## Source-Of-Truth Planning
 
@@ -41,7 +41,7 @@ Mo ta dung hon:
 ## Recommended Next Focus
 
 1. document cleanup va repo hygiene
-2. effective config diagnostics
-3. richer approval mapping
-4. MCP readiness/topology surface
-5. context budget inspector
+2. effective config diagnostics full-layer completion
+3. semantic compaction workflow wiring
+4. remaining policy/readiness explainability polish
+5. strategic runtime discovery items

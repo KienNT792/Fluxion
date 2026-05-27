@@ -55,6 +55,14 @@ interface WorkflowState {
   workflowRevision: number
   lastSavedRevision: number
   executionMode: ExecutionMode
+  reviewModel: string | null
+  serviceTier: string | null
+  modelVerbosity: 'low' | 'medium' | 'high' | null
+  modelReasoningSummary: 'auto' | 'concise' | 'detailed' | 'none' | null
+  hideAgentReasoning: boolean
+  showRawAgentReasoning: boolean
+  modelAutoCompactTokenLimit: number | null
+  modelContextWindow: number | null
   nodes: Node<WorkflowNode['data']>[]
   edges: Edge[]
   workspacePath: string | null
@@ -89,6 +97,16 @@ interface WorkflowState {
   setWorkspacePath: (path: string | null) => void
   setWorkflowName: (name: string) => void
   setExecutionMode: (mode: ExecutionMode) => void
+  setWorkflowReviewModel: (model: string | null) => void
+  setWorkflowServiceTier: (value: string | null) => void
+  setWorkflowModelVerbosity: (value: 'low' | 'medium' | 'high' | null) => void
+  setWorkflowModelReasoningSummary: (
+    value: 'auto' | 'concise' | 'detailed' | 'none' | null
+  ) => void
+  setWorkflowHideAgentReasoning: (value: boolean) => void
+  setWorkflowShowRawAgentReasoning: (value: boolean) => void
+  setWorkflowModelAutoCompactTokenLimit: (value: number | null) => void
+  setWorkflowModelContextWindow: (value: number | null) => void
   fetchProviderCapabilities: (forceRefresh?: boolean) => Promise<ProviderCapabilitiesMap>
   hydrateWorkspace: (payload: WorkspaceOpenedPayload) => void
   setNodes: (nodes: Node<WorkflowNode['data']>[]) => void
@@ -176,6 +194,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workflowRevision: 0,
   lastSavedRevision: 0,
   executionMode: 'auto',
+  reviewModel: null,
+  serviceTier: null,
+  modelVerbosity: null,
+  modelReasoningSummary: null,
+  hideAgentReasoning: false,
+  showRawAgentReasoning: false,
+  modelAutoCompactTokenLimit: null,
+  modelContextWindow: null,
   nodes: [],
   edges: [],
   workspacePath: null,
@@ -231,6 +257,70 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }),
 
+  setWorkflowReviewModel: (reviewModel) =>
+    set((state) => ({
+      reviewModel,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowServiceTier: (serviceTier) =>
+    set((state) => ({
+      serviceTier,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowModelVerbosity: (modelVerbosity) =>
+    set((state) => ({
+      modelVerbosity,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowModelReasoningSummary: (modelReasoningSummary) =>
+    set((state) => ({
+      modelReasoningSummary,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowHideAgentReasoning: (hideAgentReasoning) =>
+    set((state) => ({
+      hideAgentReasoning,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowShowRawAgentReasoning: (showRawAgentReasoning) =>
+    set((state) => ({
+      showRawAgentReasoning,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowModelAutoCompactTokenLimit: (modelAutoCompactTokenLimit) =>
+    set((state) => ({
+      modelAutoCompactTokenLimit,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
+  setWorkflowModelContextWindow: (modelContextWindow) =>
+    set((state) => ({
+      modelContextWindow,
+      workflowRevision: state.workflowRevision + 1,
+      isDirty: true,
+      saveError: null
+    })),
+
   fetchProviderCapabilities: async (forceRefresh = false) => {
     if (!window.api?.getProviderCapabilities) {
       set({
@@ -245,7 +335,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ isProviderCapabilitiesLoading: true })
 
     try {
-      const capabilities = await window.api.getProviderCapabilities({ forceRefresh })
+      const capabilities = await window.api.getProviderCapabilities({
+        forceRefresh,
+        workspacePath: get().workspacePath ?? undefined
+      })
       set({
         providerCapabilities: capabilities,
         isProviderCapabilitiesLoading: false,
@@ -272,6 +365,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflowRevision: 0,
       lastSavedRevision: 0,
       executionMode: payload.workflow.executionMode ?? 'auto',
+      reviewModel: payload.workflow.reviewModel ?? null,
+      serviceTier: payload.workflow.serviceTier ?? null,
+      modelVerbosity: payload.workflow.modelVerbosity ?? null,
+      modelReasoningSummary: payload.workflow.modelReasoningSummary ?? null,
+      hideAgentReasoning: payload.workflow.hideAgentReasoning ?? false,
+      showRawAgentReasoning: payload.workflow.showRawAgentReasoning ?? false,
+      modelAutoCompactTokenLimit: payload.workflow.modelAutoCompactTokenLimit ?? null,
+      modelContextWindow: payload.workflow.modelContextWindow ?? null,
       nodes: applySelectionState(
         payload.workflow.nodes.map((node) => ({
           id: node.id,

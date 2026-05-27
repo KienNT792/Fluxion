@@ -264,17 +264,9 @@ When later items land, rollback must remain simple:
 
 ## Backlog Links
 
-The following backlog items implement this ADR in dependency order:
-
-- [`FX-WO-015` add `flowContextId` to run state and trace](../backlog/workflow-optimization-sprint.md#fx-wo-015-add-flowcontextid-to-run-state-and-trace-done)
-- [`FX-WO-016` add append-only flow context store](../backlog/workflow-optimization-sprint.md#fx-wo-016-add-append-only-flow-context-store-done)
-- [`FX-WO-017` define `ContextSnapshot` and `ContextDelta` contracts](../backlog/workflow-optimization-sprint.md#fx-wo-017-define-contextsnapshot-and-contextdelta-contracts-done)
-- [`FX-WO-018` add prompt layout guard for cache-friendly providers](../backlog/workflow-optimization-sprint.md#fx-wo-018-add-prompt-layout-guard-for-cache-friendly-providers-done)
-- [`FX-WO-019` build per-node `ContextSnapshot` before execution](../backlog/workflow-optimization-sprint.md#fx-wo-019-build-per-node-contextsnapshot-before-execution-done)
-- [`FX-WO-020` commit `ContextDelta` only after commit-safe node states](../backlog/workflow-optimization-sprint.md#fx-wo-020-commit-contextdelta-only-after-commit-safe-node-states-done)
-- [`FX-WO-021` add parallel merge policy for context deltas](../backlog/workflow-optimization-sprint.md#fx-wo-021-add-parallel-merge-policy-for-context-deltas-done)
-- [`FX-WO-022` extend trace evaluator for context lifecycle](../backlog/workflow-optimization-sprint.md#fx-wo-022-extend-trace-evaluator-for-context-lifecycle-ready)
-- [`FX-WO-023` add provider-state aware adapter result](../backlog/workflow-optimization-sprint.md#fx-wo-023-add-provider-state-aware-adapter-result-discovery)
+This ADR was implemented across the earlier `FX-WO-015` through `FX-WO-023` workstream.
+Those historical sprint links are intentionally no longer repeated here. Use
+[`docs/backlog/backlog.md`](../backlog/backlog.md) as the current planning source of truth.
 
 Code-facing additions completed by `FX-WO-015` through `FX-WO-021`:
 

@@ -119,6 +119,7 @@ Important behavior:
 - parallel branches may run concurrently within the process manager limit
 - review checkpoints can pause execution
 - run state persists under `.fluxion/runs`
+- compiled context diagnostics surface token pressure, stale retry carry-over, compaction guidance, and long-term summary reuse to the renderer
 
 ## IPC Shape
 
@@ -158,6 +159,18 @@ Key outputs:
 
 Node outputs are stored as markdown in `.fluxion/memory/` and can be reused as downstream context.
 
+Long-term memory can also hold semantic summaries generated from short-term node outputs. These summaries are indexed under `.fluxion/memory/long-term/` and can be injected back into future compiled contexts to reduce rerun token pressure.
+
+Fluxion also computes per-node compiled-context diagnostics, including:
+
+- heuristic token estimates
+- memory-generation eligibility under the active Codex config
+- stale retry evidence warnings
+- semantic compaction suggestions prioritized toward memory-heavy sources
+- long-term summary reuse visibility for reruns that already have condensed memory artifacts
+
+The renderer can also turn those diagnostics into durable long-term summaries through explicit user actions in the Flow Context inspector and retry/review-adjacent surfaces. That path writes semantic summary artifacts back under `.fluxion/memory/long-term/` without changing the core DAG execution contract.
+
 ## Provider and Runner Notes
 
 - `CodexCliAdapter` and `CodexCliRunner` are the production execution path
@@ -169,6 +182,7 @@ Node outputs are stored as markdown in `.fluxion/memory/` and can be reused as d
 - path handling must remain Windows-safe
 - process cleanup and abort flows are part of the product contract
 - long-running execution belongs in the main process, not the renderer
+- external Windows Terminal launch is part of the intended runtime/debug workflow for local investigation, including multi-pane debug sessions for repro, trace inspection, and workspace shell access
 
 ## Canonical Related Docs
 

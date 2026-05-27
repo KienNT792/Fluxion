@@ -1,9 +1,10 @@
 import React from 'react'
-import { FileOutput } from 'lucide-react'
+import { ExternalLink, FileOutput } from 'lucide-react'
 import { OutputPreview } from '@renderer/components/ui/OutputPreview'
 import { useExecutionStore } from '@renderer/stores/execution.store'
 import { useWorkflowStore } from '@renderer/stores/workflow.store'
 import { buildAttemptLineageSummary } from '../lib/attempt-lineage'
+import { buildNodeTerminalLaunchPayload } from '../lib/terminal-launch'
 
 function OutputEmptyState(): React.JSX.Element {
   return (
@@ -26,6 +27,7 @@ export function RuntimeOutputPreview(): React.JSX.Element {
   const nodeOutputPaths = useExecutionStore((state) => state.nodeOutputPaths)
   const nodeAttemptCounts = useExecutionStore((state) => state.nodeAttemptCounts)
   const nodeStatuses = useExecutionStore((state) => state.nodeStatuses)
+  const activeRunId = useExecutionStore((state) => state.activeRunId)
   const workflowError = useExecutionStore((state) => state.workflowError)
   const setWorkflowError = useExecutionStore((state) => state.setWorkflowError)
   const workspacePath = useWorkflowStore((state) => state.workspacePath)
@@ -40,9 +42,24 @@ export function RuntimeOutputPreview(): React.JSX.Element {
       <div className="space-y-3">
         {Object.entries(nodeOutputPaths).map(([nodeId, outputPath]) => {
           if (!outputPath) return null
+          if (!workspacePath) return null
           const attemptCount = nodeAttemptCounts[nodeId]
           const nodeStatus = nodeStatuses[nodeId]
           const attemptLineage = buildAttemptLineageSummary(attemptCount)
+          const launchMode =
+            nodeStatus === 'paused' ? 'review' : nodeStatus === 'error' ? 'debug' : 'default'
+          const issueHint =
+            nodeStatus === 'paused'
+              ? 'Review checkpoint is holding this node.'
+              : nodeStatus === 'error'
+                ? 'Node output belongs to a failed run.'
+                : undefined
+          const focusHint =
+            nodeStatus === 'paused'
+              ? 'Validate output, then inspect trace before approving or rerunning.'
+              : nodeStatus === 'error'
+                ? 'Start with output and trace, then inspect workspace diff if behavior drifted.'
+                : undefined
           return (
             <section
               key={nodeId}
@@ -78,6 +95,39 @@ export function RuntimeOutputPreview(): React.JSX.Element {
                       ? attemptLineage.label
                       : 'Latest'}
                 </span>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-sm p-1 transition-colors"
+                  title={
+                    launchMode === 'review'
+                      ? 'Open a review-focused Windows Terminal session'
+                      : launchMode === 'debug'
+                        ? 'Open a debug-focused Windows Terminal session'
+                        : 'Open this output in Windows Terminal'
+                  }
+                  onClick={() => {
+                    void window.api.openTerminal(
+                      buildNodeTerminalLaunchPayload({
+                        workspacePath,
+                        runId: activeRunId,
+                        nodeId,
+                        outputPath,
+                        mode: launchMode,
+                        issueHint,
+                        focusHint
+                      })
+                    )
+                  }}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.background = 'var(--color-surface-strong)'
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.background = 'transparent'
+                  }}
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  <ExternalLink size={11} />
+                </button>
               </div>
 
               <div className="px-2.5 py-2">

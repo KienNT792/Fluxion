@@ -19,6 +19,8 @@ import {
   ExecutionMode,
   IpcChannels,
   MemoryContextReadyPayload,
+  MemoryCompactWorkflowPayload,
+  MemoryCompactWorkflowResult,
   NodeId,
   OnboardingPacket,
   GetProviderCapabilitiesPayload,
@@ -33,6 +35,7 @@ import {
   TerminalDataBatchPayload,
   TerminalErrorPayload,
   TerminalExitPayload,
+  OpenTerminalPayload,
   UpdateOpenAIApiKeyPayload,
   Workflow,
   WorkflowReviewActionPayload,
@@ -243,6 +246,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.SHELL_OPEN_PATH, path) as Promise<void>,
   revealPath: (path: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.SHELL_REVEAL_PATH, path) as Promise<void>,
+  openTerminal: (payload: OpenTerminalPayload): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.SHELL_OPEN_TERMINAL, payload) as Promise<void>,
   runWorkflow: (
     workflowId: string,
     nodes: WorkflowNode[],
@@ -278,6 +283,13 @@ const api = {
       IpcChannels.WORKFLOW_EXPLAIN_FAILURE,
       payload
     ) as Promise<WorkflowExplainFailureResult>,
+  compactWorkflowMemory: (
+    payload: MemoryCompactWorkflowPayload
+  ): Promise<MemoryCompactWorkflowResult> =>
+    ipcRenderer.invoke(
+      IpcChannels.MEMORY_COMPACT_WORKFLOW,
+      payload
+    ) as Promise<MemoryCompactWorkflowResult>,
 
   onWorkspaceFileChanged: (callback: (payload: WorkspaceFileChangedPayload) => void) =>
     bindListener(IpcChannels.WORKSPACE_FILE_CHANGED, callback),

@@ -241,7 +241,7 @@ export function useIpcListeners(): void {
     )
 
     const unsubMemory = window.api.onMemoryContextReady((payload: MemoryContextReadyPayload) => {
-      setCompiledContext(payload.nodeId, payload.compiledContext)
+      setCompiledContext(payload.nodeId, payload.compiledContext, payload.diagnostics)
     })
 
     const unsubCompleted = window.api.onWorkflowCompleted((payload: WorkflowCompletedPayload) => {

@@ -188,6 +188,62 @@ describe('CodexCliRunner', () => {
     expect(args).toContain('model_verbosity="high"')
   })
 
+  it('serializes granular approval policy, approvals reviewer, and review model', async () => {
+    const ctx = createContext({
+      node: WorkflowNodeSchema.parse({
+        ...createContext().node,
+        data: {
+          ...createContext().node.data,
+          codex: {
+            ...createContext().node.data.codex,
+            approvalPolicy: {
+              kind: 'granular',
+              sandboxApproval: true,
+              requestPermissions: false
+            },
+            approvalsReviewer: 'auto_review',
+            reviewModel: 'gpt-5.5-review'
+          }
+        }
+      })
+    })
+
+    const args = await buildCodexExecArgs(ctx, 'D:\\out\\last-message.md')
+
+    expect(args).toContain(
+      'approval_policy={ granular = { sandbox_approval=true, request_permissions=false } }'
+    )
+    expect(args).toContain('approvals_reviewer=auto_review')
+    expect(args).toContain('review_model="gpt-5.5-review"')
+  })
+
+  it('serializes service tier, verbosity, and reasoning visibility config', async () => {
+    const ctx = createContext({
+      node: WorkflowNodeSchema.parse({
+        ...createContext().node,
+        data: {
+          ...createContext().node.data,
+          codex: {
+            ...createContext().node.data.codex,
+            serviceTier: 'fast',
+            modelVerbosity: 'high',
+            modelReasoningSummary: 'concise',
+            hideAgentReasoning: true,
+            showRawAgentReasoning: false
+          }
+        }
+      })
+    })
+
+    const args = await buildCodexExecArgs(ctx, 'D:\\out\\last-message.md')
+
+    expect(args).toContain('service_tier="fast"')
+    expect(args).toContain('model_verbosity="high"')
+    expect(args).toContain('model_reasoning_summary="concise"')
+    expect(args).toContain('hide_agent_reasoning=true')
+    expect(args).toContain('show_raw_agent_reasoning=false')
+  })
+
   it('injects model_reasoning_effort only for supported models and does not override explicit config', async () => {
     const ctx = createContext({
       node: WorkflowNodeSchema.parse({

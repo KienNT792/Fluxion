@@ -122,7 +122,7 @@ export interface TopbarStatusView {
 
 export interface AggregateReadinessRow {
   detail?: string
-  id: 'workflow' | 'save' | 'context' | 'codex' | 'activity' | 'permissions'
+  id: 'workflow' | 'save' | 'context' | 'codex' | 'activity' | 'permissions' | 'policy' | 'mcp'
   label: string
   tone: StatusChipTone
   value: string
@@ -145,10 +145,21 @@ export interface AggregateReadinessOptions {
     summary?: string
   }
   codexReadiness: {
+    actionItems?: Array<{
+      id: string
+      title: string
+      detail: string
+      severity: 'warning' | 'blocked'
+      kind: 'config' | 'mcp'
+    }>
     blocking?: boolean
     detail: string
     label: string
+    mcpSummary?: string
+    policySummary?: string
+    resolvedConfigSummary?: string
     summary: string
+    warnings?: string[]
   }
   contextChipState: TopbarStatusView
   hasExternalWorkflowChange: boolean
@@ -180,6 +191,11 @@ export function getAggregateReadinessState({
       : approvalGuardrail.severity === 'warning'
         ? 'warning'
         : 'success'
+  const configIssues =
+    codexReadiness.actionItems?.filter((item) => item.kind === 'config') ?? []
+  const mcpIssues = codexReadiness.actionItems?.filter((item) => item.kind === 'mcp') ?? []
+  const blockedMcpIssues = mcpIssues.filter((item) => item.severity === 'blocked')
+  const warningMcpIssues = mcpIssues.filter((item) => item.severity === 'warning')
   const rows: AggregateReadinessRow[] = [
     {
       id: 'workflow',
@@ -208,6 +224,48 @@ export function getAggregateReadinessState({
       tone: readinessTone,
       value: codexReadiness.label,
       detail: codexReadiness.detail
+    },
+    {
+      id: 'policy',
+      label: 'Policy',
+      tone:
+        configIssues.length > 0 ||
+        codexReadiness.label === 'Config warning' ||
+        (codexReadiness.warnings?.length ?? 0) > 0
+          ? 'warning'
+          : 'idle',
+      value:
+        configIssues.length > 0
+          ? `${configIssues.length} config issue${configIssues.length === 1 ? '' : 's'}`
+          : codexReadiness.resolvedConfigSummary ?? 'Default runtime policy',
+      detail:
+        configIssues.length > 0
+          ? configIssues.map((item) => item.title).join(' ')
+          : codexReadiness.policySummary ?? codexReadiness.warnings?.join(' ')
+    },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      tone:
+        blockedMcpIssues.length > 0
+          ? 'error'
+          : codexReadiness.label === 'MCP warning' || warningMcpIssues.length > 0
+            ? 'warning'
+          : codexReadiness.mcpSummary
+            ? 'idle'
+            : 'warning',
+      value:
+        blockedMcpIssues.length > 0
+          ? `${blockedMcpIssues.length} MCP blocker${blockedMcpIssues.length === 1 ? '' : 's'}`
+          : warningMcpIssues.length > 0
+            ? `${warningMcpIssues.length} MCP warning${warningMcpIssues.length === 1 ? '' : 's'}`
+            : codexReadiness.mcpSummary ?? 'No MCP config detected',
+      detail:
+        mcpIssues.length > 0
+          ? mcpIssues.map((item) => item.title).join(' ')
+          : codexReadiness.mcpSummary
+            ? 'Workspace MCP topology derived from project Codex config.'
+            : 'No project-scoped MCP server configuration was detected.'
     },
     {
       id: 'activity',
@@ -319,6 +377,25 @@ export function getAggregateReadinessState({
       label: 'Permission warning',
       rows,
       tone: 'warning'
+    }
+  }
+
+  if (codexReadiness.label === 'MCP warning' || codexReadiness.label === 'Config warning') {
+    return {
+      animate: false,
+      detail:
+        blockedMcpIssues[0]?.detail ??
+        mcpIssues[0]?.detail ??
+        configIssues[0]?.detail ??
+        codexReadiness.summary,
+      label:
+        blockedMcpIssues.length > 0
+          ? 'MCP blocked'
+          : configIssues.length > 0
+            ? 'Config warning'
+            : codexReadiness.label,
+      rows,
+      tone: blockedMcpIssues.length > 0 ? 'error' : 'warning'
     }
   }
 

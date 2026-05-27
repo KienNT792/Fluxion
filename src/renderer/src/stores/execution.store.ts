@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { NodeId, NodeStatus } from '@shared'
+import { CompiledContextDiagnostics, NodeId, NodeStatus } from '@shared'
 
 // We split into slices conceptually, but keep them in one store for easy access
 // since Zustand handles partial updates very well.
@@ -77,6 +77,7 @@ interface StatusSlice {
   nodeRunMetrics: Record<NodeId, NodeRunMetrics>
   pendingReviewByNodeId: Record<NodeId, PendingReviewContext | undefined>
   compiledContexts: Record<NodeId, string>
+  compiledContextDiagnostics: Record<NodeId, CompiledContextDiagnostics | undefined>
 
   setWorkflowStatus: (status: WorkflowRuntimeStatus) => void
   setWorkflowError: (error: string | null) => void
@@ -92,7 +93,11 @@ interface StatusSlice {
   setNodeRunMetrics: (nodeId: NodeId, metrics: Partial<NodeRunMetrics>) => void
   setNodeAttemptCount: (nodeId: NodeId, attemptCount: number) => void
   setPendingReviewContext: (nodeId: NodeId, context?: PendingReviewContext) => void
-  setCompiledContext: (nodeId: NodeId, context: string) => void
+  setCompiledContext: (
+    nodeId: NodeId,
+    context: string,
+    diagnostics?: CompiledContextDiagnostics
+  ) => void
   resetNodeExecution: (nodeIds: NodeId[]) => void
   resetExecution: (nodeIds: NodeId[]) => void
   clearReviewActionInFlight: () => void
@@ -236,6 +241,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   nodeRunMetrics: {},
   pendingReviewByNodeId: {},
   compiledContexts: {},
+  compiledContextDiagnostics: {},
 
   setWorkflowStatus: (status) => set({ workflowStatus: status }),
   setWorkflowError: (error) => set({ workflowError: error }),
@@ -342,11 +348,15 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }))
   },
 
-  setCompiledContext: (nodeId, context) => {
+  setCompiledContext: (nodeId, context, diagnostics) => {
     set((state) => ({
       compiledContexts: {
         ...state.compiledContexts,
         [nodeId]: context
+      },
+      compiledContextDiagnostics: {
+        ...state.compiledContextDiagnostics,
+        [nodeId]: diagnostics
       }
     }))
   },
@@ -355,6 +365,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     set((state) => {
       const nextNodeStatuses = { ...state.nodeStatuses }
       const nextContexts = { ...state.compiledContexts }
+      const nextContextDiagnostics = { ...state.compiledContextDiagnostics }
       const nextNodeErrors = { ...state.nodeErrors }
       const nextNodeExitCodes = { ...state.nodeExitCodes }
       const nextNodeOutputPaths = { ...state.nodeOutputPaths }
@@ -365,6 +376,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       nodeIds.forEach((id) => {
         nextNodeStatuses[id] = 'idle'
         nextContexts[id] = ''
+        nextContextDiagnostics[id] = undefined
         nextNodeErrors[id] = undefined
         nextNodeExitCodes[id] = undefined
         nextNodeOutputPaths[id] = undefined
@@ -382,7 +394,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nodeOutputPaths: nextNodeOutputPaths,
         nodeRunMetrics: nextNodeRunMetrics,
         pendingReviewByNodeId: nextPendingReviewByNodeId,
-        compiledContexts: nextContexts
+        compiledContexts: nextContexts,
+        compiledContextDiagnostics: nextContextDiagnostics
       }
     })
   },
@@ -393,6 +406,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     const newLogCursors: Record<NodeId, number> = {}
     const newAttemptCounts: Record<NodeId, number> = {}
     const newContexts: Record<NodeId, string> = {}
+    const newContextDiagnostics: Record<NodeId, CompiledContextDiagnostics | undefined> = {}
     const newNodeErrors: Record<NodeId, string | undefined> = {}
     const newNodeExitCodes: Record<NodeId, number | null | undefined> = {}
     const newNodeOutputPaths: Record<NodeId, string | undefined> = {}
@@ -407,6 +421,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       newLogCursors[id] = 0
       newAttemptCounts[id] = 1
       newContexts[id] = ''
+      newContextDiagnostics[id] = undefined
       newNodeErrors[id] = undefined
       newNodeExitCodes[id] = undefined
       newNodeOutputPaths[id] = undefined
@@ -430,7 +445,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       runtimeLogs: newRuntimeLogs,
       terminalLogCursors: newLogCursors,
       nodeAttemptCounts: newAttemptCounts,
-      compiledContexts: newContexts
+      compiledContexts: newContexts,
+      compiledContextDiagnostics: newContextDiagnostics
     })
   },
 

@@ -2,6 +2,8 @@ import {
   AgentNodeData,
   CodexApprovalProtocolStatus,
   CodexApprovalPolicy,
+  CodexApprovalPolicyMode,
+  CodexApprovalReviewer,
   CodexSandboxMode,
   CodexWindowsSandbox,
   NodeId,
@@ -23,6 +25,8 @@ export interface CodexApprovalGuardrailResult {
   nodeId?: NodeId
   nodeLabel?: string
   approvalPolicy: CodexApprovalPolicy
+  approvalPolicyMode: CodexApprovalPolicyMode | 'granular'
+  approvalsReviewer?: CodexApprovalReviewer
   sandboxMode: CodexSandboxMode
   windowsSandbox?: CodexWindowsSandbox
 }
@@ -34,6 +38,28 @@ export interface CodexApprovalGuardrailOptions {
 const DEFAULT_APPROVAL_POLICY: CodexApprovalPolicy = 'never'
 const DEFAULT_SANDBOX_MODE: CodexSandboxMode = 'workspace-write'
 const DEFAULT_APPROVAL_PROTOCOL_STATUS: CodexApprovalProtocolStatus = 'unknown'
+
+function getApprovalPolicyMode(policy: CodexApprovalPolicy): CodexApprovalPolicyMode | 'granular' {
+  return typeof policy === 'string' ? policy : 'granular'
+}
+
+function formatApprovalPolicy(policy: CodexApprovalPolicy): string {
+  if (typeof policy === 'string') {
+    return policy
+  }
+
+  const enabledCategories = [
+    policy.sandboxApproval ? 'sandbox_approval' : null,
+    policy.rules ? 'rules' : null,
+    policy.mcpElicitations ? 'mcp_elicitations' : null,
+    policy.requestPermissions ? 'request_permissions' : null,
+    policy.skillApproval ? 'skill_approval' : null
+  ].filter(Boolean)
+
+  return enabledCategories.length > 0
+    ? `granular(${enabledCategories.join(', ')})`
+    : 'granular(no interactive categories)'
+}
 
 function getDisplayName(node: CodexApprovalGuardrailNode): string {
   const dataLabel = typeof node.data?.label === 'string' ? node.data.label.trim() : ''
@@ -48,6 +74,7 @@ function createResult(
   summary: string,
   message: string,
   approvalPolicy: CodexApprovalPolicy,
+  approvalsReviewer: CodexApprovalReviewer | undefined,
   sandboxMode: CodexSandboxMode,
   windowsSandbox?: CodexWindowsSandbox
 ): CodexApprovalGuardrailResult {
@@ -58,6 +85,8 @@ function createResult(
     nodeId: node.id,
     nodeLabel: getDisplayName(node),
     approvalPolicy,
+    approvalPolicyMode: getApprovalPolicyMode(approvalPolicy),
+    approvalsReviewer,
     sandboxMode,
     windowsSandbox
   }
@@ -68,30 +97,48 @@ export function getNodeCodexApprovalGuardrail(
   options: CodexApprovalGuardrailOptions = {}
 ): CodexApprovalGuardrailResult {
   const approvalPolicy = node.data?.codex?.approvalPolicy ?? DEFAULT_APPROVAL_POLICY
+  const approvalsReviewer = node.data?.codex?.approvalsReviewer
   const sandboxMode = node.data?.codex?.sandboxMode ?? DEFAULT_SANDBOX_MODE
   const windowsSandbox = node.data?.codex?.windowsSandbox
   const nodeLabel = getDisplayName(node)
   const approvalProtocolStatus = options.approvalProtocolStatus ?? DEFAULT_APPROVAL_PROTOCOL_STATUS
+  const approvalPolicyMode = getApprovalPolicyMode(approvalPolicy)
+  const approvalPolicyLabel = formatApprovalPolicy(approvalPolicy)
 
-  if (approvalPolicy === 'on-request' && approvalProtocolStatus !== 'supported') {
+  if (approvalPolicyMode === 'on-request' && approvalProtocolStatus !== 'supported') {
     return createResult(
       node,
       'blocked',
       `${nodeLabel}: approval_policy=on-request requires interactive approval support.`,
       `Node "${nodeLabel}" uses approval_policy=on-request. Codex works inside the sandbox by default and can ask when it needs to go beyond that boundary. Fluxion Phase 2A only allows interactive policies after a supported Codex approval protocol probe, but the current protocol status is ${approvalProtocolStatus}. Set approval policy to never before running this workflow.`,
       approvalPolicy,
+      approvalsReviewer,
       sandboxMode,
       windowsSandbox
     )
   }
 
-  if (approvalPolicy === 'untrusted' && approvalProtocolStatus !== 'supported') {
+  if (approvalPolicyMode === 'untrusted' && approvalProtocolStatus !== 'supported') {
     return createResult(
       node,
       'blocked',
       `${nodeLabel}: approval_policy=untrusted requires interactive approval support.`,
       `Node "${nodeLabel}" uses approval_policy=untrusted. Codex can ask before commands outside its trusted set. Fluxion Phase 2A only allows interactive policies after a supported Codex approval protocol probe, but the current protocol status is ${approvalProtocolStatus}. Set approval policy to never before running this workflow.`,
       approvalPolicy,
+      approvalsReviewer,
+      sandboxMode,
+      windowsSandbox
+    )
+  }
+
+  if (approvalPolicyMode === 'granular' && approvalProtocolStatus !== 'supported') {
+    return createResult(
+      node,
+      'blocked',
+      `${nodeLabel}: approval_policy=${approvalPolicyLabel} requires interactive approval support.`,
+      `Node "${nodeLabel}" uses approval_policy=${approvalPolicyLabel}. Codex can surface approvals only for the enabled categories in this granular policy, but Fluxion cannot host those interactive prompts until approval protocol support is verified. The current protocol status is ${approvalProtocolStatus}. Switch this node to approval_policy=never for non-interactive runs, or complete the approval-hosting work first.`,
+      approvalPolicy,
+      approvalsReviewer,
       sandboxMode,
       windowsSandbox
     )
@@ -102,8 +149,9 @@ export function getNodeCodexApprovalGuardrail(
       node,
       'warning',
       `${nodeLabel}: sandbox_mode=danger-full-access is high risk.`,
-      `Node "${nodeLabel}" uses sandbox_mode=danger-full-access with approval_policy=${approvalPolicy}. Codex runs without sandbox restrictions, so keep this limited to trusted workspaces.`,
+      `Node "${nodeLabel}" uses sandbox_mode=danger-full-access with approval_policy=${approvalPolicyLabel}. Codex runs without sandbox restrictions, so keep this limited to trusted workspaces.`,
       approvalPolicy,
+      approvalsReviewer,
       sandboxMode,
       windowsSandbox
     )
@@ -114,8 +162,24 @@ export function getNodeCodexApprovalGuardrail(
       node,
       'warning',
       `${nodeLabel}: sandbox_mode=read-only may prevent writes.`,
-      `Node "${nodeLabel}" uses sandbox_mode=read-only with approval_policy=${approvalPolicy}. This is allowed, but edits and write commands may fail.`,
+      `Node "${nodeLabel}" uses sandbox_mode=read-only with approval_policy=${approvalPolicyLabel}. This is allowed, but edits and write commands may fail.`,
       approvalPolicy,
+      approvalsReviewer,
+      sandboxMode,
+      windowsSandbox
+    )
+  }
+
+  if (approvalPolicyMode === 'granular') {
+    return createResult(
+      node,
+      'warning',
+      `${nodeLabel}: approval_policy=${approvalPolicyLabel} is only partially surfaced in Fluxion.`,
+      `Node "${nodeLabel}" uses approval_policy=${approvalPolicyLabel}${
+        approvalsReviewer ? ` with approvals_reviewer=${approvalsReviewer}` : ''
+      }. The runtime policy is valid, but Fluxion does not yet expose every approval category separately in the workflow UX.`,
+      approvalPolicy,
+      approvalsReviewer,
       sandboxMode,
       windowsSandbox
     )
@@ -125,10 +189,13 @@ export function getNodeCodexApprovalGuardrail(
     node,
     'ok',
     `${nodeLabel}: Codex permissions are runnable.`,
-    approvalPolicy === 'never'
+    approvalPolicyMode === 'never'
       ? `Node "${nodeLabel}" uses approval_policy=never. Codex does not stop for approval prompts, which matches Fluxion's non-interactive runner.`
-      : `Node "${nodeLabel}" uses approval_policy=${approvalPolicy}, and Fluxion has a supported Codex approval protocol status for interactive policies.`,
+      : `Node "${nodeLabel}" uses approval_policy=${approvalPolicyLabel}${
+          approvalsReviewer ? ` with approvals_reviewer=${approvalsReviewer}` : ''
+        }, and Fluxion has a supported Codex approval protocol status for interactive policies.`,
     approvalPolicy,
+    approvalsReviewer,
     sandboxMode,
     windowsSandbox
   )
@@ -155,6 +222,7 @@ export function getWorkflowCodexApprovalGuardrail(
     message:
       'All nodes use approval_policy=never or an interactive policy with supported approval protocol status. Codex does not stop for approval prompts when approval_policy=never.',
     approvalPolicy: DEFAULT_APPROVAL_POLICY,
+    approvalPolicyMode: 'never',
     sandboxMode: DEFAULT_SANDBOX_MODE
   }
 }

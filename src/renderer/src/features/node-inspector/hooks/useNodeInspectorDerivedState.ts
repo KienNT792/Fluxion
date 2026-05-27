@@ -23,6 +23,7 @@ interface UseNodeInspectorDerivedStateOptions {
   executionMode: 'auto' | 'manual'
   localData: Partial<AgentNodeData>
   providerCapabilities: ProviderCapabilitiesMap
+  workflowReviewModel: string | null
   selectedNode: {
     id: string
     data: WorkflowNode['data']
@@ -42,6 +43,7 @@ export interface NodeInspectorDerivedState {
   currentModel: ModelId
   currentModelCapabilities: ReturnType<typeof getCodexModelById>
   currentModelDisplayName: string
+  currentReviewModel?: ModelId
   currentSandboxMode: CodexSandboxMode
   currentWindowsSandbox: string
   isReasoningModel: boolean
@@ -58,6 +60,7 @@ export function useNodeInspectorDerivedState({
   executionMode,
   localData,
   providerCapabilities,
+  workflowReviewModel,
   selectedNode,
   selectedNodeId
 }: UseNodeInspectorDerivedStateOptions): NodeInspectorDerivedState {
@@ -82,6 +85,10 @@ export function useNodeInspectorDerivedState({
   const currentSandboxMode: CodexSandboxMode = currentCodexOptions.sandboxMode ?? 'workspace-write'
   const currentApprovalPolicy: CodexApprovalPolicy = currentCodexOptions.approvalPolicy ?? 'never'
   const currentWindowsSandbox = currentCodexOptions.windowsSandbox ?? ''
+  const currentReviewModel =
+    typeof currentCodexOptions.reviewModel === 'string' && currentCodexOptions.reviewModel.trim()
+      ? (currentCodexOptions.reviewModel as ModelId)
+      : undefined
   const nodeApprovalGuardrail = getNodeCodexApprovalGuardrail(
     {
       id: selectedNodeId,
@@ -119,7 +126,7 @@ export function useNodeInspectorDerivedState({
   const reviewModeNote =
     executionMode === 'manual'
       ? 'Manual mode pauses every completed node. This checkbox only matters when the workflow returns to Auto.'
-      : 'Auto mode continues immediately unless this node explicitly requires review.'
+      : `Auto mode continues immediately unless this node explicitly requires review. Review model fallback: node override${workflowReviewModel ? `, workflow=${workflowReviewModel}` : ''}, then run model.`
 
   return {
     currentApprovalPolicy,
@@ -130,6 +137,7 @@ export function useNodeInspectorDerivedState({
     currentModel,
     currentModelCapabilities,
     currentModelDisplayName,
+    currentReviewModel,
     currentSandboxMode,
     currentWindowsSandbox,
     isReasoningModel,

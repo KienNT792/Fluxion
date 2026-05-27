@@ -170,12 +170,33 @@ function collectRetryNodeIds(startNodeId: NodeId, edges: WorkflowEdge[]): NodeId
 }
 
 export function buildWorkflowDocument(): Workflow {
-  const { workflowId, workflowName, lastSavedAt, executionMode } = useWorkflowStore.getState()
+  const {
+    workflowId,
+    workflowName,
+    lastSavedAt,
+    executionMode,
+    reviewModel,
+    serviceTier,
+    modelVerbosity,
+    modelReasoningSummary,
+    hideAgentReasoning,
+    showRawAgentReasoning,
+    modelAutoCompactTokenLimit,
+    modelContextWindow
+  } = useWorkflowStore.getState()
 
   return {
     id: workflowId,
     name: workflowName,
     executionMode,
+    reviewModel: reviewModel ?? undefined,
+    serviceTier: serviceTier ?? undefined,
+    modelVerbosity: modelVerbosity ?? undefined,
+    modelReasoningSummary: modelReasoningSummary ?? undefined,
+    hideAgentReasoning,
+    showRawAgentReasoning,
+    modelAutoCompactTokenLimit: modelAutoCompactTokenLimit ?? undefined,
+    modelContextWindow: modelContextWindow ?? undefined,
     nodes: mapCanvasNodesToWorkflowNodes(),
     edges: mapCanvasEdgesToWorkflowEdges(),
     updatedAt: lastSavedAt ?? undefined
@@ -420,6 +441,58 @@ export async function runCurrentWorkflow(resumeFromNodeId?: NodeId): Promise<voi
 
 export function retryWorkflowFromNode(nodeId: NodeId): void {
   void runCurrentWorkflow(nodeId)
+}
+
+export async function compactWorkflowContextForNode(nodeId: NodeId): Promise<void> {
+  const workflowStore = useWorkflowStore.getState()
+  const executionStore = useExecutionStore.getState()
+  const diagnostics = executionStore.compiledContextDiagnostics[nodeId]
+
+  if (!workflowStore.workspacePath || !executionStore.activeRunId || !diagnostics?.compactSuggested) {
+    return
+  }
+
+  const sourceNodeIds =
+    diagnostics.previousNodeIds?.length
+      ? diagnostics.previousNodeIds
+      : diagnostics.staleAttemptNodeIds?.length
+        ? diagnostics.staleAttemptNodeIds
+        : []
+
+  if (sourceNodeIds.length === 0) {
+    executionStore.setWorkflowError(
+      'No upstream node outputs are available to summarize for compaction.'
+    )
+    return
+  }
+
+  try {
+      await window.api.compactWorkflowMemory({
+        workspacePath: workflowStore.workspacePath,
+        workflowId: workflowStore.workflowId,
+        runId: executionStore.activeRunId,
+        sourceNodeIds,
+        diagnostics: {
+          estimatedTotalTokens: diagnostics.estimatedTotalTokens,
+          pressure: diagnostics.pressure,
+          compactPriority: diagnostics.compactPriority,
+          compactReason: diagnostics.compactReason,
+          memoryEligibilityReason: diagnostics.memoryEligibilityReason,
+          compactCandidateSourceIds: diagnostics.compactCandidateSourceIds,
+          previousNodeIds: diagnostics.previousNodeIds,
+          staleAttemptNodeIds: diagnostics.staleAttemptNodeIds,
+          includesExternalContext: diagnostics.includesExternalContext,
+          memoriesDisableOnExternalContext: diagnostics.memoriesDisableOnExternalContext
+        }
+      })
+    executionStore.setWorkflowError(
+      `Long-term summary created for ${sourceNodeIds.join(', ')}.`
+    )
+  } catch (error) {
+    executionStore.setWorkflowError(
+      getErrorMessage(error, 'Failed to create long-term summary.')
+    )
+  }
 }
 
 export async function approveReviewNode(nodeId: NodeId): Promise<void> {

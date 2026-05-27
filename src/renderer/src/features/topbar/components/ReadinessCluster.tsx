@@ -234,6 +234,8 @@ function ReadinessRow({
     row.tone === 'paused' ||
     row.tone === 'running' ||
     row.tone === 'stopping' ||
+    row.id === 'policy' ||
+    row.id === 'mcp' ||
     (row.id === 'activity' && hasExternalWorkflowChange) ||
     (row.id === 'permissions' && approvalGuardrail.severity !== 'ok')
   const dotColor = TONE_COLORS[row.tone]

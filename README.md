@@ -11,6 +11,10 @@ Fluxion turns repeatable `codex exec` work into a local orchestration system wit
 - Persist workflow state and run history under `.fluxion/`
 - Stream terminal output and node status in real time
 - Gate execution with human review checkpoints
+- Inspect effective Codex config, MCP readiness, and workflow policy posture
+- Track context pressure, compaction hints, stale retry carry-over, and long-term summary reuse before reruns
+- Create long-term memory summaries directly from compaction warnings in the Flow Context inspector and from retry/review-adjacent runtime surfaces
+- Jump from runtime failures or review checkpoints into Windows Terminal repro sessions, including split-pane debug layouts
 - Export repository guidance such as `AGENTS.md` and optional `.codex/config.toml`
 
 ## Product Direction
@@ -115,6 +119,7 @@ npm run smoke:win
 6. Run through the Codex CLI
 7. Review outputs, logs, and checkpoints
 8. Retry failed nodes when needed
+9. Use policy/context inspectors, MCP dependency warnings, long-term memory summaries, and Windows Terminal repro sessions when diagnosing reruns
 
 ## Architecture Summary
 
@@ -135,6 +140,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the detailed runtime model.
 ## Related Docs
 
 - [docs/agents/README.md](./docs/agents/README.md)
+- [docs/runtime/](./docs/runtime/): implementation notes and ADR-style runtime documents; useful, but not canonical unless linked from `AGENTS.md`, `README.md`, or `ARCHITECTURE.md`
 - [docs/runtime/codex-approval-status.md](./docs/runtime/codex-approval-status.md)
 - [docs/dogfood/README.md](./docs/dogfood/README.md)
 - [docs/qa/context-init-smoke.md](./docs/qa/context-init-smoke.md)

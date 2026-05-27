@@ -1,6 +1,6 @@
 import React from 'react'
 import { RotateCcw } from 'lucide-react'
-import type { NodeId, NodeStatus } from '@shared'
+import type { CompiledContextDiagnostics, NodeId, NodeStatus } from '@shared'
 import { retryWorkflowFromNode } from '@renderer/lib/workflow-session'
 import { Button } from '@renderer/components/ui/Button'
 import { FilePathCard } from '@renderer/components/ui/FilePathCard'
@@ -11,12 +11,17 @@ import { InspectorSection as Section } from './InspectorSection'
 import { LABEL_STYLE, READONLY_BLOCK_STYLE, READONLY_INLINE_STYLE } from '../lib/inspector-styles'
 import { getNodeStatusLabel, NODE_STATUS_TONE } from '../lib/node-display'
 import {
+  buildRuntimePolicyLinesFromDiagnostics,
+  buildRuntimePolicySummaryFromDiagnostics
+} from '../lib/effective-policy'
+import {
   deriveDurationMs,
   formatDurationMs,
   useRuntimeNow
 } from '@renderer/features/runtime/lib/runtime-metrics'
 
 interface RuntimeSectionProps {
+  contextDiagnostics?: CompiledContextDiagnostics
   nodeAttemptCount?: number
   nodeError?: string
   nodeExitCode?: number | null
@@ -35,6 +40,7 @@ interface RuntimeSectionProps {
 }
 
 export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
+  contextDiagnostics,
   nodeAttemptCount,
   nodeError,
   nodeExitCode,
@@ -56,6 +62,8 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
       now
     })
   )
+  const runtimePolicyLines = buildRuntimePolicyLinesFromDiagnostics(contextDiagnostics)
+  const runtimePolicySummary = buildRuntimePolicySummaryFromDiagnostics(contextDiagnostics)
 
   return (
     <Section title="Output">
@@ -81,6 +89,41 @@ export const RuntimeSection: React.FC<RuntimeSectionProps> = ({
       <div>
         <label style={LABEL_STYLE}>Output File</label>
         <FilePathCard path={nodeOutputPath} onError={onError} />
+      </div>
+
+      <div>
+        <label style={LABEL_STYLE}>Effective Runtime Policy</label>
+        <div
+          className="mb-2 rounded-md px-3 py-2 text-[11px] leading-5"
+          style={{
+            color: 'var(--color-body)',
+            background: 'var(--color-surface-card)',
+            border: '1px solid var(--color-hairline)'
+          }}
+        >
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Runtime summary
+          </div>
+          <div className="mt-1 text-xs font-medium" style={{ color: 'var(--color-ink)' }}>
+            {runtimePolicySummary.headline}
+          </div>
+          <div className="mt-1 text-[10px]" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>
+            {runtimePolicySummary.detail}
+          </div>
+        </div>
+        <div
+          style={{
+            ...READONLY_BLOCK_STYLE,
+            minHeight: '124px',
+            color: 'var(--color-body)',
+            whiteSpace: 'pre-wrap'
+          }}
+        >
+          {runtimePolicyLines.join('\n')}
+        </div>
       </div>
 
       {(nodeStatus !== 'paused' || showOutputPreviewForPaused) && (

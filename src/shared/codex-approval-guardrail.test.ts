@@ -109,6 +109,51 @@ describe('Codex approval guardrail', () => {
     })
   })
 
+  it('blocks granular approval policy when protocol status is unsupported', () => {
+    const result = getNodeCodexApprovalGuardrail(
+      createNode({
+        provider: 'codex',
+        model: 'gpt-5.5',
+        prompt: '',
+        codex: {
+          approvalPolicy: {
+            kind: 'granular',
+            sandboxApproval: true,
+            mcpElicitations: true
+          }
+        }
+      }),
+      { approvalProtocolStatus: 'unknown' }
+    )
+
+    expect(result.severity).toBe('blocked')
+    expect(result.message).toContain('granular')
+    expect(result.message).toContain('interactive prompts')
+  })
+
+  it('warns for granular approval policy even when protocol status is supported', () => {
+    const result = getNodeCodexApprovalGuardrail(
+      createNode({
+        provider: 'codex',
+        model: 'gpt-5.5',
+        prompt: '',
+        codex: {
+          approvalPolicy: {
+            kind: 'granular',
+            sandboxApproval: true,
+            skillApproval: true
+          },
+          approvalsReviewer: 'auto_review'
+        }
+      }),
+      { approvalProtocolStatus: 'supported' }
+    )
+
+    expect(result.severity).toBe('warning')
+    expect(result.approvalPolicyMode).toBe('granular')
+    expect(result.approvalsReviewer).toBe('auto_review')
+  })
+
   it('warns but allows danger-full-access when approval policy is never', () => {
     const result = getNodeCodexApprovalGuardrail(
       createNode({
