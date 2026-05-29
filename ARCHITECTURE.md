@@ -187,9 +187,8 @@ The renderer can also turn those diagnostics into durable long-term summaries th
 ## Canonical Related Docs
 
 - [README.md](./README.md)
-- [AGENTS.md](./AGENTS.md)
+- [CLAUDE.md](./CLAUDE.md)
 - [DESIGN.md](./DESIGN.md)
-- [docs/agents/README.md](./docs/agents/README.md)
 - [docs/runtime/codex-approval-status.md](./docs/runtime/codex-approval-status.md)
 
 ## Non-Goals of This Document

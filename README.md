@@ -29,10 +29,9 @@ The unfinished OpenAI adapter exists in the codebase, but it is not the main pro
 
 ## Repository Guide
 
-- [AGENTS.md](./AGENTS.md): durable instructions for Codex working in this repo
+- [CLAUDE.md](./CLAUDE.md): guidance for Claude Code working in this repo
 - [ARCHITECTURE.md](./ARCHITECTURE.md): current architecture, runtime boundaries, persistence, and execution model
 - [DESIGN.md](./DESIGN.md): visual and UX direction
-- [docs/agents/README.md](./docs/agents/README.md): agent-facing documentation map for this repository
 - [docs/backlog/backlog.md](./docs/backlog/backlog.md): tracked work and open items
 
 ## Repository Layout
@@ -43,7 +42,7 @@ src/main       Electron main process, IPC handlers, services, runners, adapters
 src/preload    typed contextBridge API exposed to the renderer
 src/renderer   React UI, React Flow canvas, Zustand stores, dialogs, terminal view
 src/shared     shared workflow, provider, and IPC contracts
-docs/          backlog, QA, runtime notes, agent docs, and dogfood assets
+docs/          backlog, QA, runtime notes, and dogfood assets
 scripts/       smoke and project scripts
 ```
 
@@ -114,7 +113,7 @@ npm run smoke:win
 1. Open a repository workspace
 2. Trust the workspace
 3. Review the generated context
-4. Export or update `AGENTS.md` and optional `.codex/config.toml`
+4. Export or update `CLAUDE.md` and optional `.codex/config.toml`
 5. Create or edit a workflow DAG
 6. Run through the Codex CLI
 7. Review outputs, logs, and checkpoints
@@ -140,7 +139,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the detailed runtime model.
 ## Related Docs
 
 - [docs/agents/README.md](./docs/agents/README.md)
-- [docs/runtime/](./docs/runtime/): implementation notes and ADR-style runtime documents; useful, but not canonical unless linked from `AGENTS.md`, `README.md`, or `ARCHITECTURE.md`
+- [docs/runtime/](./docs/runtime/): implementation notes and ADR-style runtime documents; useful, but not canonical unless linked from `CLAUDE.md`, `README.md`, or `ARCHITECTURE.md`
 - [docs/runtime/codex-approval-status.md](./docs/runtime/codex-approval-status.md)
 - [docs/dogfood/README.md](./docs/dogfood/README.md)
 - [docs/qa/context-init-smoke.md](./docs/qa/context-init-smoke.md)
